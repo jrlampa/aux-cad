@@ -19,9 +19,9 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `CAC.md` & `RAG/MEMORY.md`: Diretrizes arquiteturais e histórico da base de conhecimento.
 
 ### 2. `cqt/` (Projeto Queda de Tensão BT)
-- `cqt_cad_extractor.lsp`: Rotina AutoLISP com comandos **`CQTCAD`**, **`CQT`**, **`CQTUI`** e **`CQTQUADROS`**:
+- `cqt_cad_extractor.lsp` (329 linhas): Rotina AutoLISP com comandos **`CQTCAD`**, **`CQT`**, **`CQTUI`** e **`CQTQUADROS`**:
   - `CQT` / `CQTUI`: Abre imediatamente a interface gráfica interativa para estudos de viabilidade.
-  - `CQTCAD`: Extrai vãos e trechos do CAD ou via prompt e dispara a interface gráfica.
+  - `CQTCAD`: Extrai vãos e trechos do CAD graficamente ou via prompt, grava com segurança o arquivo de intercâmbio JSON via `TEMPPREFIX` e dispara a interface gráfica via `WScript.Shell` (com fallback para `startapp`), carregando dados de projeto, trafo e vãos automaticamente.
   - `CQTQUADROS`: Desenha no CAD os Quadros de Resumo do Trafo (47.03 x 47.10) e Quadros de CQT por Trecho (33.21 x 13.64).
 - `cqt_live_calc.py` (249 linhas): Motor de cálculo instantâneo em tempo real (Live Preview) para CQT e carregamento do trafo ($QT \le 6,00\%$).
 - `cqt_excel_io.py` (240 linhas): Camada de persistência e I/O de planilhas Excel (`load_cables_from_database`, `load_scenario_from_excel`, `update_cqt_excel`).
@@ -107,7 +107,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
 
 ## Validação e Qualidade
-- Suíte completa com **51 testes unitários passando 100%**:
+- Suíte completa com **52 testes unitários passando 100%**:
   - `topografia\kmz_pontos_importer.py`: 93%
   - `mapa_postes\mapa_servidor.py`: 83%
   - `orcamento\orcamento_excel.py`: 99%

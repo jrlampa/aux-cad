@@ -31,9 +31,10 @@
 )
 
 ;; Comando Principal
-(defun c:CQTCAD (/ num_proj ponto_trafo pot_trafo modo letras idx letra montante_padrao
-                  montante ss i ent d_len total_comp qtd_vaos continuar opt_m ans
-                  trechos_list json_file py_script xlsm_file cmd dest_file ans_dest f)
+(defun c:CQTCAD (/ num_proj ponto_trafo pot_trafo cenario_opt cenario_txt modo has_lines default_modo
+                  letras idx letra montante_padrao montante ss i ent d_len total_comp qtd_vaos
+                  continuar opt_m ans trechos_list temp_dir json_file py_script xlsm_file cmd
+                  dest_file ans_dest f tr wsh root)
 
   (princ "\n=======================================================")
   (princ "\n  EXTRATOR DE VÃOS E TOPOLOGIA DE CQT - BAIXA TENSÃO   ")
@@ -74,7 +75,7 @@
   (setq trechos_list '())
   (setq continuar T)
 
-  ;; Se o usuário optou por abrir a interface direta, pula para o disparo
+  ;; Se o usuário optou por abrir a interface direta, não entra no loop de trechos
   (if (or (= modo "Interface") (= modo "I"))
     (setq continuar nil)
   )
@@ -180,7 +181,7 @@
     )
   )
 
-  ;; 4. Escolha do Local Onde Salvar o Excel Preenchido
+  ;; 4. Escolha do Local Onde Salvar o Excel Preenchido (Opcional)
   (setq dest_file "")
   (initget "Sim Nao S N")
   (setq ans_dest (getkword "\nDeseja escolher a pasta/arquivo para salvar o Excel CQT? [Sim/Nao] <Sim>: "))
@@ -192,48 +193,81 @@
   )
 
   ;; 5. Montagem do JSON de Intercâmbio e Execução da Interface
-  (setq py_script "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\cqt\\cqt_excel_manager.py")
-  (if (not (findfile py_script)) (setq py_script (findfile "cqt_excel_manager.py")))
+  ;; Inicializa o arquivo temporário com caminho absoluto e seguro
+  (setq temp_dir (getvar "TEMPPREFIX"))
+  (if (or (null temp_dir) (= temp_dir ""))
+    (setq temp_dir "C:\\Temp\\")
+  )
+  (setq json_file (strcat temp_dir "cqt_cad_input.json"))
+
+  ;; Localiza o script Python do gerenciador CQT
+  (if (boundp '*aux-cad-root*)
+    (setq py_script (strcat *aux-cad-root* "cqt\\cqt_excel_manager.py"))
+    (setq py_script (findfile "cqt\\cqt_excel_manager.py"))
+  )
+  (if (or (null py_script) (not (findfile py_script)))
+    (setq py_script (findfile "cqt_excel_manager.py"))
+  )
+  (if (or (null py_script) (not (findfile py_script)))
+    (setq py_script "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\cqt\\cqt_excel_manager.py")
+  )
+
   (setq xlsm_file "G:\\Meu Drive\\1-HBT\\HBT\\SETEMBRO\\CQT TRECHO.xlsm")
 
   (setq trechos_list (reverse trechos_list))
 
+  ;; Grava o JSON de intercâmbio de forma protegida
   (setq f (open json_file "w"))
-  (write-line "{" f)
-  (write-line (strcat "  \"projeto\": \"" num_proj "\",") f)
-  (write-line (strcat "  \"ponto_trafo\": \"" ponto_trafo "\",") f)
-  (write-line (strcat "  \"potencia_trafo\": \"" pot_trafo "\",") f)
-  (write-line (strcat "  \"cenario\": \"" cenario_txt "\",") f)
-  (write-line (strcat "  \"salvar_em\": \"" (vl-string-translate "\\" "/" dest_file) "\",") f)
-  (write-line "  \"trechos\": [" f)
+  (if f
+    (progn
+      (write-line "{" f)
+      (write-line (strcat "  \"projeto\": \"" num_proj "\",") f)
+      (write-line (strcat "  \"ponto_trafo\": \"" ponto_trafo "\",") f)
+      (write-line (strcat "  \"potencia_trafo\": \"" pot_trafo "\",") f)
+      (write-line (strcat "  \"cenario\": \"" cenario_txt "\",") f)
+      (write-line (strcat "  \"salvar_em\": \"" (vl-string-translate "\\" "/" dest_file) "\",") f)
+      (write-line "  \"trechos\": [" f)
 
-  (setq i 0)
-  (while (< i (length trechos_list))
-    (setq tr (nth i trechos_list))
-    (write-line
-      (strcat
-        "    {\"letra\": \"" (cdr (assoc "letra" tr)) "\", "
-        "\"montante\": \"" (cdr (assoc "montante" tr)) "\", "
-        "\"vaos\": " (itoa (cdr (assoc "vaos" tr))) ", "
-        "\"comprimento_m\": " (rtos (cdr (assoc "comp" tr)) 2 2) "}"
-        (if (< (1+ i) (length trechos_list)) "," "")
+      (setq i 0)
+      (while (< i (length trechos_list))
+        (setq tr (nth i trechos_list))
+        (write-line
+          (strcat
+            "    {\"letra\": \"" (cdr (assoc "letra" tr)) "\", "
+            "\"montante\": \"" (cdr (assoc "montante" tr)) "\", "
+            "\"vaos\": " (itoa (cdr (assoc "vaos" tr))) ", "
+            "\"comprimento_m\": " (rtos (cdr (assoc "comp" tr)) 2 2) "}"
+            (if (< (1+ i) (length trechos_list)) "," "")
+          )
+          f
+        )
+        (setq i (1+ i))
       )
-      f
+      (write-line "  ]" f)
+      (write-line "}" f)
+      (close f)
+      (princ (strcat "\n[INFO] Parâmetros salvos temporariamente em: " json_file))
     )
-    (setq i (1+ i))
+    (princ (strcat "\n[AVISO] Falha ao criar arquivo de troca: " json_file))
   )
-  (write-line "  ]" f)
-  (write-line "}" f)
-  (close f)
 
   (princ "\nAbrindo Interface Gráfica do CQT...")
 
-  ;; Dispara a interface gráfica em Python passando o destino se selecionado
-  (if (/= dest_file "")
+  ;; Monta linha de comando Python
+  (if (and dest_file (/= dest_file ""))
     (setq cmd (strcat "python \"" py_script "\" \"" xlsm_file "\" \"" json_file "\" \"" dest_file "\""))
     (setq cmd (strcat "python \"" py_script "\" \"" xlsm_file "\" \"" json_file "\""))
   )
-  (startapp "cmd.exe" (strcat "/c " cmd))
+
+  ;; Execução resiliente via WScript.Shell ou startapp
+  (setq wsh (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
+  (if (and wsh (not (vl-catch-all-error-p wsh)))
+    (progn
+      (vlax-invoke-method wsh 'Run cmd 1 :vlax-false)
+      (vlax-release-object wsh)
+    )
+    (startapp "cmd.exe" (strcat "/c " cmd))
+  )
 
   (princ)
 )
@@ -243,13 +277,26 @@
 ;;  Abre diretamente a interface gráfica interativa do CQT
 ;;  Ideal para estudos preliminares de viabilidade sem desenho.
 ;; ============================================================
-(defun c:CQTUI (/ py_script xlsm_file cmd)
+(defun c:CQTUI (/ py_script xlsm_file cmd wsh)
   (princ "\nAbrindo Gerenciador CQT para estudo prévio...")
-  (setq py_script "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\cqt\\cqt_excel_manager.py")
-  (if (not (findfile py_script)) (setq py_script (findfile "cqt_excel_manager.py")))
+  (if (boundp '*aux-cad-root*)
+    (setq py_script (strcat *aux-cad-root* "cqt\\cqt_excel_manager.py"))
+    (setq py_script (findfile "cqt\\cqt_excel_manager.py"))
+  )
+  (if (or (null py_script) (not (findfile py_script)))
+    (setq py_script "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\cqt\\cqt_excel_manager.py")
+  )
   (setq xlsm_file "G:\\Meu Drive\\1-HBT\\HBT\\SETEMBRO\\CQT TRECHO.xlsm")
   (setq cmd (strcat "python \"" py_script "\" \"" xlsm_file "\""))
-  (startapp "cmd.exe" (strcat "/c " cmd))
+
+  (setq wsh (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
+  (if (and wsh (not (vl-catch-all-error-p wsh)))
+    (progn
+      (vlax-invoke-method wsh 'Run cmd 1 :vlax-false)
+      (vlax-release-object wsh)
+    )
+    (startapp "cmd.exe" (strcat "/c " cmd))
+  )
   (princ)
 )
 
