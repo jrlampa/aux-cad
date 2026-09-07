@@ -250,8 +250,8 @@ def gerar_script_lisp_postes(
     caminho_saida_lsp: str,
     offset_num_x: float = -2.5,
     offset_num_y: float = -2.5,
-    offset_txt_x: float = 1.8,
-    offset_txt_y: float = 0.8
+    offset_txt_x: float = 2.4,
+    offset_txt_y: float = 0.6
 ) -> str:
     """
     Gera um script AutoLISP completo e autônomo para inserção dos blocos
@@ -301,15 +301,11 @@ def gerar_script_lisp_postes(
         txt_y = round(num_y + offset_txt_y, 3)
 
         nome_escapado = p.nome.replace('"', '\\"')
-        
-        # Concatena linhas de descrição para MTEXT com quebra de linha do AutoCAD (\P)
-        desc_escapada = "\\P".join(linha.replace('"', '\\"') for linha in p.descricao_linhas)
 
         linhas_lsp.extend([
             f"  ;; --- Poste {nome_escapado} (UTM X: {x}, Y: {y}) ---",
             f"  (setq pBase (vlax-3d-point (list {x} {y} 0.0)))",
             f"  (setq pNum  (vlax-3d-point (list {num_x} {num_y} 0.0)))",
-            f"  (setq pTxt  (vlax-3d-point (list {txt_x} {txt_y} 0.0)))",
             "",
             "  ;; A) Inserção do Bloco 'POSTE_' (ou Fallback se não existir no DWG)",
             "  (if (tblsearch \"BLOCK\" \"POSTE_\")",
@@ -349,14 +345,19 @@ def gerar_script_lisp_postes(
             ""
         ])
 
-        if desc_escapada:
-            linhas_lsp.extend([
-                "  ;; C) Descrição Técnica Lateral (MTEXT)",
-                f"  (setq mTextObj (vla-AddMText space pTxt 0.0 \"{desc_escapada}\"))",
-                "  (vla-put-Height mTextObj 0.9)",
-                "  (vla-put-Layer mTextObj \"POSTES_DESCRICAO\")",
-                ""
-            ])
+        if p.descricao_linhas:
+            linhas_lsp.append("  ;; C) Descrição Técnica Lateral (Linhas Empilhadas)")
+            altura_texto = 0.85
+            espacamento_y = 1.30
+            for idx_linha, linha in enumerate(p.descricao_linhas):
+                cur_y = round(txt_y - (idx_linha * espacamento_y), 3)
+                linha_escapada = linha.replace('"', '\\"')
+                linhas_lsp.extend([
+                    f"  (setq tObj (vla-AddText space \"{linha_escapada}\" (vlax-3d-point (list {txt_x} {cur_y} 0.0)) {altura_texto}))",
+                    "  (vla-put-Layer tObj \"POSTES_DESCRICAO\")"
+                ])
+            linhas_lsp.append("")
+
 
     linhas_lsp.extend([
         "  (vla-EndUndoMark doc)",

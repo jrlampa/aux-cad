@@ -147,7 +147,10 @@ def test_gerar_script_lisp_postes_conteudo():
 
         # Verifica nome e descrição no script LISP
         assert '"05"' in conteudo
-        assert "11/M\\PN1\\PS1\\PESF. RESULTANTE" in conteudo
+        assert '"11/M"' in conteudo
+        assert '"N1"' in conteudo
+        assert '"S1"' in conteudo
+        assert '"ESF. RESULTANTE"' in conteudo
         assert "c:EXEC_IMPORT_KMZ_POSTES" in conteudo
 
 
