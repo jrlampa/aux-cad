@@ -95,10 +95,8 @@
   ;; 2. Diretório temporário e script Python
   (setq tempdir
     (cond
-      ((and (getvar "TEMPPATH") (stringp (getvar "TEMPPATH")))
-       (vl-string-right-trim "\\" (getvar "TEMPPATH")))
-      ((and (getvar "TEMP") (stringp (getvar "TEMP")))
-       (vl-string-right-trim "\\" (getvar "TEMP")))
+      ((and (getvar "TEMPPREFIX") (= (type (getvar "TEMPPREFIX")) 'STR))
+       (vl-string-right-trim "\\" (getvar "TEMPPREFIX")))
       (T "C:\\Temp")
     )
   )

@@ -12,6 +12,9 @@
 
 (vl-load-com)
 
+;; Compatibilidade para checagem de tipo string
+(defun stringp (x) (= (type x) 'STR))
+
 ;; Função auxiliar para calcular o comprimento exato de qualquer entidade linear
 (defun get-curve-length (ent / obj len data)
   (setq data (entget ent))
@@ -213,7 +216,7 @@
   (setq trechos_list (reverse trechos_list))
 
   ;; Garante que dest_file seja string válida
-  (if (or (null dest_file) (not (stringp dest_file)))
+  (if (or (null dest_file) (/= (type dest_file) 'STR))
     (setq dest_file "")
   )
 

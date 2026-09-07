@@ -7,9 +7,12 @@
 
 (vl-load-com)
 
+;; Compatibilidade para checagem de tipo string
+(defun stringp (x) (= (type x) 'STR))
+
 ;; Sanitiza strings para não corromper a sintaxe do JSON
 (defun cad2kmz-clean-str (str /)
-  (if (or (null str) (not (stringp str)))
+  (if (or (null str) (/= (type str) 'STR))
     ""
     (vl-string-translate "\"\\\n\r\t" "'/   " str)
   )
