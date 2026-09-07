@@ -248,10 +248,10 @@ def ler_arquivo_kmz_ou_kml(caminho_arquivo: str, fuso_padrao: int = 23, hemisfer
 def gerar_script_lisp_postes(
     postes: List[PosteKMZ],
     caminho_saida_lsp: str,
-    offset_num_x: float = -2.5,
-    offset_num_y: float = -2.5,
-    offset_txt_x: float = 2.4,
-    offset_txt_y: float = 0.6
+    offset_num_x: float = -3.0,
+    offset_num_y: float = -3.0,
+    offset_txt_x: float = 3.0,
+    offset_txt_y: float = 0.8
 ) -> str:
     """
     Gera um script AutoLISP completo e autônomo para inserção dos blocos
@@ -334,9 +334,9 @@ def gerar_script_lisp_postes(
             "    )",
             "    (progn",
             "      ;; Fallback para Bloco PONTO: Círculo verde + Texto centralizado",
-            "      (setq c (vla-AddCircle space pNum 1.0))",
+            "      (setq c (vla-AddCircle space pNum 1.8))",
             "      (vla-put-Layer c \"POSTES_NUMERO\")",
-            f"      (setq tObj (vla-AddText space \"{nome_escapado}\" pNum 0.9))",
+            f"      (setq tObj (vla-AddText space \"{nome_escapado}\" pNum 1.8))",
             "      (vla-put-Alignment tObj 10) ; acAlignmentMiddleCenter",
             "      (vla-put-TextAlignmentPoint tObj pNum)",
             "      (vla-put-Layer tObj \"POSTES_NUMERO\")",
@@ -347,8 +347,8 @@ def gerar_script_lisp_postes(
 
         if p.descricao_linhas:
             linhas_lsp.append("  ;; C) Descrição Técnica Lateral (Linhas Empilhadas)")
-            altura_texto = 0.85
-            espacamento_y = 1.30
+            altura_texto = 1.8
+            espacamento_y = 2.60
             for idx_linha, linha in enumerate(p.descricao_linhas):
                 cur_y = round(txt_y - (idx_linha * espacamento_y), 3)
                 linha_escapada = linha.replace('"', '\\"')
@@ -357,6 +357,7 @@ def gerar_script_lisp_postes(
                     "  (vla-put-Layer tObj \"POSTES_DESCRICAO\")"
                 ])
             linhas_lsp.append("")
+
 
 
     linhas_lsp.extend([
