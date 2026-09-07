@@ -84,14 +84,35 @@ aux cad/
 - `orcamento_catalogo.json`: Base padronizada de códigos, unidades e preços de referência para redes de distribuição.
 - `Abrir_Orcamento.bat`: Atalho executável direto com 2 cliques na raiz e na pasta do módulo.
 
-### 6. Carregamento Universal (`acaddoc.lsp`)
+### 6. Módulo Estúdio Web de Satélite (`mapa_postes/`)
+- `mapa_servidor.py` (305 linhas): Servidor HTTP local leve e resiliente com endpoints REST:
+  - `/api/postes` (GET/POST): Persistência em arquivo JSON local (`dados_postes.json`).
+  - `/api/enviar-cad` (POST): Compilação instantânea da rotina AutoLISP `desenhar_postes_gerados.lsp` para desenho automático no AutoCAD.
+  - `/api/exportar-kmz` (POST): Geração de arquivo `.kml`/`.kmz` compatível com o Google Earth Pro.
+  - `/api/converter-coordenadas` (POST): Conversão bidirecional Snyder analítica UTM (Fuso 23S/24S) $\leftrightarrow$ Lat/Lon WGS84 para lançamento direto a partir do croqui de campo.
+- `web/index.html` & `web/style.css` (451 linhas): Interface gráfica moderna em tema executivo `#1B365D` (Inter font, cards táteis, responsiva):
+  - **Modal de Lançamento por Coordenadas**: Permite digitar coordenadas exatas do croqui de campo em **UTM Métrico** (E/X, N/Y, Fuso 23S/24S) ou **Graus Decimais (Lat/Lon)**, realizando cálculo em tempo real e animação `flyTo` no mapa.
+  - **Card de Configuração do Poste**:
+    - Tipos de Poste: 11/M, 11/400, 11/600, 11/1000, 12/300, 12/600, etc.
+    - Estruturas MT: N1, N2, N3b, N4, CE1, CE2, etc.
+    - Estruturas BT: S1, S2, F1, F2-D2, etc.
+    - Equipamentos de 1 clique: IP, ATERR, DAE, Trafo, Chave Fusível, Para-raios.
+    - **Quantificação de Clientes**: Lançamento rápido de clientes **Monofásicos (Mono)**, **Bifásicos (Bi)**, **Trifásicos (Tri)** e campo específico para **Cargas Especiais Trifásicas** (kW/kVA).
+- `web/app.js` (368 linhas): Orquestração do mapa Leaflet com tiles de satélite ESRI World Imagery, Google Híbrido e OSM, marcadores arrastáveis, cálculo de vão linear e conexão das redes.
+- `mapa_cad_launcher.lsp` (85 linhas): Comandos do AutoCAD:
+  - **`MAPAPOSTES`** (ou **`MAPA`**): Abre o estúdio no navegador e inicia o servidor caso esteja desligado.
+  - **`ATUALIZAR_MAPAPOSTES`**: Lê os postes enviados pelo mapa web e gera os blocos `POSTE_`, `PONTO` e os textos técnicos empilhados no AutoCAD.
+- `Abrir_Mapa_Postes.bat`: Atalho executável de 2 cliques para abertura direta do estúdio.
+
+### 7. Carregamento Universal (`acaddoc.lsp`)
 O arquivo `acaddoc.lsp` foi projetado para:
 1. Localizar o caminho absoluto da pasta raiz `aux cad`.
-2. Adicionar dinamicamente as pastas `orcamento`, `cqt`, `ambiental`, `mecanico` e `topografia` ao `SupportPath` de arquivos de suporte do AutoCAD.
+2. Adicionar dinamicamente as pastas `orcamento`, `cqt`, `ambiental`, `mecanico`, `topografia` e `mapa_postes` ao `SupportPath` de arquivos de suporte do AutoCAD.
 3. Carregar as rotinas modulares de forma resiliente com tratamento de erros (`vl-catch-all-apply`).
 
-### 7. Validação e Testes
-- Suíte com 46 testes unitários passando 100% (`python -m pytest`).
-- Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia`).
-- Cobertura nos módulos centrais de regras de negócio entre 88% e 99% (com `kmz_pontos_importer.py` em 93%).
+### 8. Validação e Testes
+- Suíte com **50 testes unitários passando 100%** (`python -m pytest`).
+- Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes`).
+- Cobertura nos módulos centrais de regras de negócio entre 83% e 99% (com `kmz_pontos_importer.py` em 93% e `mapa_postes` em 83%).
+
 

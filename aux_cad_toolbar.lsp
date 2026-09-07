@@ -56,13 +56,13 @@
           ;; 7. Botão ADDBLOCO
           (vla-AddToolbarItem tb (vla-get-Count tb) "📍 Add Bloco no UCS" "Insere blocos sobre referências orientado à tela" "^C^CADDBLOCO ")
 
-          ;; 8. Botão CAD2KMZ
-          (vla-AddToolbarItem tb (vla-get-Count tb) "🌍 Exportar para KMZ" "Exporta postes e linhas para o Google Earth" "^C^CCAD2KMZ ")
+          ;; 9. Botão Estúdio Mapa Web
+          (vla-AddToolbarItem tb (vla-get-Count tb) "🌍 Estúdio Mapa Satélite (MAPAPOSTES)" "Abre o mapa com satélite para lançar coordenadas, postes e clientes" "^C^CMAPAPOSTES ")
 
-          ;; 9. Botão KMZ Postes
+          ;; 10. Botão KMZ Postes
           (vla-AddToolbarItem tb (vla-get-Count tb) "📍 KMZ ➔ Postes & Textos" "Importa pontos do KMZ com bloco POSTE_, PONTO e descricao" "^C^CIMPORTAR_KMZ_POSTES ")
 
-          ;; 10. Botão CSV UTM
+          ;; 11. Botão CSV UTM
           (vla-AddToolbarItem tb (vla-get-Count tb) "📥 Importar CSV UTM" "Importa pontos topográficos de arquivo CSV" "^C^CIMPORTAR_PONTOS_UTM ")
         )
       )

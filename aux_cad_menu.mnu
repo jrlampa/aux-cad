@@ -24,6 +24,7 @@ ID_Separator3 [_Separator]
 ID_Result    [_Button("Cálculo de Esforço Resultante", "ICON_RESULT", "ICON_RESULT")]^C^CCALC_RESULTANTE
 ID_AddBloco  [_Button("Adicionar Blocos no UCS", "ICON_ADDBLOCO", "ICON_ADDBLOCO")]^C^CADDBLOCO
 ID_Separator4 [_Separator]
+ID_MapaPostes [_Button("Estúdio Mapa Web de Postes", "ICON_MAPA", "ICON_MAPA")]^C^CMAPAPOSTES
 ID_KmzPoste [_Button("Importar Postes do KMZ", "ICON_KMZPOSTES", "ICON_KMZPOSTES")]^C^CIMPORTAR_KMZ_POSTES
 ID_Cad2Kmz   [_Button("Exportar para Google Earth (KMZ)", "ICON_CAD2KMZ", "ICON_CAD2KMZ")]^C^CCAD2KMZ
 ID_ImportUtm [_Button("Importar Pontos UTM (CSV)", "ICON_IMPORTCSV", "ICON_IMPORTCSV")]^C^CIMPORTAR_PONTOS_UTM
@@ -46,7 +47,8 @@ ID_MnCroqui    [&5. Inserir Ortofoto / Croqui (INSCROQUI)]^C^CINSCROQUI
 ID_MnResult    [&6. Esforço Resultante em Postes (CALC_RESULTANTE)]^C^CCALC_RESULTANTE
 ID_MnAddBloco  [&7. Inserir Bloco no UCS (ADDBLOCO)]^C^CADDBLOCO
 [--]
-ID_MnKmzPoste  [&8. Importar KMZ com Postes e Textos (KMZPOSTES)]^C^CIMPORTAR_KMZ_POSTES
-ID_MnCad2Kmz   [&9. Exportar para Google Earth (CAD2KMZ)]^C^CCAD2KMZ
-ID_MnCsv       [&10. Importar CSV UTM]^C^CIMPORTAR_PONTOS_UTM
+ID_MnMapaPoste [&8. Estúdio Mapa Web de Postes (MAPAPOSTES)]^C^CMAPAPOSTES
+ID_MnKmzPoste  [&9. Importar KMZ com Postes e Textos (KMZPOSTES)]^C^CIMPORTAR_KMZ_POSTES
+ID_MnCad2Kmz   [&10. Exportar para Google Earth (CAD2KMZ)]^C^CCAD2KMZ
+ID_MnCsv       [&11. Importar CSV UTM]^C^CIMPORTAR_PONTOS_UTM
 

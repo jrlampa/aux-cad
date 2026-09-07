@@ -26,6 +26,7 @@
 (add-support-path (strcat *aux-cad-root* "mecanico"))
 (add-support-path (strcat *aux-cad-root* "topografia"))
 (add-support-path (strcat *aux-cad-root* "orcamento"))
+(add-support-path (strcat *aux-cad-root* "mapa_postes"))
 
 (defun load-aux-safe (subpath / fullpath res)
   (setq fullpath (strcat *aux-cad-root* subpath))
@@ -69,6 +70,10 @@
 ;; 6. Módulo Orçamento e Levantamento Automático de Materiais
 (load-aux-safe "orcamento\\orcamento_cad_extractor.lsp")
 
+;; 7. Módulo Estúdio Web de Satélite de Postes & Cargas
+(load-aux-safe "mapa_postes\\mapa_cad_launcher.lsp")
+
+
 ;; =============================================================================
 ;;  COMANDOS DE CONSULTA E AJUDA (COMANDOS / AJUDA / AUXCAD / ROTINAS)
 ;; =============================================================================
@@ -96,7 +101,8 @@
   (princ "\n  [CÁLCULO ESTRUTURAL & MECÂNICO]")
   (princ "\n   - CALC_RESULTANTE ou TRACAO ou ESFORCO : Tração resultante em postes")
   (princ "\n")
-  (princ "\n  [TOPOGRAFIA, KMZ & BLOCOS]")
+  (princ "\n  [TOPOGRAFIA, KMZ & MAPA WEB]")
+  (princ "\n   - MAPAPOSTES ou MAPA : Estúdio Web de Satélite (lançar coordenadas, postes e clientes)")
   (princ "\n   - IMPORTAR_KMZ_POSTES ou KMZPOSTES : Importa KMZ/KML com POSTE_, PONTO e descrição")
   (princ "\n   - ADDBLOCO : Insere blocos alinhados ao UCS da tela")
   (princ "\n   - IMPORTAR_PONTOS_UTM : Importa CSV UTM clássico")
@@ -109,6 +115,7 @@
   ;; Exibe também caixa de diálogo visual na tela
   (setq msg (strcat
     "=== GUIA DE COMANDOS AUX CAD ===\n\n"
+    "• ESTÚDIO MAPA WEB: Digite MAPAPOSTES (ou MAPA)\n"
     "• KMZ PARA POSTES: Digite IMPORTAR_KMZ_POSTES (ou KMZPOSTES)\n"
     "• ORTOFOTO / CROQUI: Digite INSCROQUI (ou ORTOFOTO)\n"
     "• MEMORIAL / CHECKLIST: Digite KMZCHECK (ou MEMORIAL)\n"

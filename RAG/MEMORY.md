@@ -78,12 +78,26 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `orcamento_catalogo.json`: Catálogo base de materiais padronizados para redes aéreas.
 - `Abrir_Orcamento.bat`: Atalho local na pasta do projeto e na raiz.
 
-### 7. `softwares/` (Instaladores e Aplicações Externas)
+### 7. `mapa_postes/` (Estúdio Web de Satélite, Coordenadas e Clientes)
+- `mapa_servidor.py` (305 linhas): Servidor HTTP local nativo com API REST:
+  - `/api/postes`: Persistência atômica de postes e redes (`dados_postes.json`).
+  - `/api/enviar-cad`: Gera dinamicamente `desenhar_postes_gerados.lsp` com blocos `POSTE_`, `PONTO` e descrição empilhada para injeção direta no AutoCAD.
+  - `/api/exportar-kmz`: Geração de KML/KMZ para interoperabilidade com o Google Earth Pro.
+  - `/api/converter-coordenadas`: Conversor bidirecional analítico Snyder (UTM 23S/24S $\leftrightarrow$ Lat/Lon WGS84).
+- `web/index.html` & `web/style.css` (451 linhas): Interface gráfica executiva moderna (Inter, paleta `#1B365D`):
+  - **Lançamento Direto de Coordenadas de Campo**: Modal dedicado com suporte a **UTM Métrico** (E/X, N/Y) e **Lat/Lon GPS**, calculando em tempo real e voando suavemente com animação `flyTo` até a posição exata.
+  - **Configuração de Postes & Equipamentos de 1 Clique**: Tipo de poste (`11/M`, `11/400`...), estruturas MT/BT, equipamentos (IP, ATERR, DAE, Trafo, etc.).
+  - **Quantificação de Clientes & Cargas**: Contagem de clientes **Monofásicos**, **Bifásicos**, **Trifásicos** e campos para **Cargas Especiais Trifásicas** (kW/kVA).
+- `web/app.js` (368 linhas): Lógica do mapa Leaflet, camadas de satélite (ESRI / Google Híbrido / OSM), marcadores com drag & drop e conectores de linha de transmissão/distribuição.
+- `mapa_cad_launcher.lsp` (85 linhas): Comandos do AutoCAD **`MAPAPOSTES`** (ou **`MAPA`**) e **`ATUALIZAR_MAPAPOSTES`**.
+- `Abrir_Mapa_Postes.bat`: Atalho executável de 2 cliques na raiz para inicialização instantânea.
+
+### 8. `softwares/` (Instaladores e Aplicações Externas)
 - `sisRUA-Installer-1.1.0-Optimized.exe` & `sisRUA-Installer-1.1.0.zip`
 - `ArkanceSystems_CADStudio_Job-Time.msi`
 - `sisrua2/` & `Lampa/`
 
-### 8. `documentos/` (Pranchas, Referências e Notas)
+### 9. `documentos/` (Pranchas, Referências e Notas)
 - `PRANCHA LIGHT.dwg` e `PRANCHA LIGHT.bak`: Templates de prancha oficial.
 - `PLAN_MEDIÇÃO_ELETTRICA_PROJETOS_BASE(1).xlsx` & `Árvore de Dispositivos.xlsx`: Planilhas de medição e dispositivos.
 - `anotações-2.one`: Caderno técnico de anotações.
@@ -91,8 +105,9 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
 
 ## Validação e Qualidade
-- Suíte completa com 46 testes unitários passando 100%:
+- Suíte completa com **50 testes unitários passando 100%**:
   - `topografia\kmz_pontos_importer.py`: 93%
+  - `mapa_postes\mapa_servidor.py`: 83%
   - `orcamento\orcamento_excel.py`: 99%
   - `orcamento\orcamento_core.py`: 89%
   - `orcamento\orcamento_manager.py`: 75%

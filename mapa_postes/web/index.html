@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AUX CAD - Estúdio de Lançamento de Postes & Cargas</title>
+  
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Header Executivo -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="brand-logo">⚡ AUX CAD</div>
+      <div class="brand-subtitle">Estúdio de Postes & Cargas (Satélite)</div>
+    </div>
+    
+    <div class="header-center">
+      <div class="search-box">
+        <input type="text" id="inputBusca" placeholder="Buscar endereço, cidade ou lat, lon..." onkeydown="if(event.key==='Enter') buscarLocalizacao()">
+        <button onclick="buscarLocalizacao()" title="Buscar local">🔍</button>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <button class="btn btn-warning" onclick="abrirModalCoordenadas()" title="Lançar poste informando coordenadas do croqui">📍 Lançar por Coordenadas</button>
+      <button class="btn btn-outline" onclick="exportarKMZ()" title="Salvar arquivo para Google Earth">🌍 Exportar KMZ</button>
+      <button class="btn btn-primary" onclick="enviarParaAutoCAD()" title="Desenhar no AutoCAD aberto">📐 Enviar para o AutoCAD</button>
+    </div>
+  </header>
+
+
+  <!-- Container Principal -->
+  <div class="app-container">
+    <!-- Mapa Full Screen -->
+    <div id="map"></div>
+
+    <!-- Barra Flutuante de Ferramentas / Camadas -->
+    <div class="floating-controls">
+      <div class="btn-group-layer">
+        <button class="btn-layer active" onclick="trocarCamada('esri')" id="btnEsri">Satélite ESRI</button>
+        <button class="btn-layer" onclick="trocarCamada('google')" id="btnGoogle">Satélite Híbrido</button>
+        <button class="btn-layer" onclick="trocarCamada('osm')" id="btnOsm">Ruas / Mapa</button>
+      </div>
+      <div class="stats-badge" id="badgePostes">0 Postes no Traçado</div>
+    </div>
+
+    <!-- Drawer Lateral / Card de Edição de Poste -->
+    <aside class="poste-drawer" id="posteDrawer">
+      <div class="drawer-header">
+        <h3 id="drawerTitulo">Poste 01</h3>
+        <button class="btn-close" onclick="fecharDrawer()">✕</button>
+      </div>
+
+      <div class="drawer-body">
+        <!-- Identificação -->
+        <div class="form-group">
+          <label>Identificação / Número do Poste</label>
+          <input type="text" id="txtNumero" class="form-control" placeholder="ex: 01, 15, P-02">
+        </div>
+
+        <!-- Coordenadas -->
+        <div class="coords-box">
+          <div><small>Lat:</small> <span id="lblLat">-</span></div>
+          <div><small>Lon:</small> <span id="lblLon">-</span></div>
+          <div><small>UTM:</small> <span id="lblUTM">-</span></div>
+        </div>
+
+        <!-- Tipo de Poste (Chips Rápidos) -->
+        <div class="form-group">
+          <label>Tipo de Poste (Comprimento / Esforço)</label>
+          <div class="chips-group" id="chipsTipoPoste">
+            <button class="chip active" onclick="selecionarChip(this, 'txtTipoPoste')">11/M</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtTipoPoste')">11/400</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtTipoPoste')">11/600</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtTipoPoste')">9/M</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtTipoPoste')">9/400</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtTipoPoste')">10/300</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtTipoPoste')">12/300</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtTipoPoste')">12/600</button>
+          </div>
+          <input type="text" id="txtTipoPoste" class="form-control mt-1" value="11/M" placeholder="Ou digite outro tipo...">
+        </div>
+
+        <!-- Estrutura MT (Média Tensão) -->
+        <div class="form-group">
+          <label>Estrutura MT (Média Tensão)</label>
+          <div class="chips-group" id="chipsMT">
+            <button class="chip active" onclick="selecionarChip(this, 'txtEstruturaMT')">N1</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtEstruturaMT')">N2</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtEstruturaMT')">N3b</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtEstruturaMT')">M2b</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtEstruturaMT')">CE1</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtEstruturaMT')">Nenhum</button>
+          </div>
+          <input type="text" id="txtEstruturaMT" class="form-control mt-1" value="N1" placeholder="Ou digite MT...">
+        </div>
+
+        <!-- Estrutura BT (Baixa Tensão) -->
+        <div class="form-group">
+          <label>Estrutura BT (Baixa Tensão)</label>
+          <div class="chips-group" id="chipsBT">
+            <button class="chip active" onclick="selecionarChip(this, 'txtEstruturaBT')">S1</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtEstruturaBT')">S2</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtEstruturaBT')">SI1</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtEstruturaBT')">SI4</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtEstruturaBT')">F2-D2</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtEstruturaBT')">B1b</button>
+            <button class="chip" onclick="selecionarChip(this, 'txtEstruturaBT')">Nenhum</button>
+          </div>
+          <input type="text" id="txtEstruturaBT" class="form-control mt-1" value="S1" placeholder="Ou digite BT...">
+        </div>
+
+        <!-- Equipamentos e Complementos -->
+        <div class="form-group">
+          <label>Equipamentos & Acessórios</label>
+          <div class="chips-multi" id="chipsEquipamentos">
+            <button class="chip-toggle" onclick="toggleMultiChip(this)">IP</button>
+            <button class="chip-toggle" onclick="toggleMultiChip(this)">ATERR</button>
+            <button class="chip-toggle" onclick="toggleMultiChip(this)">DAE</button>
+            <button class="chip-toggle" onclick="toggleMultiChip(this)">Trafo 10kVA</button>
+            <button class="chip-toggle" onclick="toggleMultiChip(this)">Trafo 15kVA</button>
+            <button class="chip-toggle" onclick="toggleMultiChip(this)">Trafo 25kVA</button>
+            <button class="chip-toggle" onclick="toggleMultiChip(this)">Chave Fusível</button>
+          </div>
+        </div>
+
+        <!-- Clientes e Cargas (Conexão CQT) -->
+        <div class="card-section">
+          <label class="section-title">⚡ Clientes & Cargas Conectadas</label>
+          <div class="counters-grid">
+            <div class="counter-item">
+              <span class="counter-label">Monofásicos</span>
+              <div class="counter-control">
+                <button onclick="ajustarContador('cntMono', -1)">-</button>
+                <input type="number" id="cntMono" value="0" min="0">
+                <button onclick="ajustarContador('cntMono', 1)">+</button>
+              </div>
+            </div>
+
+            <div class="counter-item">
+              <span class="counter-label">Bifásicos</span>
+              <div class="counter-control">
+                <button onclick="ajustarContador('cntBi', -1)">-</button>
+                <input type="number" id="cntBi" value="0" min="0">
+                <button onclick="ajustarContador('cntBi', 1)">+</button>
+              </div>
+            </div>
+
+            <div class="counter-item">
+              <span class="counter-label">Trifásicos</span>
+              <div class="counter-control">
+                <button onclick="ajustarContador('cntTri', -1)">-</button>
+                <input type="number" id="cntTri" value="0" min="0">
+                <button onclick="ajustarContador('cntTri', 1)">+</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Carga Especial Trifásica -->
+          <div class="mt-2">
+            <label class="sub-label">Carga Especial Trifásica (Motor / Oficina / Bomba)</label>
+            <div class="row-flex">
+              <input type="text" id="txtCargaDesc" class="form-control" placeholder="Descrição (ex: Bomba 15CV)">
+              <input type="number" id="txtCargaKw" class="form-control w-100" placeholder="kW" step="0.5" min="0">
+            </div>
+          </div>
+        </div>
+
+        <!-- Observações -->
+        <div class="form-group mt-2">
+          <label>Observações Adicionais</label>
+          <input type="text" id="txtObs" class="form-control" placeholder="ex: ESF. RESULTANTE 450 daN">
+        </div>
+      </div>
+
+      <div class="drawer-footer">
+        <button class="btn btn-danger" onclick="excluirPosteAtual()">Excluir Poste</button>
+        <button class="btn btn-success" onclick="salvarPosteAtual()">Salvar Alterações</button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Modal de Lançamento por Coordenadas (Croqui de Campo) -->
+  <div class="modal-overlay" id="modalCoordenadas">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📍 Lançar Poste por Coordenadas</h3>
+        <button class="btn-close" onclick="fecharModalCoordenadas()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="tabs-group">
+          <button class="tab-btn active" id="tabUtm" onclick="alternarAbaCoord('utm')">Coordenadas UTM (Métrico)</button>
+          <button class="tab-btn" id="tabLatLon" onclick="alternarAbaCoord('latlon')">Lat / Lon (GPS / Google Earth)</button>
+        </div>
+
+        <!-- Painel UTM -->
+        <div id="painelUtm" class="coord-panel">
+          <div class="form-group">
+            <label>Easting X (metros)</label>
+            <input type="number" id="inputUtmX" class="form-control" placeholder="ex: 585786.00" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Northing Y (metros)</label>
+            <input type="number" id="inputUtmY" class="form-control" placeholder="ex: 7454079.00" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Fuso UTM</label>
+            <input type="number" id="inputUtmFuso" class="form-control" value="23" min="18" max="25">
+          </div>
+        </div>
+
+        <!-- Painel Lat/Lon -->
+        <div id="painelLatLon" class="coord-panel" style="display: none;">
+          <div class="form-group">
+            <label>Latitude (graus decimais)</label>
+            <input type="number" id="inputLat" class="form-control" placeholder="ex: -23.019477" step="0.000001">
+          </div>
+          <div class="form-group">
+            <label>Longitude (graus decimais)</label>
+            <input type="number" id="inputLon" class="form-control" placeholder="ex: -44.162813" step="0.000001">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" style="color: #333; border-color: #ccc;" onclick="fecharModalCoordenadas()">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmarLancamentoCoordenada()">📍 Lançar e Voar para o Ponto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast de Notificações -->
+  <div id="toast" class="toast">Mensagem</div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>
