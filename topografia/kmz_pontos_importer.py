@@ -122,29 +122,59 @@ def sanitizar_descricao(descricao_bruta: Optional[str]) -> List[str]:
     return linhas_finais
 
 
-def extrair_postes_kml(conteudo_xml: str, fuso_padrao: int = 23, hemisferio_norte: bool = False) -> List[PosteKMZ]:
+def _strip_ns(tag: str) -> str:
+    """Remove o namespace de uma tag XML (ex: '{http://...}Placemark' -> 'Placemark')."""
+    if "}" in tag:
+        return tag.split("}", 1)[1]
+    return tag
+
+
+def extrair_postes_kml(conteudo_xml: bytes | str, fuso_padrao: int = 23, hemisferio_norte: bool = False) -> List[PosteKMZ]:
     """
     Lê o conteúdo XML de um KML e extrai os marcadores (<Placemark>) contendo <Point>.
+    Suporta namespaces múltiplos (gx:, atom:, etc.) sem falhar.
     """
     postes: List[PosteKMZ] = []
     
-    # Remove namespaces para simplificar a busca com XPath/ElementTree
-    xml_limpo = re.sub(r'\sxmlns(:\w+)?="[^"]+"', '', conteudo_xml, count=0)
-    root = ET.fromstring(xml_limpo)
+    if isinstance(conteudo_xml, str):
+        # Se for string com declaração de encoding <?xml encoding="..."?>, codifica para bytes para o ElementTree
+        if conteudo_xml.startswith("<?xml") and "encoding=" in conteudo_xml[:100].lower():
+            root = ET.fromstring(conteudo_xml.encode("utf-8"))
+        else:
+            root = ET.fromstring(conteudo_xml)
+    else:
+        root = ET.fromstring(conteudo_xml)
 
     idx_generico = 1
-    for placemark in root.iter("Placemark"):
-        point = placemark.find(".//Point")
+    for placemark in root.iter():
+        if _strip_ns(placemark.tag) != "Placemark":
+            continue
+
+        point = None
+        for elem in placemark.iter():
+            if _strip_ns(elem.tag) == "Point":
+                point = elem
+                break
+
         if point is None:
             continue
 
-        coord_elem = point.find(".//coordinates")
+        coord_elem = None
+        for elem in point.iter():
+            if _strip_ns(elem.tag) == "coordinates" and elem.text:
+                coord_elem = elem
+                break
+
         if coord_elem is None or not coord_elem.text:
             continue
 
         coords_str = coord_elem.text.strip()
-        # Coordenadas no KML: lon,lat[,alt]
-        partes = coords_str.split(",")
+        # Coordenadas no KML: lon,lat[,alt] (pode conter múltiplos tokens se houver quebra de linha)
+        tokens = coords_str.replace("\n", " ").replace("\r", " ").split()
+        if not tokens:
+            continue
+
+        partes = tokens[0].strip().split(",")
         if len(partes) < 2:
             continue
 
@@ -155,16 +185,23 @@ def extrair_postes_kml(conteudo_xml: str, fuso_padrao: int = 23, hemisferio_nort
             continue
 
         # Extrai Nome
-        nome_elem = placemark.find("name")
-        if nome_elem is not None and nome_elem.text:
-            nome = nome_elem.text.strip()
-        else:
+        nome = ""
+        for elem in placemark:
+            if _strip_ns(elem.tag) == "name" and elem.text:
+                nome = elem.text.strip()
+                break
+
+        if not nome:
             nome = f"{idx_generico:02d}"
             idx_generico += 1
 
         # Extrai Descrição
-        desc_elem = placemark.find("description")
-        desc_bruta = desc_elem.text if desc_elem is not None else ""
+        desc_bruta = ""
+        for elem in placemark:
+            if _strip_ns(elem.tag) == "description" and elem.text:
+                desc_bruta = elem.text
+                break
+
         linhas_desc = sanitizar_descricao(desc_bruta)
 
         # Fuso UTM
@@ -199,12 +236,13 @@ def ler_arquivo_kmz_ou_kml(caminho_arquivo: str, fuso_padrao: int = 23, hemisfer
             if not kml_files:
                 raise ValueError("Nenhum arquivo .kml encontrado dentro do .kmz")
             with z.open(kml_files[0]) as kf:
-                conteudo = kf.read().decode("utf-8", errors="replace")
-                return extrair_postes_kml(conteudo, fuso_padrao, hemisferio_norte)
+                conteudo_bytes = kf.read()
+                return extrair_postes_kml(conteudo_bytes, fuso_padrao, hemisferio_norte)
     else:
-        with open(caminho_arquivo, "r", encoding="utf-8", errors="replace") as f:
-            conteudo = f.read()
-            return extrair_postes_kml(conteudo, fuso_padrao, hemisferio_norte)
+        with open(caminho_arquivo, "rb") as f:
+            conteudo_bytes = f.read()
+            return extrair_postes_kml(conteudo_bytes, fuso_padrao, hemisferio_norte)
+
 
 
 def gerar_script_lisp_postes(

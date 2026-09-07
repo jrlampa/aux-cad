@@ -8,12 +8,12 @@
 
 (vl-load-com)
 
-(defun c:IMPORTAR_KMZ_POSTES ( / kmz_file fuso pyScript outLsp wsh cmd res )
+(defun c:IMPORTAR_KMZ_POSTES ( / kmz_file fuso pyScript outLsp logFile wsh cmd res f_log log_txt line_log )
   (princ "\n--- IMPORTADOR DE POSTES DO GOOGLE EARTH (KMZ / KML) ---")
 
   ;; 1. Seleciona o arquivo do Google Earth
   (setq kmz_file (getfiled "Selecione o arquivo do Google Earth (KMZ ou KML)" "" "kmz;kml" 0))
-  (if (not kmz_file)
+  (if (or (not kmz_file) (not (findfile kmz_file)))
     (progn
       (princ "\nOperação cancelada pelo usuário.")
       (exit)
@@ -24,8 +24,14 @@
   (setq fuso (getint "\nInforme o Fuso UTM [Enter para 23]: "))
   (if (not fuso) (setq fuso 23))
 
-  ;; 3. Localiza o script Python inteligente
-  (setq pyScript (findfile "topografia\\kmz_pontos_importer.py"))
+  ;; 3. Localiza o script Python
+  (setq pyScript nil)
+  (if (and (boundp '*aux-cad-root*) *aux-cad-root*)
+    (setq pyScript (findfile (strcat *aux-cad-root* "topografia\\kmz_pontos_importer.py")))
+  )
+  (if (not pyScript)
+    (setq pyScript (findfile "topografia\\kmz_pontos_importer.py"))
+  )
   (if (not pyScript)
     (setq pyScript (findfile "kmz_pontos_importer.py"))
   )
@@ -36,24 +42,24 @@
     )
   )
 
-  ;; 4. Define arquivo temporário para receber o script gerado
-  (setq outLsp (vl-filename-mktemp "kmz_postes.lsp"))
+  ;; 4. Define arquivos temporários para script LISP e log de diagnóstico
+  (setq outLsp  (vl-filename-mktemp "kmz_postes.lsp"))
+  (setq logFile (vl-filename-mktemp "kmz_log.txt"))
 
-  ;; 5. Executa o backend Python de forma oculta e síncrona
+  ;; 5. Executa o backend Python de forma protegida e síncrona
   (princ "\nProcessando coordenadas, marcadores e descrições do KMZ...")
-  (setq cmd (strcat "python \"" pyScript "\" \"" kmz_file "\" --fuso " (itoa fuso) " --saida \"" outLsp "\""))
+  ;; Aspas extras ao redor do comando completo para o cmd.exe /c do Windows
+  (setq cmd (strcat "\"python \"" pyScript "\" \"" kmz_file "\" --fuso " (itoa fuso) " --saida \"" outLsp "\" > \"" logFile "\" 2>&1\""))
 
   (setq wsh (vlax-create-object "WScript.Shell"))
   (if wsh
     (progn
-      ;; Executa oculto (0) e aguarda o término (:vlax-true)
-      (vlax-invoke wsh 'Run (strcat "cmd.exe /c " cmd) 0 :vlax-true)
+      (vlax-invoke-method wsh "Run" (strcat "cmd.exe /c " cmd) 0 :vlax-true)
       (vlax-release-object wsh)
     )
     (progn
-      ;; Fallback caso WScript.Shell não esteja disponível
       (startapp "cmd.exe" (strcat "/c " cmd))
-      (command "_.DELAY" "1500")
+      (command "_.DELAY" "2000")
     )
   )
 
@@ -63,17 +69,34 @@
       (princ "\nInserindo simbologias, blocos e anotações no desenho...")
       (setq res (vl-catch-all-apply 'load (list outLsp)))
       (if (vl-catch-all-error-p res)
-        (princ (strcat "\n[ERRO NA EXECUÇÃO] " (vl-catch-all-error-message res)))
+        (princ (strcat "\n[ERRO NA EXECUÇÃO DO LISP] " (vl-catch-all-error-message res)))
         (progn
           (princ "\n==============================================================")
           (princ "\n[SUCESSO] Postes e descrições do KMZ importados perfeitamente!")
           (princ "\n==============================================================")
         )
       )
-      ;; Limpa arquivo temporário
-      (vl-file-delete outLsp)
+      (if (findfile outLsp) (vl-file-delete outLsp))
+      (if (findfile logFile) (vl-file-delete logFile))
     )
-    (alert "ERRO: Não foi possível processar o arquivo KMZ/KML.\nVerifique se o Python está instalado e se o arquivo contém marcadores com coordenadas válidas.")
+    (progn
+      ;; Lê o log do Python para exibir o erro exato
+      (setq log_txt "")
+      (if (findfile logFile)
+        (progn
+          (setq f_log (open logFile "r"))
+          (while (and (setq line_log (read-line f_log)) (< (strlen log_txt) 500))
+            (setq log_txt (strcat log_txt line_log "\n"))
+          )
+          (close f_log)
+        )
+      )
+      (if (= (vl-string-trim " \n\r\t" log_txt) "")
+        (setq log_txt "Verifique se o comando 'python' está configurado nas variáveis de ambiente do Windows.")
+      )
+      (alert (strcat "ERRO AO PROCESSAR KMZ/KML:\n\n" log_txt))
+      (if (findfile logFile) (vl-file-delete logFile))
+    )
   )
 
   (princ)
