@@ -205,13 +205,25 @@ function abrirDrawerParaPoste(id) {
   document.getElementById('cntBi').value = p.clientes_bi || 0;
   document.getElementById('cntTri').value = p.clientes_tri || 0;
 
-  // Cargas Especiais
+  // Cargas Especiais com kVA e kW interligados (FP = 0.92)
+  const lblStatus = document.getElementById('lblPotenciaStatus');
   if (p.cargas_especiais && p.cargas_especiais.length > 0) {
-    document.getElementById('txtCargaDesc').value = p.cargas_especiais[0].descricao || '';
-    document.getElementById('txtCargaKw').value = p.cargas_especiais[0].potencia_kw || '';
+    const cEsp = p.cargas_especiais[0];
+    document.getElementById('txtCargaDesc').value = cEsp.descricao || '';
+    const kw = cEsp.potencia_kw || 0;
+    const kva = cEsp.potencia_kva || (kw > 0 ? Number((kw / 0.92).toFixed(2)) : '');
+    document.getElementById('txtCargaKva').value = kva || '';
+    document.getElementById('txtCargaKw').value = kw || '';
+    if (kva > 0 && kw > 0) {
+      lblStatus.innerHTML = `✅ Carga configurada: <strong>${kva} kVA</strong> (${kw} kW com FP=0.92)`;
+    } else {
+      lblStatus.innerHTML = '💡 Digite kVA ou kW: a conversão é calculada automaticamente com FP = 0.92.';
+    }
   } else {
     document.getElementById('txtCargaDesc').value = '';
+    document.getElementById('txtCargaKva').value = '';
     document.getElementById('txtCargaKw').value = '';
+    lblStatus.innerHTML = '💡 Digite kVA ou kW: a conversão é calculada automaticamente com FP = 0.92.';
   }
 
   // Obs
@@ -223,6 +235,43 @@ function abrirDrawerParaPoste(id) {
 function fecharDrawer() {
   document.getElementById('posteDrawer').classList.remove('open');
   currentPosteId = null;
+}
+
+// Funções de Carga Especial Trifásica & Conversão FP = 0.92
+const FP_PADRAO = 0.92;
+
+function setDescCarga(nome) {
+  const input = document.getElementById('txtCargaDesc');
+  input.value = nome;
+  input.focus();
+}
+
+function converterPotencia(origem) {
+  const inputKva = document.getElementById('txtCargaKva');
+  const inputKw = document.getElementById('txtCargaKw');
+  const lblStatus = document.getElementById('lblPotenciaStatus');
+
+  if (origem === 'kva') {
+    const valKva = parseFloat(inputKva.value);
+    if (!isNaN(valKva) && valKva > 0) {
+      const calcKw = Number((valKva * FP_PADRAO).toFixed(2));
+      inputKw.value = calcKw;
+      lblStatus.innerHTML = `⚡ <strong>${valKva.toFixed(1)} kVA</strong> convertidos para <strong>${calcKw.toFixed(2)} kW</strong> (FP = 0.92)`;
+    } else {
+      inputKw.value = '';
+      lblStatus.innerHTML = '💡 Digite kVA ou kW: a conversão é calculada automaticamente com FP = 0.92.';
+    }
+  } else if (origem === 'kw') {
+    const valKw = parseFloat(inputKw.value);
+    if (!isNaN(valKw) && valKw > 0) {
+      const calcKva = Number((valKw / FP_PADRAO).toFixed(2));
+      inputKva.value = calcKva;
+      lblStatus.innerHTML = `⚡ <strong>${valKw.toFixed(1)} kW</strong> convertidos para <strong>${calcKva.toFixed(2)} kVA</strong> (FP = 0.92)`;
+    } else {
+      inputKva.value = '';
+      lblStatus.innerHTML = '💡 Digite kVA ou kW: a conversão é calculada automaticamente com FP = 0.92.';
+    }
+  }
 }
 
 function salvarPosteAtual() {
@@ -246,14 +295,24 @@ function salvarPosteAtual() {
   p.clientes_bi = parseInt(document.getElementById('cntBi').value, 10) || 0;
   p.clientes_tri = parseInt(document.getElementById('cntTri').value, 10) || 0;
 
-  // Carga Especial
+  // Carga Especial Trifásica com kVA e kW
   const descCarga = document.getElementById('txtCargaDesc').value.trim();
-  const kwCarga = parseFloat(document.getElementById('txtCargaKw').value) || 0;
+  let kvaCarga = parseFloat(document.getElementById('txtCargaKva').value) || 0;
+  let kwCarga = parseFloat(document.getElementById('txtCargaKw').value) || 0;
+
+  if (kvaCarga > 0 && kwCarga <= 0) {
+    kwCarga = Number((kvaCarga * FP_PADRAO).toFixed(2));
+  } else if (kwCarga > 0 && kvaCarga <= 0) {
+    kvaCarga = Number((kwCarga / FP_PADRAO).toFixed(2));
+  }
+
   p.cargas_especiais = [];
-  if (descCarga || kwCarga > 0) {
+  if (descCarga || kvaCarga > 0 || kwCarga > 0) {
     p.cargas_especiais.push({
       descricao: descCarga || 'Carga Especial',
+      potencia_kva: kvaCarga,
       potencia_kw: kwCarga,
+      fp: FP_PADRAO,
       tipo: 'Trifásica'
     });
   }

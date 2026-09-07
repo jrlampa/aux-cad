@@ -87,8 +87,10 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `web/index.html` & `web/style.css` (451 linhas): Interface gráfica executiva moderna (Inter, paleta `#1B365D`):
   - **Lançamento Direto de Coordenadas de Campo**: Modal dedicado com suporte a **UTM Métrico** (E/X, N/Y) e **Lat/Lon GPS**, calculando em tempo real e voando suavemente com animação `flyTo` até a posição exata.
   - **Configuração de Postes & Equipamentos de 1 Clique**: Tipo de poste (`11/M`, `11/400`...), estruturas MT/BT, equipamentos (IP, ATERR, DAE, Trafo, etc.).
-  - **Quantificação de Clientes & Cargas**: Contagem de clientes **Monofásicos**, **Bifásicos**, **Trifásicos** e campos para **Cargas Especiais Trifásicas** (kW/kVA).
-- `web/app.js` (368 linhas): Lógica do mapa Leaflet, camadas de satélite (ESRI / Google Híbrido / OSM), marcadores com drag & drop e conectores de linha de transmissão/distribuição.
+  - **Quantificação de Clientes & Cargas Especiais Trifásicas**:
+    - Contagem de clientes **Monofásicos**, **Bifásicos**, **Trifásicos**.
+    - **Cargas Especiais Trifásicas Interligadas**: Lançamento com conversão instantânea bidirecional entre **kVA** e **kW** com Fator de Potência **FP = 0.92** ($kVA = kW / 0.92$ e $kW = kVA \times 0.92$), com sugestões de 1 clique (Bomba, Trafo, Motor, Comércio) e anotação técnica padronizada no CAD (`CARGA TRI: BOMBA 16.3kVA (15kW)`).
+- `web/app.js` (368 linhas): Lógica do mapa Leaflet, camadas de satélite (ESRI / Google Híbrido / OSM), marcadores com drag & drop, conversão em tempo real de kVA/kW e conectores de linha de transmissão/distribuição.
 - `mapa_cad_launcher.lsp` (85 linhas): Comandos do AutoCAD **`MAPAPOSTES`** (ou **`MAPA`**) e **`ATUALIZAR_MAPAPOSTES`**.
 - `Abrir_Mapa_Postes.bat`: Atalho executável de 2 cliques na raiz para inicialização instantânea.
 
@@ -105,7 +107,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
 
 ## Validação e Qualidade
-- Suíte completa com **50 testes unitários passando 100%**:
+- Suíte completa com **51 testes unitários passando 100%**:
   - `topografia\kmz_pontos_importer.py`: 93%
   - `mapa_postes\mapa_servidor.py`: 83%
   - `orcamento\orcamento_excel.py`: 99%

@@ -74,10 +74,21 @@ def utm_to_latlon(easting: float, northing: float, zone: int, northern_hemispher
 
 
 
+def converter_potencia_trifasica(kw: float = 0.0, kva: float = 0.0, fp: float = 0.92) -> tuple[float, float]:
+    """Converte entre kW e kVA usando Fator de Potência padrão de 0.92."""
+    if kva > 0 and kw <= 0:
+        kw = round(kva * fp, 2)
+    elif kw > 0 and kva <= 0:
+        kva = round(kw / fp, 2)
+    return kw, kva
+
+
 @dataclass
 class CargaEspecial:
     descricao: str = ""
     potencia_kw: float = 0.0
+    potencia_kva: float = 0.0
+    fp: float = 0.92
     tipo: str = "Trifásica"
 
 
@@ -198,13 +209,29 @@ def gerar_lisp_postes_studio(
             cargas_resumo.append(f"{p.clientes_bi}B")
         if p.clientes_tri > 0:
             cargas_resumo.append(f"{p.clientes_tri}T")
+
+        cargas_especiais_linhas = []
         for ce in p.cargas_especiais:
-            desc = ce.get("descricao", "Carga")
-            pot = ce.get("potencia_kw", 0.0)
-            cargas_resumo.append(f"{desc} ({pot}kW)")
+            desc = ce.get("descricao", "").strip() or "Carga"
+            kw = float(ce.get("potencia_kw") or 0.0)
+            kva = float(ce.get("potencia_kva") or 0.0)
+            fp = float(ce.get("fp") or 0.92)
+            kw, kva = converter_potencia_trifasica(kw, kva, fp)
+
+            if kva > 0 and kw > 0:
+                cargas_especiais_linhas.append(f"{desc.upper()} {kva:g}kVA ({kw:g}kW)")
+                cargas_resumo.append(f"{desc[:4].upper()} {kva:g}kVA")
+            elif kva > 0:
+                cargas_especiais_linhas.append(f"{desc.upper()} {kva:g}kVA")
+                cargas_resumo.append(f"{desc[:4].upper()} {kva:g}kVA")
+            elif kw > 0:
+                cargas_especiais_linhas.append(f"{desc.upper()} {kw:g}kW")
+                cargas_resumo.append(f"{desc[:4].upper()} {kw:g}kW")
 
         if cargas_resumo:
             desc_linhas.append("CLI: " + "/".join(cargas_resumo))
+        for ce_linha in cargas_especiais_linhas:
+            desc_linhas.append(f"CARGA TRI: {ce_linha}")
 
         if p.observacao:
             desc_linhas.append(p.observacao)
@@ -430,6 +457,22 @@ class MapaHandler(http.server.SimpleHTTPRequestHandler):
                 "x_utm": round(x, 3),
                 "y_utm": round(y, 3),
                 "fuso": fuso
+            }).encode("utf-8"))
+            return
+
+        elif self.path == "/api/converter-potencia":
+            kw = float(dados.get("kw") or 0.0)
+            kva = float(dados.get("kva") or 0.0)
+            fp = float(dados.get("fp") or 0.92)
+            calc_kw, calc_kva = converter_potencia_trifasica(kw, kva, fp)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "ok": True,
+                "kw": calc_kw,
+                "kva": calc_kva,
+                "fp": fp
             }).encode("utf-8"))
             return
 

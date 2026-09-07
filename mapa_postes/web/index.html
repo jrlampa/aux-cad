@@ -164,12 +164,43 @@
             </div>
           </div>
 
-          <!-- Carga Especial Trifásica -->
-          <div class="mt-2">
-            <label class="sub-label">Carga Especial Trifásica (Motor / Oficina / Bomba)</label>
-            <div class="row-flex">
-              <input type="text" id="txtCargaDesc" class="form-control" placeholder="Descrição (ex: Bomba 15CV)">
-              <input type="number" id="txtCargaKw" class="form-control w-100" placeholder="kW" step="0.5" min="0">
+          <!-- Carga Especial Trifásica com conversão automática kW <-> kVA (FP = 0.92) -->
+          <div class="mt-2 carga-especial-card">
+            <div class="d-flex justify-between align-center">
+              <label class="sub-label">⭐ Carga Especial Trifásica</label>
+              <span class="badge-fp">FP: 0.92</span>
+            </div>
+            
+            <div class="chips-sugestoes mb-1">
+              <button type="button" class="chip-mini" onclick="setDescCarga('Bomba')">Bomba</button>
+              <button type="button" class="chip-mini" onclick="setDescCarga('Trafo Particular')">Trafo</button>
+              <button type="button" class="chip-mini" onclick="setDescCarga('Motor/Oficina')">Motor</button>
+              <button type="button" class="chip-mini" onclick="setDescCarga('Comércio')">Comércio</button>
+              <button type="button" class="chip-mini" onclick="setDescCarga('Serralheria')">Serralheria</button>
+            </div>
+
+            <input type="text" id="txtCargaDesc" class="form-control mb-1" placeholder="Descrição da carga (ex: Bomba Poço, Trafo 45kVA)">
+
+            <div class="grid-potencias">
+              <div>
+                <label class="input-micro-label">Potência kVA (Aparente)</label>
+                <div class="input-with-unit">
+                  <input type="number" id="txtCargaKva" class="form-control" placeholder="0.0" step="0.1" min="0" oninput="converterPotencia('kva')">
+                  <span class="unit-tag">kVA</span>
+                </div>
+              </div>
+
+              <div>
+                <label class="input-micro-label">Potência kW (Ativa)</label>
+                <div class="input-with-unit">
+                  <input type="number" id="txtCargaKw" class="form-control" placeholder="0.0" step="0.1" min="0" oninput="converterPotencia('kw')">
+                  <span class="unit-tag">kW</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="formula-hint mt-1" id="lblPotenciaStatus">
+              💡 Digite kVA ou kW: a conversão é calculada automaticamente com FP = 0.92.
             </div>
           </div>
         </div>

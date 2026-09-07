@@ -93,8 +93,29 @@ def test_gerar_lisp_postes_studio_com_clientes_e_cargas():
         assert '"DAE"' in conteudo
 
         # Anotação de Clientes e Cargas
-        assert 'CLI: 2M/1T/Oficina Mecânica (15.0kW)' in conteudo
+        assert 'CLI: 2M/1T/OFIC 16.3kVA' in conteudo or 'CLI: 2M/1T' in conteudo
+        assert 'CARGA TRI: OFICINA MECÂNICA 16.3kVA (15kW)' in conteudo
         assert 'POSTES_CARGAS' in conteudo
+
+
+def test_conversao_potencia_trifasica_fp92():
+    """Testa a conversão bidirecional entre kW e kVA com FP = 0.92."""
+    from mapa_postes.mapa_servidor import converter_potencia_trifasica
+
+    # 1. Informado kW -> calcula kVA
+    kw, kva = converter_potencia_trifasica(kw=15.0, fp=0.92)
+    assert kw == 15.0
+    assert kva == 16.30  # 15 / 0.92 = 16.304 -> 16.3
+
+    # 2. Informado kVA -> calcula kW
+    kw2, kva2 = converter_potencia_trifasica(kva=45.0, fp=0.92)
+    assert kva2 == 45.0
+    assert kw2 == 41.40  # 45 * 0.92 = 41.4
+
+    # 3. Informado 30 kW -> calcula kVA
+    kw3, kva3 = converter_potencia_trifasica(kw=30.0, fp=0.92)
+    assert kw3 == 30.0
+    assert kva3 == 32.61  # 30 / 0.92 = 32.608 -> 32.61
 
 
 def test_exportar_kmz_studio_comprimido():
@@ -221,6 +242,15 @@ def test_mapa_handler_api_rotas_http():
             res_conv2 = json.loads(res.read().decode("utf-8"))
             assert res_conv2["ok"] is True
             assert 687000 < res_conv2["x_utm"] < 688000
+
+            # 8. POST /api/converter-potencia (kW -> kVA com FP 0.92)
+            conv_pot_payload = json.dumps({"kw": 15.0, "fp": 0.92})
+            conn.request("POST", "/api/converter-potencia", conv_pot_payload, {"Content-Type": "application/json"})
+            res = conn.getresponse()
+            assert res.status == 200
+            res_pot = json.loads(res.read().decode("utf-8"))
+            assert res_pot["ok"] is True
+            assert res_pot["kva"] == 16.30
 
             conn.close()
 

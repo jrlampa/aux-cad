@@ -97,8 +97,10 @@ aux cad/
     - Estruturas MT: N1, N2, N3b, N4, CE1, CE2, etc.
     - Estruturas BT: S1, S2, F1, F2-D2, etc.
     - Equipamentos de 1 clique: IP, ATERR, DAE, Trafo, Chave Fusível, Para-raios.
-    - **Quantificação de Clientes**: Lançamento rápido de clientes **Monofásicos (Mono)**, **Bifásicos (Bi)**, **Trifásicos (Tri)** e campo específico para **Cargas Especiais Trifásicas** (kW/kVA).
-- `web/app.js` (368 linhas): Orquestração do mapa Leaflet com tiles de satélite ESRI World Imagery, Google Híbrido e OSM, marcadores arrastáveis, cálculo de vão linear e conexão das redes.
+    - **Quantificação de Clientes & Cargas Especiais Trifásicas**:
+      - Lançamento rápido de clientes **Monofásicos (Mono)**, **Bifásicos (Bi)** e **Trifásicos (Tri)**.
+      - **Cargas Especiais Trifásicas Interligadas**: Permite informar a potência em **kVA** ou em **kW** com conversão bidirecional automática em tempo real através do Fator de Potência **FP = 0.92** ($kVA = kW / 0.92$ e $kW = kVA \times 0.92$), com chips de sugestão rápida (Bomba, Trafo, Motor, Comércio, Serralheria) e geração de linha técnica formatada no CAD (`CARGA TRI: BOMBA 16.3kVA (15kW)`).
+- `web/app.js` (368 linhas): Orquestração do mapa Leaflet com tiles de satélite ESRI World Imagery, Google Híbrido e OSM, marcadores arrastáveis, cálculo de vão linear, conversão instantânea de potência e conexão das redes.
 - `mapa_cad_launcher.lsp` (85 linhas): Comandos do AutoCAD:
   - **`MAPAPOSTES`** (ou **`MAPA`**): Abre o estúdio no navegador e inicia o servidor caso esteja desligado.
   - **`ATUALIZAR_MAPAPOSTES`**: Lê os postes enviados pelo mapa web e gera os blocos `POSTE_`, `PONTO` e os textos técnicos empilhados no AutoCAD.
@@ -111,7 +113,7 @@ O arquivo `acaddoc.lsp` foi projetado para:
 3. Carregar as rotinas modulares de forma resiliente com tratamento de erros (`vl-catch-all-apply`).
 
 ### 8. Validação e Testes
-- Suíte com **50 testes unitários passando 100%** (`python -m pytest`).
+- Suíte com **51 testes unitários passando 100%** (`python -m pytest`).
 - Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes`).
 - Cobertura nos módulos centrais de regras de negócio entre 83% e 99% (com `kmz_pontos_importer.py` em 93% e `mapa_postes` em 83%).
 
