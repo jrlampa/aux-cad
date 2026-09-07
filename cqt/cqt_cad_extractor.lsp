@@ -193,12 +193,8 @@
   )
 
   ;; 5. Montagem do JSON de Intercâmbio e Execução da Interface
-  ;; Inicializa o arquivo temporário com caminho absoluto e seguro
-  (setq temp_dir (getvar "TEMPPREFIX"))
-  (if (or (null temp_dir) (= temp_dir ""))
-    (setq temp_dir "C:\\Temp\\")
-  )
-  (setq json_file (strcat temp_dir "cqt_cad_input.json"))
+  ;; Gera nome de arquivo temporário atômico garantido pelo Visual LISP
+  (setq json_file (vl-filename-mktemp "cqt_cad_input.json"))
 
   ;; Localiza o script Python do gerenciador CQT
   (if (boundp '*aux-cad-root*)
@@ -215,6 +211,11 @@
   (setq xlsm_file "G:\\Meu Drive\\1-HBT\\HBT\\SETEMBRO\\CQT TRECHO.xlsm")
 
   (setq trechos_list (reverse trechos_list))
+
+  ;; Garante que dest_file seja string válida
+  (if (or (null dest_file) (not (stringp dest_file)))
+    (setq dest_file "")
+  )
 
   ;; Grava o JSON de intercâmbio de forma protegida
   (setq f (open json_file "w"))
@@ -246,28 +247,19 @@
       (write-line "  ]" f)
       (write-line "}" f)
       (close f)
-      (princ (strcat "\n[INFO] Parâmetros salvos temporariamente em: " json_file))
+      (princ (strcat "\n[INFO] Parâmetros exportados com sucesso para: " json_file))
     )
     (princ (strcat "\n[AVISO] Falha ao criar arquivo de troca: " json_file))
   )
 
   (princ "\nAbrindo Interface Gráfica do CQT...")
 
-  ;; Monta linha de comando Python
+  ;; Disparo infalível e independente via startapp (idêntico ao CQTUI)
   (if (and dest_file (/= dest_file ""))
-    (setq cmd (strcat "python \"" py_script "\" \"" xlsm_file "\" \"" json_file "\" \"" dest_file "\""))
-    (setq cmd (strcat "python \"" py_script "\" \"" xlsm_file "\" \"" json_file "\""))
+    (setq cmd (strcat "/c start \"\" python \"" py_script "\" \"" xlsm_file "\" \"" json_file "\" \"" dest_file "\""))
+    (setq cmd (strcat "/c start \"\" python \"" py_script "\" \"" xlsm_file "\" \"" json_file "\""))
   )
-
-  ;; Execução resiliente via WScript.Shell ou startapp
-  (setq wsh (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
-  (if (and wsh (not (vl-catch-all-error-p wsh)))
-    (progn
-      (vlax-invoke-method wsh 'Run cmd 1 :vlax-false)
-      (vlax-release-object wsh)
-    )
-    (startapp "cmd.exe" (strcat "/c " cmd))
-  )
+  (startapp "cmd.exe" cmd)
 
   (princ)
 )
@@ -277,7 +269,7 @@
 ;;  Abre diretamente a interface gráfica interativa do CQT
 ;;  Ideal para estudos preliminares de viabilidade sem desenho.
 ;; ============================================================
-(defun c:CQTUI (/ py_script xlsm_file cmd wsh)
+(defun c:CQTUI (/ py_script xlsm_file cmd)
   (princ "\nAbrindo Gerenciador CQT para estudo prévio...")
   (if (boundp '*aux-cad-root*)
     (setq py_script (strcat *aux-cad-root* "cqt\\cqt_excel_manager.py"))
@@ -287,16 +279,8 @@
     (setq py_script "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\cqt\\cqt_excel_manager.py")
   )
   (setq xlsm_file "G:\\Meu Drive\\1-HBT\\HBT\\SETEMBRO\\CQT TRECHO.xlsm")
-  (setq cmd (strcat "python \"" py_script "\" \"" xlsm_file "\""))
-
-  (setq wsh (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
-  (if (and wsh (not (vl-catch-all-error-p wsh)))
-    (progn
-      (vlax-invoke-method wsh 'Run cmd 1 :vlax-false)
-      (vlax-release-object wsh)
-    )
-    (startapp "cmd.exe" (strcat "/c " cmd))
-  )
+  (setq cmd (strcat "/c start \"\" python \"" py_script "\" \"" xlsm_file "\""))
+  (startapp "cmd.exe" cmd)
   (princ)
 )
 
@@ -322,8 +306,16 @@
   (princ)
 )
 
+;; Comando para forçar recarga imediata da rotina na sessão atual do AutoCAD
+(defun c:RECARREGAR_CQT ()
+  (load "cqt\\cqt_cad_extractor.lsp")
+  (princ "\n[CQT] Rotina CQTCAD recarregada na memória do AutoCAD!")
+  (princ)
+)
+
 (princ "\nRotinas de Queda de Tensão (CQT) carregadas com sucesso!")
 (princ "\n  - CQTCAD     : Medir vãos no desenho ou inserir via prompt")
 (princ "\n  - CQT / CQTUI: Abrir diretamente a Interface (desenho vazio / estudo prévio)")
 (princ "\n  - CQTQUADROS : Desenhar os Quadros de Resumo e Queda de Tensão no CAD")
+(princ "\n  - RECARREGAR_CQT : Recarregar a rotina na sessão atual")
 (princ)
