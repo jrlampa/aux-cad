@@ -40,7 +40,11 @@ aux cad/
 - `postes_detalhador.py`: Parser inteligente de blocos e atributos do CAD (`12/300`, `12/600`, `10/300` etc.).
 - `croqui_ambiental_generator.py`: Gerador de Ortofoto / Croqui de Satélite georreferenciado (`CROQUI_AMBIENTAL_{SOB}.png`) com conversão Snyder analítica bidirecional (`latlon_to_utm`) e **Cache de Tiles em Disco** (`ambiental/.tile_cache/`) com chave MD5 para acelerar downloads e garantir custo zero de requisições.
 - `croqui_cad_inserter.lsp`: Inserção automática de raster georreferenciado via ActiveX (`INSCROQUI`) em Model ou PaperSpace.
-- `cad_to_kmz_exporter.py` & `cad2kmz.lsp`: Extração e exportação para Google Earth (`CAD2KMZ`) em formato WGS84 compactado.
+- `cad_to_kmz_exporter.py` & `cad2kmz.lsp` (298 linhas): Extração e exportação para Google Earth (`CAD2KMZ`) em formato WGS84 compactado:
+  - Resolução segura de temporários via `vl-filename-mktemp`.
+  - Suporte a extração do número real do poste via atributos do bloco (`cad2kmz-get-attr-num`).
+  - Suporte completo a linhas e polilinhas (`LINE`, `LWPOLYLINE`, `POLYLINE` clássica).
+  - Execução protegida via `WScript.Shell` com redirecionamento de log de diagnóstico e verificação do KMZ gerado.
 - `preferencias_ambiental.json`: Smart Cache de parâmetros de formulário.
 
 ### 2. Módulo de Queda de Tensão BT (`cqt/`)

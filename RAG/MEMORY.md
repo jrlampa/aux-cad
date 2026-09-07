@@ -44,7 +44,11 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - **Projeção Geodésica Analítica Snyder**: Conversão bidirecional milimétrica `utm_to_latlon` e `latlon_to_utm`.
 - `croqui_cad_inserter.lsp`: Inserção automática de Ortofoto/Croqui no AutoCAD via comando **`INSCROQUI`** no ModelSpace ou PaperSpace sem diálogos manuais.
 - `postes_detalhador.py`: Parser inteligente de blocos e atributos do CAD (`12/300`, `12/600`, `10/300` etc.).
-- `cad_to_kmz_exporter.py` & `cad2kmz.lsp`: Exportador direto do AutoCAD para Google Earth via comando **`CAD2KMZ`** (WGS84 `.kmz`).
+- `cad_to_kmz_exporter.py` & `cad2kmz.lsp` (298 linhas): Exportador direto do AutoCAD para Google Earth via comando **`CAD2KMZ`** (WGS84 `.kmz`):
+  - Resolução de temporários via `vl-filename-mktemp`.
+  - Extração de número do poste via atributos do bloco (`cad2kmz-get-attr-num`).
+  - Suporte completo a linhas e polilinhas (`LINE`, `LWPOLYLINE`, `POLYLINE`).
+  - Execução protegida via `WScript.Shell` com log de diagnóstico e verificação de saída.
 - `preferencias_ambiental.json`: Smart Cache de preferências locais.
 
 ### 4. `mecanico/` (Projeto Cálculo Mecânico / Esforço em Postes)
