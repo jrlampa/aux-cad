@@ -1,0 +1,263 @@
+{
+  "materiais": {
+    "PST_CONC_10_300": {
+      "codigo": "10010300",
+      "descricao": "Poste de Concreto Armado DT 10m / 300 daN",
+      "unidade": "UN",
+      "preco_unitario": 850.00,
+      "categoria": "Postes"
+    },
+    "PST_CONC_11_600": {
+      "codigo": "10011600",
+      "descricao": "Poste de Concreto Armado DT 11m / 600 daN",
+      "unidade": "UN",
+      "preco_unitario": 1250.00,
+      "categoria": "Postes"
+    },
+    "PST_CONC_12_300": {
+      "codigo": "10012300",
+      "descricao": "Poste de Concreto Armado DT 12m / 300 daN",
+      "unidade": "UN",
+      "preco_unitario": 1100.00,
+      "categoria": "Postes"
+    },
+    "PST_CONC_12_600": {
+      "codigo": "10012600",
+      "descricao": "Poste de Concreto Armado DT 12m / 600 daN",
+      "unidade": "UN",
+      "preco_unitario": 1450.00,
+      "categoria": "Postes"
+    },
+    "PST_CONC_12_1000": {
+      "codigo": "10012100",
+      "descricao": "Poste de Concreto Armado DT 12m / 1000 daN",
+      "unidade": "UN",
+      "preco_unitario": 1950.00,
+      "categoria": "Postes"
+    },
+    "PST_CONC_GENERICO": {
+      "codigo": "10000000",
+      "descricao": "Poste de Concreto Armado de Distribuição (Padrão)",
+      "unidade": "UN",
+      "preco_unitario": 980.00,
+      "categoria": "Postes"
+    },
+    "CABO_BT_1X35_35": {
+      "codigo": "20013535",
+      "descricao": "Cabo de Alumínio Multiplexado BT 0,6/1kV 1x35+35 mm²",
+      "unidade": "M",
+      "preco_unitario": 8.50,
+      "categoria": "Condutores"
+    },
+    "CABO_BT_3X35_35": {
+      "codigo": "20033535",
+      "descricao": "Cabo de Alumínio Multiplexado BT 0,6/1kV 3x35+35 mm²",
+      "unidade": "M",
+      "preco_unitario": 16.80,
+      "categoria": "Condutores"
+    },
+    "CABO_BT_3X70_50": {
+      "codigo": "20037050",
+      "descricao": "Cabo de Alumínio Multiplexado BT 0,6/1kV 3x70+50 mm²",
+      "unidade": "M",
+      "preco_unitario": 28.50,
+      "categoria": "Condutores"
+    },
+    "CABO_BT_3X120_70": {
+      "codigo": "20031270",
+      "descricao": "Cabo de Alumínio Multiplexado BT 0,6/1kV 3x120+70 mm²",
+      "unidade": "M",
+      "preco_unitario": 48.00,
+      "categoria": "Condutores"
+    },
+    "CABO_MT_3X1_0_CAA": {
+      "codigo": "21031000",
+      "descricao": "Cabo de Alumínio Nu com Alma de Aço 1/0 AWG CAA (Raven)",
+      "unidade": "M",
+      "preco_unitario": 12.30,
+      "categoria": "Condutores"
+    },
+    "CABO_MT_3X2_CAA": {
+      "codigo": "21030200",
+      "descricao": "Cabo de Alumínio Nu com Alma de Aço 2 AWG CAA (Sparrow)",
+      "unidade": "M",
+      "preco_unitario": 8.90,
+      "categoria": "Condutores"
+    },
+    "CABO_MT_3X4_CAA": {
+      "codigo": "21030400",
+      "descricao": "Cabo de Alumínio Nu com Alma de Aço 4 AWG CAA (Swan)",
+      "unidade": "M",
+      "preco_unitario": 6.70,
+      "categoria": "Condutores"
+    },
+    "CABO_MT_3X336_CA": {
+      "codigo": "21033360",
+      "descricao": "Cabo de Alumínio Nu CA 336,4 MCM (Linnet)",
+      "unidade": "M",
+      "preco_unitario": 26.00,
+      "categoria": "Condutores"
+    },
+    "CABO_MT_COMPACTO_50": {
+      "codigo": "21535000",
+      "descricao": "Cabo Protegido Compacto Rede Aérea MT 15kV 50 mm²",
+      "unidade": "M",
+      "preco_unitario": 24.50,
+      "categoria": "Condutores"
+    },
+    "CABO_MT_COMPACTO_150": {
+      "codigo": "21531500",
+      "descricao": "Cabo Protegido Compacto Rede Aérea MT 15kV 150 mm²",
+      "unidade": "M",
+      "preco_unitario": 56.00,
+      "categoria": "Condutores"
+    },
+    "TRAFO_15_KVA": {
+      "codigo": "30015000",
+      "descricao": "Transformador de Distribuição Trifásico 13,8kV / 220-127V 15 kVA",
+      "unidade": "UN",
+      "preco_unitario": 6800.00,
+      "categoria": "Equipamentos"
+    },
+    "TRAFO_30_KVA": {
+      "codigo": "30030000",
+      "descricao": "Transformador de Distribuição Trifásico 13,8kV / 220-127V 30 kVA",
+      "unidade": "UN",
+      "preco_unitario": 8900.00,
+      "categoria": "Equipamentos"
+    },
+    "TRAFO_45_KVA": {
+      "codigo": "30045000",
+      "descricao": "Transformador de Distribuição Trifásico 13,8kV / 220-127V 45 kVA",
+      "unidade": "UN",
+      "preco_unitario": 10500.00,
+      "categoria": "Equipamentos"
+    },
+    "TRAFO_75_KVA": {
+      "codigo": "30075000",
+      "descricao": "Transformador de Distribuição Trifásico 13,8kV / 220-127V 75 kVA",
+      "unidade": "UN",
+      "preco_unitario": 14200.00,
+      "categoria": "Equipamentos"
+    },
+    "TRAFO_112_KVA": {
+      "codigo": "30112000",
+      "descricao": "Transformador de Distribuição Trifásico 13,8kV / 220-127V 112,5 kVA",
+      "unidade": "UN",
+      "preco_unitario": 18500.00,
+      "categoria": "Equipamentos"
+    },
+    "TRAFO_150_KVA": {
+      "codigo": "30150000",
+      "descricao": "Transformador de Distribuição Trifásico 13,8kV / 220-127V 150 kVA",
+      "unidade": "UN",
+      "preco_unitario": 23000.00,
+      "categoria": "Equipamentos"
+    },
+    "CHAVE_FUSIVEL_15KV": {
+      "codigo": "31015000",
+      "descricao": "Chave Fusível de Distribuição Tipo Matheus 15kV 100A",
+      "unidade": "CJ",
+      "preco_unitario": 420.00,
+      "categoria": "Equipamentos"
+    },
+    "PARA_RAIOS_12KV": {
+      "codigo": "32012000",
+      "descricao": "Pára-Raios de Distribuição Óxido de Zinco Polimérico 12kV 10kA",
+      "unidade": "CJ",
+      "preco_unitario": 195.00,
+      "categoria": "Equipamentos"
+    },
+    "ESTRUTURA_N1": {
+      "codigo": "40000001",
+      "descricao": "Conjunto de Montagem de Estrutura Normal Tipo N1 MT",
+      "unidade": "CJ",
+      "preco_unitario": 380.00,
+      "categoria": "Estruturas"
+    },
+    "ESTRUTURA_N2": {
+      "codigo": "40000002",
+      "descricao": "Conjunto de Montagem de Estrutura Normal Tipo N2 MT (Ângulo Pequeno)",
+      "unidade": "CJ",
+      "preco_unitario": 460.00,
+      "categoria": "Estruturas"
+    },
+    "ESTRUTURA_N3": {
+      "codigo": "40000003",
+      "descricao": "Conjunto de Montagem de Estrutura Normal Tipo N3 MT (Beco / Fim de Linha)",
+      "unidade": "CJ",
+      "preco_unitario": 590.00,
+      "categoria": "Estruturas"
+    },
+    "ESTRUTURA_N4": {
+      "codigo": "40000004",
+      "descricao": "Conjunto de Montagem de Estrutura Normal Tipo N4 MT (Seccionamento / Ancoragem Dupla)",
+      "unidade": "CJ",
+      "preco_unitario": 780.00,
+      "categoria": "Estruturas"
+    },
+    "ESTRUTURA_CE1": {
+      "codigo": "40000101",
+      "descricao": "Conjunto de Montagem Compacto Espaçador CE1 MT",
+      "unidade": "CJ",
+      "preco_unitario": 290.00,
+      "categoria": "Estruturas"
+    },
+    "ESTRUTURA_CE2": {
+      "codigo": "40000102",
+      "descricao": "Conjunto de Montagem Compacto Espaçador CE2 MT",
+      "unidade": "CJ",
+      "preco_unitario": 340.00,
+      "categoria": "Estruturas"
+    },
+    "ESTRUTURA_B1": {
+      "codigo": "40000201",
+      "descricao": "Armação Secundária 1 Estribo com Roldana de Porcelana BT (B1)",
+      "unidade": "CJ",
+      "preco_unitario": 45.00,
+      "categoria": "Estruturas"
+    },
+    "ESTRUTURA_B2": {
+      "codigo": "40000202",
+      "descricao": "Armação Secundária 2 Estribos com Roldanas BT (B2)",
+      "unidade": "CJ",
+      "preco_unitario": 75.00,
+      "categoria": "Estruturas"
+    },
+    "ESTRUTURA_RS1": {
+      "codigo": "40000211",
+      "descricao": "Conjunto de Suspensão de Cabo Multiplexado BT (RS1)",
+      "unidade": "CJ",
+      "preco_unitario": 35.00,
+      "categoria": "Estruturas"
+    },
+    "ESTRUTURA_RS2": {
+      "codigo": "40000212",
+      "descricao": "Conjunto de Ancoragem de Cabo Multiplexado BT (RS2)",
+      "unidade": "CJ",
+      "preco_unitario": 52.00,
+      "categoria": "Estruturas"
+    },
+    "ESTAI_ANCORA": {
+      "codigo": "50000001",
+      "descricao": "Conjunto Completo de Estai de Âncora (Cabo de Aço 3/8\", Haste e Bloco)",
+      "unidade": "CJ",
+      "preco_unitario": 310.00,
+      "categoria": "Acessórios"
+    },
+    "ESTAI_CONTRAPOSTE": {
+      "codigo": "50000002",
+      "descricao": "Conjunto Completo de Estai Contraposte com Cordalheiras",
+      "unidade": "CJ",
+      "preco_unitario": 420.00,
+      "categoria": "Acessórios"
+    },
+    "ATERRAMENTO_COMPLETO": {
+      "codigo": "50000010",
+      "descricao": "Aterramento de Proteção (Haste Copperweld 5/8\"x2,4m + Conector + Cabo Nu 25mm²)",
+      "unidade": "CJ",
+      "preco_unitario": 160.00,
+      "categoria": "Acessórios"
+    }
+  }
+}

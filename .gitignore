@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.tile_cache/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# AutoCAD / Temporários / Binários compilados
+*.bak
+*.dcl_tmp
+*.tmp
+*~
+*.cuix
+*.mnr
+
+# Vídeos e modelos 3D pesados (>100MB)
+*.mp4
+*.SLDPRT
+
+# Softwares e instaladores pesados
+softwares/

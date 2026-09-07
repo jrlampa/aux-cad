@@ -1,0 +1,52 @@
+// =============================================================================
+// aux_cad_menu.mnu
+// Menu e Barra de Ferramentas nativa do AUX CAD para o AutoCAD
+// Carregável via comando MENULOAD ou CUILOAD
+// =============================================================================
+
+***MENUGROUP=AUXCAD
+
+***TOOLBARS
+**TB_AUXCAD
+ID_TbAuxCad [_Toolbar("AUX CAD - Engenharia", _Top, _Show, 100, 100, 1)]
+ID_Ajuda     [_Button("Guia de Comandos (COMANDOS)", "ICON_HELP", "ICON_HELP")]^C^CCOMANDOS
+ID_Separator0 [_Separator]
+ID_OrcCad    [_Button("Orçamento e Levantamento CAD", "ICON_ORCAD", "ICON_ORCAD")]^C^CORCAD
+ID_OrcUi     [_Button("Tabela de Materiais e Preços", "ICON_ORCUI", "ICON_ORCUI")]^C^CORCUI
+ID_Separator1 [_Separator]
+ID_Cqt       [_Button("CQT - Queda de Tensão", "ICON_CQT", "ICON_CQT")]^C^CCQT
+ID_CqtCad    [_Button("Extrair Vãos do CAD para CQT", "ICON_CQTCAD", "ICON_CQTCAD")]^C^CCQTCAD
+ID_Quadros   [_Button("Desenhar Quadros CQT", "ICON_QUADROS", "ICON_QUADROS")]^C^CCQTQUADROS
+ID_Separator2 [_Separator]
+ID_KmzCheck  [_Button("Verificação Ambiental KMZ", "ICON_KMZ", "ICON_KMZ")]^C^CKMZCHECK
+ID_InsCroqui [_Button("Inserir Ortofoto no CAD", "ICON_CROQUI", "ICON_CROQUI")]^C^CINSCROQUI
+ID_Separator3 [_Separator]
+ID_Result    [_Button("Cálculo de Esforço Resultante", "ICON_RESULT", "ICON_RESULT")]^C^CCALC_RESULTANTE
+ID_AddBloco  [_Button("Adicionar Blocos no UCS", "ICON_ADDBLOCO", "ICON_ADDBLOCO")]^C^CADDBLOCO
+ID_Separator4 [_Separator]
+ID_KmzPoste [_Button("Importar Postes do KMZ", "ICON_KMZPOSTES", "ICON_KMZPOSTES")]^C^CIMPORTAR_KMZ_POSTES
+ID_Cad2Kmz   [_Button("Exportar para Google Earth (KMZ)", "ICON_CAD2KMZ", "ICON_CAD2KMZ")]^C^CCAD2KMZ
+ID_ImportUtm [_Button("Importar Pontos UTM (CSV)", "ICON_IMPORTCSV", "ICON_IMPORTCSV")]^C^CIMPORTAR_PONTOS_UTM
+
+***POP1
+**AUXCAD_PULLDOWN
+ID_MnAuxCad  [&AUX CAD]
+ID_MnAjuda     [&0. Guia de Comandos (COMANDOS / AJUDA)]^C^CCOMANDOS
+[--]
+ID_MnOrcCad    [&1. Orçamento e Levantamento CAD (ORCAD)]^C^CORCAD
+ID_MnOrcUi     [&2. Tabela de Materiais e Preços (ORCUI)]^C^CORCUI
+[--]
+ID_MnCqt       [&3. Queda de Tensão (CQT)]^C^CCQT
+ID_MnCqtCad    [&4. Extrair Vãos CAD (CQTCAD)]^C^CCQTCAD
+ID_MnQuadros   [&5. Desenhar Quadros no CAD (CQTQUADROS)]^C^CCQTQUADROS
+[--]
+ID_MnKmz       [&4. Checagem Ambiental e Memorial (KMZCHECK)]^C^CKMZCHECK
+ID_MnCroqui    [&5. Inserir Ortofoto / Croqui (INSCROQUI)]^C^CINSCROQUI
+[--]
+ID_MnResult    [&6. Esforço Resultante em Postes (CALC_RESULTANTE)]^C^CCALC_RESULTANTE
+ID_MnAddBloco  [&7. Inserir Bloco no UCS (ADDBLOCO)]^C^CADDBLOCO
+[--]
+ID_MnKmzPoste  [&8. Importar KMZ com Postes e Textos (KMZPOSTES)]^C^CIMPORTAR_KMZ_POSTES
+ID_MnCad2Kmz   [&9. Exportar para Google Earth (CAD2KMZ)]^C^CCAD2KMZ
+ID_MnCsv       [&10. Importar CSV UTM]^C^CIMPORTAR_PONTOS_UTM
+
