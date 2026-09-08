@@ -15,9 +15,17 @@
 (setq *TB-CONDUTORES-BT*
   '(
     ("3X150+1X80" "3x150+1x80" "3x150" "1x80"   326.0 554.0 51.0 1878.0 0.2775 0.0867)
+    ("PR150"      "3x150+1x80" "3x150" "1x80"   326.0 554.0 51.0 1878.0 0.2775 0.0867)
+    ("150"        "3x150+1x80" "3x150" "1x80"   326.0 554.0 51.0 1878.0 0.2775 0.0867)
     ("3X95+1X54.6" "3x95+1x54,6" "3x95" "1x54,6" 244.0 393.0 43.0 1270.0 0.4311 0.0902)
+    ("PR95"       "3x95+1x54,6" "3x95" "1x54,6" 244.0 393.0 43.0 1270.0 0.4311 0.0902)
+    ("95"         "3x95+1x54,6" "3x95" "1x54,6" 244.0 393.0 43.0 1270.0 0.4311 0.0902)
     ("3X50+1X54.6" "3x50+1x54,6" "3x50" "1x54,6" 169.0 260.0 37.0  765.0 0.8634 0.0943)
+    ("PR50"       "3x50+1x54,6" "3x50" "1x54,6" 169.0 260.0 37.0  765.0 0.8634 0.0943)
+    ("50"         "3x50+1x54,6" "3x50" "1x54,6" 169.0 260.0 37.0  765.0 0.8634 0.0943)
     ("3X35+1X54.6" "3x35+1x54,6" "3x35" "1x54,6" 136.0 235.0 37.0  700.0 1.1694 0.0974)
+    ("PR35"       "3x35+1x54,6" "3x35" "1x54,6" 136.0 235.0 37.0  700.0 1.1694 0.0974)
+    ("35"         "3x35+1x54,6" "3x35" "1x54,6" 136.0 235.0 37.0  700.0 1.1694 0.0974)
    )
 )
 
@@ -213,6 +221,67 @@
 ;;; 4. COMANDOS INTERATIVOS NO AUTOCAD (TABELAS / CONDUTORES_BT / ESTRUTURAS_BT)
 ;;; =============================================================================
 
+;;; =============================================================================
+;;; 3. BANCO DE DADOS EM MEMÓRIA - ESFORÇOS CABOS MÉDIA TENSÃO (MT) - VÃO 40M TÍPICO
+;;; Formato por item:
+;;; (chave_cabo nome_cabo vao40_1f vao40_2f vao40_3f neutro_dan)
+;;; =============================================================================
+(setq *TB-CABOS-MT*
+  '(
+    ("1/0CAA"    "1/0 CAA"     160.0  320.0  480.0  128.0)
+    ("4/0CAA"    "4/0 CAA"     320.0  640.0  960.0  256.0)
+    ("336.4CAA"  "336,4 CAA"   589.0 1178.0 1767.0  471.0)
+    ("336CAA"    "336,4 CAA"   589.0 1178.0 1767.0  471.0)
+    ("4CAA"      "4 CAA"        75.0  150.0  225.0   60.0)
+    ("1/0CA"     "1/0 CA"      125.0  250.0  375.0  100.0)
+    ("4/0CA"     "4/0 CA"      190.0  380.0  570.0  152.0)
+    ("336.4CA"   "336,4 CA"    325.0  650.0  975.0  260.0)
+    ("336CA"     "336,4 CA"    325.0  650.0  975.0  260.0)
+    ("2CA"       "2 CA"         96.0  192.0  288.0   77.0)
+    ("50XLPE"    "35/50 XLPE"  259.0  517.0  776.0   60.0)
+    ("35XLPE"    "35/50 XLPE"  259.0  517.0  776.0   60.0)
+    ("185XLPE"   "185 XLPE"    336.0  672.0 1008.0  100.0)
+   )
+)
+
+;; Retorna tração em daN para MT (vão típico 40m se omitido)
+(defun tb-get-tracao-mt (chave_cabo n_fases / s res val)
+  (setq s (tb-norm-str chave_cabo))
+  (foreach item *TB-CABOS-MT*
+    (if (and (not res)
+             (or (= (car item) s)
+                 (vl-string-search s (car item))
+                 (vl-string-search (car item) s)))
+      (setq res item)
+    )
+  )
+  (if res
+    (cond
+      ((= n_fases 1) (nth 2 res))
+      ((= n_fases 2) (nth 3 res))
+      ((= n_fases 4) (nth 5 res)) ;; neutro
+      (t (nth 4 res))             ;; 3 fases padrão
+    )
+    0.0
+  )
+)
+
+;; Retorna tração nominal em daN como número float (busca BT primeiro, depois MT)
+(defun tb-get-tracao (chave / c val)
+  (setq c (tb-get-condutor chave))
+  (if c
+    (cdr (assoc 'tracao c))
+    (progn
+      (setq val (tb-get-tracao-mt chave 3))
+      (if (> val 0.0) val 0.0)
+    )
+  )
+)
+
+;;; =============================================================================
+;;; 4. COMANDOS INTERATIVOS NO AUTOCAD (TABELAS / CONDUTORES_BT / ESTRUTURAS_BT / CABOS_MT)
+;;; =============================================================================
+
 (defun c:CONDUTORES_BT ()
   (textscr)
   (princ "\n================================================================================")
@@ -220,16 +289,38 @@
   (princ "\n================================================================================")
   (princ "\n Condutor       | In(A) | Tração(daN) | Ø(mm) | Massa(kg/km) | R(Ω/km) | X(Ω/km)")
   (princ "\n----------------+-------+-------------+-------+--------------+---------+--------")
-  (foreach item *TB-CONDUTORES-BT*
+  (foreach item '(("3X150+1X80" "3x150+1x80" 326.0 554.0 51.0 1878.0 0.2775 0.0867)
+                  ("3X95+1X54.6" "3x95+1x54,6" 244.0 393.0 43.0 1270.0 0.4311 0.0902)
+                  ("3X50+1X54.6" "3x50+1x54,6" 169.0 260.0 37.0  765.0 0.8634 0.0943)
+                  ("3X35+1X54.6" "3x35+1x54,6" 136.0 235.0 37.0  700.0 1.1694 0.0974))
     (princ (strcat "\n " (nth 1 item)
-                   " | " (rtos (nth 4 item) 2 0) " A"
-                   " | " (rtos (nth 5 item) 2 0) " daN"
-                   " | " (rtos (nth 6 item) 2 0) " mm"
-                   " | " (rtos (nth 7 item) 2 0) " kg/km"
-                   " | " (rtos (nth 8 item) 2 4)
-                   " | " (rtos (nth 9 item) 2 4)))
+                   " | " (rtos (nth 2 item) 2 0) " A"
+                   " | " (rtos (nth 3 item) 2 0) " daN"
+                   " | " (rtos (nth 4 item) 2 0) " mm"
+                   " | " (rtos (nth 5 item) 2 0) " kg/km"
+                   " | " (rtos (nth 6 item) 2 4)
+                   " | " (rtos (nth 7 item) 2 4)))
   )
   (princ "\n================================================================================")
+  (princ)
+)
+
+(defun c:CABOS_MT ()
+  (textscr)
+  (princ "\n================================================================================")
+  (princ "\n       ESFORÇOS DE CABOS DE MÉDIA TENSÃO - MT (daN para Vão de 40m)            ")
+  (princ "\n================================================================================")
+  (princ "\n Cabo MT       | 1 Fase (daN) | 2 Fases (daN) | 3 Fases (daN) | Neutro (daN)")
+  (princ "\n---------------+--------------+---------------+---------------+--------------")
+  (foreach item *TB-CABOS-MT*
+    (princ (strcat "\n " (nth 1 item)
+                   "     | " (rtos (nth 2 item) 2 0) " daN"
+                   "      | " (rtos (nth 3 item) 2 0) " daN"
+                   "      | " (rtos (nth 4 item) 2 0) " daN"
+                   "      | " (rtos (nth 5 item) 2 0) " daN"))
+  )
+  (princ "\n================================================================================")
+  (princ "\n* Fonte: Diretório CALC_ESF (Vão padrão de distribuição urbana: 40m)")
   (princ)
 )
 
@@ -261,14 +352,15 @@
 )
 
 (defun c:TABELAS (/ opc)
-  (initget "Condutores Estruturas")
-  (setq opc (getkword "\nConsultar Tabelas BT [Condutores/Estruturas] <Condutores>: "))
-  (if (or (not opc) (= opc "Condutores"))
-    (c:CONDUTORES_BT)
-    (c:ESTRUTURAS_BT)
+  (initget "BT_Condutores BT_Estruturas MT_Cabos")
+  (setq opc (getkword "\nConsultar Tabelas [BT_Condutores/BT_Estruturas/MT_Cabos] <BT_Condutores>: "))
+  (cond
+    ((= opc "BT_Estruturas") (c:ESTRUTURAS_BT))
+    ((= opc "MT_Cabos")      (c:CABOS_MT))
+    (t                       (c:CONDUTORES_BT))
   )
   (princ)
 )
 
-(princ "\n[AUX CAD] Módulo de Tabelas Técnicas BT carregado. Comandos: TABELAS, CONDUTORES_BT, ESTRUTURAS_BT")
+(princ "\n[AUX CAD] Tabelas Técnicas BT/MT carregadas. Comandos: TABELAS, CONDUTORES_BT, ESTRUTURAS_BT, CABOS_MT")
 (princ)

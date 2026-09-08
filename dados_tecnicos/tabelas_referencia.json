@@ -1,12 +1,13 @@
 {
   "_metadados": {
-    "titulo": "Tabelas Técnicas de Referência - Baixa Tensão (BT)",
-    "fonte": "OneNote BASE.one - INFO DE PROJETO IMPORTANTE",
+    "titulo": "Tabelas Técnicas de Referência - Redes BT e MT",
+    "fonte": "OneNote BASE.one e Diretório CALC_ESF (IM3 Brasil)",
     "tabelas": [
       "Tabela 7 - Estruturas de Baixa Tensão",
-      "Tabela 9 - Condutores de Baixa Tensão"
+      "Tabela 9 - Condutores de Baixa Tensão",
+      "Tabelas MT - Esforços de Cabos CA, CAA e XLPE por Vão (daN)"
     ],
-    "versao": "1.0.0"
+    "versao": "2.0.0"
   },
   "condutores_bt": [
     {
@@ -639,6 +640,744 @@
       "resistencia_min_poste_dan": null,
       "angulo_utilizacao": "-",
       "fixacao_rede": "-"
+    }
+  ],
+  "cabos_mt_esforcos": [
+    {
+      "tipo_cabo": "1/0 CAA",
+      "vao_m": 20,
+      "fase_1_dan": 125.0,
+      "fase_2_dan": 250.0,
+      "fase_3_dan": 375.0,
+      "neutro_dan": 100.0
+    },
+    {
+      "tipo_cabo": "1/0 CAA",
+      "vao_m": 30,
+      "fase_1_dan": 140.0,
+      "fase_2_dan": 280.0,
+      "fase_3_dan": 420.0,
+      "neutro_dan": 112.0
+    },
+    {
+      "tipo_cabo": "1/0 CAA",
+      "vao_m": 40,
+      "fase_1_dan": 160.0,
+      "fase_2_dan": 320.0,
+      "fase_3_dan": 480.0,
+      "neutro_dan": 128.0
+    },
+    {
+      "tipo_cabo": "1/0 CAA",
+      "vao_m": 50,
+      "fase_1_dan": 189.0,
+      "fase_2_dan": 378.0,
+      "fase_3_dan": 566.0,
+      "neutro_dan": 151.0
+    },
+    {
+      "tipo_cabo": "1/0 CAA",
+      "vao_m": 60,
+      "fase_1_dan": 218.0,
+      "fase_2_dan": 435.0,
+      "fase_3_dan": 653.0,
+      "neutro_dan": 174.0
+    },
+    {
+      "tipo_cabo": "1/0 CAA",
+      "vao_m": 70,
+      "fase_1_dan": 246.0,
+      "fase_2_dan": 493.0,
+      "fase_3_dan": 739.0,
+      "neutro_dan": 197.0
+    },
+    {
+      "tipo_cabo": "1/0 CAA",
+      "vao_m": 80,
+      "fase_1_dan": 275.0,
+      "fase_2_dan": 550.0,
+      "fase_3_dan": 825.0,
+      "neutro_dan": 220.0
+    },
+    {
+      "tipo_cabo": "1/0 CAA",
+      "vao_m": 100,
+      "fase_1_dan": 315.0,
+      "fase_2_dan": 630.0,
+      "fase_3_dan": 945.0,
+      "neutro_dan": 252.0
+    },
+    {
+      "tipo_cabo": "1/0 CAA",
+      "vao_m": 120,
+      "fase_1_dan": 355.0,
+      "fase_2_dan": 710.0,
+      "fase_3_dan": 1065.0,
+      "neutro_dan": 284.0
+    },
+    {
+      "tipo_cabo": "1/0 CAA",
+      "vao_m": 150,
+      "fase_1_dan": 400.0,
+      "fase_2_dan": 800.0,
+      "fase_3_dan": 1200.0,
+      "neutro_dan": 320.0
+    },
+    {
+      "tipo_cabo": "1/0 CAA",
+      "vao_m": 200,
+      "fase_1_dan": 465.0,
+      "fase_2_dan": 930.0,
+      "fase_3_dan": 1395.0,
+      "neutro_dan": 372.0
+    },
+    {
+      "tipo_cabo": "4/0 CAA",
+      "vao_m": 20,
+      "fase_1_dan": 180.0,
+      "fase_2_dan": 360.0,
+      "fase_3_dan": 540.0,
+      "neutro_dan": 144.0
+    },
+    {
+      "tipo_cabo": "4/0 CAA",
+      "vao_m": 30,
+      "fase_1_dan": 250.0,
+      "fase_2_dan": 500.0,
+      "fase_3_dan": 750.0,
+      "neutro_dan": 200.0
+    },
+    {
+      "tipo_cabo": "4/0 CAA",
+      "vao_m": 40,
+      "fase_1_dan": 320.0,
+      "fase_2_dan": 640.0,
+      "fase_3_dan": 960.0,
+      "neutro_dan": 256.0
+    },
+    {
+      "tipo_cabo": "4/0 CAA",
+      "vao_m": 50,
+      "fase_1_dan": 378.0,
+      "fase_2_dan": 756.0,
+      "fase_3_dan": 1133.0,
+      "neutro_dan": 302.0
+    },
+    {
+      "tipo_cabo": "4/0 CAA",
+      "vao_m": 60,
+      "fase_1_dan": 436.0,
+      "fase_2_dan": 871.0,
+      "fase_3_dan": 1307.0,
+      "neutro_dan": 348.0
+    },
+    {
+      "tipo_cabo": "4/0 CAA",
+      "vao_m": 70,
+      "fase_1_dan": 493.0,
+      "fase_2_dan": 987.0,
+      "fase_3_dan": 1480.0,
+      "neutro_dan": 395.0
+    },
+    {
+      "tipo_cabo": "4/0 CAA",
+      "vao_m": 80,
+      "fase_1_dan": 551.0,
+      "fase_2_dan": 1102.0,
+      "fase_3_dan": 1653.0,
+      "neutro_dan": 441.0
+    },
+    {
+      "tipo_cabo": "4/0 CAA",
+      "vao_m": 100,
+      "fase_1_dan": 602.0,
+      "fase_2_dan": 1203.0,
+      "fase_3_dan": 1805.0,
+      "neutro_dan": 481.0
+    },
+    {
+      "tipo_cabo": "4/0 CAA",
+      "vao_m": 120,
+      "fase_1_dan": 652.0,
+      "fase_2_dan": 1304.0,
+      "fase_3_dan": 1956.0,
+      "neutro_dan": 522.0
+    },
+    {
+      "tipo_cabo": "4/0 CAA",
+      "vao_m": 150,
+      "fase_1_dan": 706.0,
+      "fase_2_dan": 1412.0,
+      "fase_3_dan": 2118.0,
+      "neutro_dan": 565.0
+    },
+    {
+      "tipo_cabo": "4/0 CAA",
+      "vao_m": 200,
+      "fase_1_dan": 784.0,
+      "fase_2_dan": 1568.0,
+      "fase_3_dan": 2352.0,
+      "neutro_dan": 627.0
+    },
+    {
+      "tipo_cabo": "336,4 CAA",
+      "vao_m": 20,
+      "fase_1_dan": 389.0,
+      "fase_2_dan": 778.0,
+      "fase_3_dan": 1167.0,
+      "neutro_dan": 311.0
+    },
+    {
+      "tipo_cabo": "336,4 CAA",
+      "vao_m": 30,
+      "fase_1_dan": 489.0,
+      "fase_2_dan": 978.0,
+      "fase_3_dan": 1467.0,
+      "neutro_dan": 391.0
+    },
+    {
+      "tipo_cabo": "336,4 CAA",
+      "vao_m": 40,
+      "fase_1_dan": 589.0,
+      "fase_2_dan": 1178.0,
+      "fase_3_dan": 1767.0,
+      "neutro_dan": 471.0
+    },
+    {
+      "tipo_cabo": "336,4 CAA",
+      "vao_m": 50,
+      "fase_1_dan": 661.0,
+      "fase_2_dan": 1322.0,
+      "fase_3_dan": 1982.0,
+      "neutro_dan": 529.0
+    },
+    {
+      "tipo_cabo": "336,4 CAA",
+      "vao_m": 60,
+      "fase_1_dan": 733.0,
+      "fase_2_dan": 1465.0,
+      "fase_3_dan": 2198.0,
+      "neutro_dan": 586.0
+    },
+    {
+      "tipo_cabo": "336,4 CAA",
+      "vao_m": 70,
+      "fase_1_dan": 804.0,
+      "fase_2_dan": 1609.0,
+      "fase_3_dan": 2413.0,
+      "neutro_dan": 643.0
+    },
+    {
+      "tipo_cabo": "336,4 CAA",
+      "vao_m": 80,
+      "fase_1_dan": 876.0,
+      "fase_2_dan": 1752.0,
+      "fase_3_dan": 2628.0,
+      "neutro_dan": 701.0
+    },
+    {
+      "tipo_cabo": "336,4 CAA",
+      "vao_m": 100,
+      "fase_1_dan": 956.0,
+      "fase_2_dan": 1911.0,
+      "fase_3_dan": 2867.0,
+      "neutro_dan": 764.0
+    },
+    {
+      "tipo_cabo": "336,4 CAA",
+      "vao_m": 120,
+      "fase_1_dan": 1035.0,
+      "fase_2_dan": 2070.0,
+      "fase_3_dan": 3105.0,
+      "neutro_dan": 828.0
+    },
+    {
+      "tipo_cabo": "336,4 CAA",
+      "vao_m": 150,
+      "fase_1_dan": 1140.0,
+      "fase_2_dan": 2280.0,
+      "fase_3_dan": 3420.0,
+      "neutro_dan": 912.0
+    },
+    {
+      "tipo_cabo": "336,4 CAA",
+      "vao_m": 200,
+      "fase_1_dan": 1295.0,
+      "fase_2_dan": 2590.0,
+      "fase_3_dan": 3885.0,
+      "neutro_dan": 1036.0
+    },
+    {
+      "tipo_cabo": "4 CAA",
+      "vao_m": 20,
+      "fase_1_dan": 60.0,
+      "fase_2_dan": 120.0,
+      "fase_3_dan": 180.0,
+      "neutro_dan": 48.0
+    },
+    {
+      "tipo_cabo": "4 CAA",
+      "vao_m": 30,
+      "fase_1_dan": 68.0,
+      "fase_2_dan": 135.0,
+      "fase_3_dan": 203.0,
+      "neutro_dan": 54.0
+    },
+    {
+      "tipo_cabo": "4 CAA",
+      "vao_m": 40,
+      "fase_1_dan": 75.0,
+      "fase_2_dan": 150.0,
+      "fase_3_dan": 225.0,
+      "neutro_dan": 60.0
+    },
+    {
+      "tipo_cabo": "4 CAA",
+      "vao_m": 50,
+      "fase_1_dan": 90.0,
+      "fase_2_dan": 180.0,
+      "fase_3_dan": 270.0,
+      "neutro_dan": 72.0
+    },
+    {
+      "tipo_cabo": "4 CAA",
+      "vao_m": 60,
+      "fase_1_dan": 105.0,
+      "fase_2_dan": 210.0,
+      "fase_3_dan": 315.0,
+      "neutro_dan": 84.0
+    },
+    {
+      "tipo_cabo": "4 CAA",
+      "vao_m": 70,
+      "fase_1_dan": 120.0,
+      "fase_2_dan": 240.0,
+      "fase_3_dan": 360.0,
+      "neutro_dan": 96.0
+    },
+    {
+      "tipo_cabo": "4 CAA",
+      "vao_m": 80,
+      "fase_1_dan": 135.0,
+      "fase_2_dan": 270.0,
+      "fase_3_dan": 405.0,
+      "neutro_dan": 108.0
+    },
+    {
+      "tipo_cabo": "4 CAA",
+      "vao_m": 100,
+      "fase_1_dan": 155.0,
+      "fase_2_dan": 310.0,
+      "fase_3_dan": 465.0,
+      "neutro_dan": 124.0
+    },
+    {
+      "tipo_cabo": "4 CAA",
+      "vao_m": 120,
+      "fase_1_dan": 175.0,
+      "fase_2_dan": 350.0,
+      "fase_3_dan": 525.0,
+      "neutro_dan": 140.0
+    },
+    {
+      "tipo_cabo": "4 CAA",
+      "vao_m": 150,
+      "fase_1_dan": 204.0,
+      "fase_2_dan": 407.0,
+      "fase_3_dan": 611.0,
+      "neutro_dan": 163.0
+    },
+    {
+      "tipo_cabo": "4 CAA",
+      "vao_m": 200,
+      "fase_1_dan": 249.0,
+      "fase_2_dan": 498.0,
+      "fase_3_dan": 747.0,
+      "neutro_dan": 199.0
+    },
+    {
+      "tipo_cabo": "1/0 CA",
+      "vao_m": 20,
+      "fase_1_dan": 110.0,
+      "fase_2_dan": 220.0,
+      "fase_3_dan": 330.0,
+      "neutro_dan": 88.0
+    },
+    {
+      "tipo_cabo": "1/0 CA",
+      "vao_m": 30,
+      "fase_1_dan": 120.0,
+      "fase_2_dan": 240.0,
+      "fase_3_dan": 360.0,
+      "neutro_dan": 96.0
+    },
+    {
+      "tipo_cabo": "1/0 CA",
+      "vao_m": 40,
+      "fase_1_dan": 125.0,
+      "fase_2_dan": 250.0,
+      "fase_3_dan": 375.0,
+      "neutro_dan": 100.0
+    },
+    {
+      "tipo_cabo": "1/0 CA",
+      "vao_m": 50,
+      "fase_1_dan": 140.0,
+      "fase_2_dan": 281.0,
+      "fase_3_dan": 421.0,
+      "neutro_dan": 112.0
+    },
+    {
+      "tipo_cabo": "1/0 CA",
+      "vao_m": 60,
+      "fase_1_dan": 156.0,
+      "fase_2_dan": 311.0,
+      "fase_3_dan": 467.0,
+      "neutro_dan": 124.0
+    },
+    {
+      "tipo_cabo": "1/0 CA",
+      "vao_m": 70,
+      "fase_1_dan": 171.0,
+      "fase_2_dan": 342.0,
+      "fase_3_dan": 512.0,
+      "neutro_dan": 137.0
+    },
+    {
+      "tipo_cabo": "1/0 CA",
+      "vao_m": 80,
+      "fase_1_dan": 186.0,
+      "fase_2_dan": 372.0,
+      "fase_3_dan": 558.0,
+      "neutro_dan": 149.0
+    },
+    {
+      "tipo_cabo": "4/0 CA",
+      "vao_m": 20,
+      "fase_1_dan": 155.0,
+      "fase_2_dan": 310.0,
+      "fase_3_dan": 465.0,
+      "neutro_dan": 124.0
+    },
+    {
+      "tipo_cabo": "4/0 CA",
+      "vao_m": 30,
+      "fase_1_dan": 170.0,
+      "fase_2_dan": 340.0,
+      "fase_3_dan": 510.0,
+      "neutro_dan": 136.0
+    },
+    {
+      "tipo_cabo": "4/0 CA",
+      "vao_m": 40,
+      "fase_1_dan": 190.0,
+      "fase_2_dan": 380.0,
+      "fase_3_dan": 570.0,
+      "neutro_dan": 152.0
+    },
+    {
+      "tipo_cabo": "4/0 CA",
+      "vao_m": 50,
+      "fase_1_dan": 221.0,
+      "fase_2_dan": 443.0,
+      "fase_3_dan": 664.0,
+      "neutro_dan": 177.0
+    },
+    {
+      "tipo_cabo": "4/0 CA",
+      "vao_m": 60,
+      "fase_1_dan": 253.0,
+      "fase_2_dan": 505.0,
+      "fase_3_dan": 758.0,
+      "neutro_dan": 202.0
+    },
+    {
+      "tipo_cabo": "4/0 CA",
+      "vao_m": 70,
+      "fase_1_dan": 284.0,
+      "fase_2_dan": 568.0,
+      "fase_3_dan": 851.0,
+      "neutro_dan": 227.0
+    },
+    {
+      "tipo_cabo": "4/0 CA",
+      "vao_m": 80,
+      "fase_1_dan": 315.0,
+      "fase_2_dan": 630.0,
+      "fase_3_dan": 945.0,
+      "neutro_dan": 252.0
+    },
+    {
+      "tipo_cabo": "4/0 CA",
+      "vao_m": 100,
+      "fase_1_dan": 375.0,
+      "fase_2_dan": 750.0,
+      "fase_3_dan": 1125.0,
+      "neutro_dan": 300.0
+    },
+    {
+      "tipo_cabo": "336,4 CA",
+      "vao_m": 20,
+      "fase_1_dan": 246.0,
+      "fase_2_dan": 492.0,
+      "fase_3_dan": 738.0,
+      "neutro_dan": 197.0
+    },
+    {
+      "tipo_cabo": "336,4 CA",
+      "vao_m": 30,
+      "fase_1_dan": 286.0,
+      "fase_2_dan": 571.0,
+      "fase_3_dan": 857.0,
+      "neutro_dan": 228.0
+    },
+    {
+      "tipo_cabo": "336,4 CA",
+      "vao_m": 40,
+      "fase_1_dan": 325.0,
+      "fase_2_dan": 650.0,
+      "fase_3_dan": 975.0,
+      "neutro_dan": 260.0
+    },
+    {
+      "tipo_cabo": "336,4 CA",
+      "vao_m": 50,
+      "fase_1_dan": 365.0,
+      "fase_2_dan": 729.0,
+      "fase_3_dan": 1094.0,
+      "neutro_dan": 292.0
+    },
+    {
+      "tipo_cabo": "336,4 CA",
+      "vao_m": 60,
+      "fase_1_dan": 404.0,
+      "fase_2_dan": 808.0,
+      "fase_3_dan": 1212.0,
+      "neutro_dan": 323.0
+    },
+    {
+      "tipo_cabo": "336,4 CA",
+      "vao_m": 70,
+      "fase_1_dan": 444.0,
+      "fase_2_dan": 887.0,
+      "fase_3_dan": 1331.0,
+      "neutro_dan": 355.0
+    },
+    {
+      "tipo_cabo": "336,4 CA",
+      "vao_m": 80,
+      "fase_1_dan": 483.0,
+      "fase_2_dan": 966.0,
+      "fase_3_dan": 1449.0,
+      "neutro_dan": 386.0
+    },
+    {
+      "tipo_cabo": "336,4 CA",
+      "vao_m": 100,
+      "fase_1_dan": 561.0,
+      "fase_2_dan": 1122.0,
+      "fase_3_dan": 1683.0,
+      "neutro_dan": 449.0
+    },
+    {
+      "tipo_cabo": "336,4 CA",
+      "vao_m": 120,
+      "fase_1_dan": 639.0,
+      "fase_2_dan": 1278.0,
+      "fase_3_dan": 1917.0,
+      "neutro_dan": 511.0
+    },
+    {
+      "tipo_cabo": "2 CA",
+      "vao_m": 20,
+      "fase_1_dan": 76.0,
+      "fase_2_dan": 152.0,
+      "fase_3_dan": 228.0,
+      "neutro_dan": 61.0
+    },
+    {
+      "tipo_cabo": "2 CA",
+      "vao_m": 30,
+      "fase_1_dan": 91.0,
+      "fase_2_dan": 182.0,
+      "fase_3_dan": 273.0,
+      "neutro_dan": 73.0
+    },
+    {
+      "tipo_cabo": "2 CA",
+      "vao_m": 40,
+      "fase_1_dan": 96.0,
+      "fase_2_dan": 192.0,
+      "fase_3_dan": 288.0,
+      "neutro_dan": 77.0
+    },
+    {
+      "tipo_cabo": "2 CA",
+      "vao_m": 50,
+      "fase_1_dan": 105.0,
+      "fase_2_dan": 211.0,
+      "fase_3_dan": 316.0,
+      "neutro_dan": 84.0
+    },
+    {
+      "tipo_cabo": "2 CA",
+      "vao_m": 60,
+      "fase_1_dan": 115.0,
+      "fase_2_dan": 229.0,
+      "fase_3_dan": 344.0,
+      "neutro_dan": 92.0
+    },
+    {
+      "tipo_cabo": "2 CA",
+      "vao_m": 70,
+      "fase_1_dan": 124.0,
+      "fase_2_dan": 248.0,
+      "fase_3_dan": 371.0,
+      "neutro_dan": 99.0
+    },
+    {
+      "tipo_cabo": "2 CA",
+      "vao_m": 80,
+      "fase_1_dan": 133.0,
+      "fase_2_dan": 266.0,
+      "fase_3_dan": 399.0,
+      "neutro_dan": 106.0
+    },
+    {
+      "tipo_cabo": "2 CA",
+      "vao_m": 100,
+      "fase_1_dan": 152.0,
+      "fase_2_dan": 303.0,
+      "fase_3_dan": 455.0,
+      "neutro_dan": 121.0
+    },
+    {
+      "tipo_cabo": "35/50 XLPE",
+      "vao_m": 10,
+      "fase_1_dan": 154.0,
+      "fase_2_dan": 307.0,
+      "fase_3_dan": 461.0,
+      "neutro_dan": 42.0
+    },
+    {
+      "tipo_cabo": "35/50 XLPE",
+      "vao_m": 20,
+      "fase_1_dan": 188.0,
+      "fase_2_dan": 375.0,
+      "fase_3_dan": 563.0,
+      "neutro_dan": 48.0
+    },
+    {
+      "tipo_cabo": "35/50 XLPE",
+      "vao_m": 30,
+      "fase_1_dan": 226.0,
+      "fase_2_dan": 453.0,
+      "fase_3_dan": 679.0,
+      "neutro_dan": 54.0
+    },
+    {
+      "tipo_cabo": "35/50 XLPE",
+      "vao_m": 40,
+      "fase_1_dan": 259.0,
+      "fase_2_dan": 517.0,
+      "fase_3_dan": 776.0,
+      "neutro_dan": 60.0
+    },
+    {
+      "tipo_cabo": "35/50 XLPE",
+      "vao_m": 50,
+      "fase_1_dan": 286.0,
+      "fase_2_dan": 571.0,
+      "fase_3_dan": 857.0,
+      "neutro_dan": 72.0
+    },
+    {
+      "tipo_cabo": "35/50 XLPE",
+      "vao_m": 60,
+      "fase_1_dan": 309.0,
+      "fase_2_dan": 617.0,
+      "fase_3_dan": 926.0,
+      "neutro_dan": 84.0
+    },
+    {
+      "tipo_cabo": "35/50 XLPE",
+      "vao_m": 70,
+      "fase_1_dan": 328.0,
+      "fase_2_dan": 656.0,
+      "fase_3_dan": 984.0,
+      "neutro_dan": 96.0
+    },
+    {
+      "tipo_cabo": "35/50 XLPE",
+      "vao_m": 80,
+      "fase_1_dan": 345.0,
+      "fase_2_dan": 690.0,
+      "fase_3_dan": 1035.0,
+      "neutro_dan": 108.0
+    },
+    {
+      "tipo_cabo": "185 XLPE",
+      "vao_m": 10,
+      "fase_1_dan": 171.0,
+      "fase_2_dan": 343.0,
+      "fase_3_dan": 514.0,
+      "neutro_dan": 82.0
+    },
+    {
+      "tipo_cabo": "185 XLPE",
+      "vao_m": 20,
+      "fase_1_dan": 235.0,
+      "fase_2_dan": 471.0,
+      "fase_3_dan": 706.0,
+      "neutro_dan": 88.0
+    },
+    {
+      "tipo_cabo": "185 XLPE",
+      "vao_m": 30,
+      "fase_1_dan": 280.0,
+      "fase_2_dan": 561.0,
+      "fase_3_dan": 841.0,
+      "neutro_dan": 96.0
+    },
+    {
+      "tipo_cabo": "185 XLPE",
+      "vao_m": 40,
+      "fase_1_dan": 336.0,
+      "fase_2_dan": 672.0,
+      "fase_3_dan": 1008.0,
+      "neutro_dan": 100.0
+    },
+    {
+      "tipo_cabo": "185 XLPE",
+      "vao_m": 50,
+      "fase_1_dan": 375.0,
+      "fase_2_dan": 751.0,
+      "fase_3_dan": 1126.0,
+      "neutro_dan": 112.0
+    },
+    {
+      "tipo_cabo": "185 XLPE",
+      "vao_m": 60,
+      "fase_1_dan": 410.0,
+      "fase_2_dan": 819.0,
+      "fase_3_dan": 1229.0,
+      "neutro_dan": 124.0
+    },
+    {
+      "tipo_cabo": "185 XLPE",
+      "vao_m": 70,
+      "fase_1_dan": 440.0,
+      "fase_2_dan": 880.0,
+      "fase_3_dan": 1320.0,
+      "neutro_dan": 137.0
+    },
+    {
+      "tipo_cabo": "185 XLPE",
+      "vao_m": 80,
+      "fase_1_dan": 466.0,
+      "fase_2_dan": 933.0,
+      "fase_3_dan": 1399.0,
+      "neutro_dan": 149.0
     }
   ]
 }

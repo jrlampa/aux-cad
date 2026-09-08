@@ -99,15 +99,16 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `mapa_cad_launcher.lsp` (85 linhas): Comandos do AutoCAD **`MAPAPOSTES`** (ou **`MAPA`**) e **`ATUALIZAR_MAPAPOSTES`**.
 - `Abrir_Mapa_Postes.bat`: Atalho executável de 2 cliques na raiz para inicialização instantânea.
 
-### 8. `dados_tecnicos/` (Tabelas de Referência Técnicas BT: SQLite3, JSON e AutoLISP)
-- `tabelas_referencia.py` (220 linhas): Criação, exportação e consultas rápidas das tabelas normativas oficiais de Baixa Tensão (BT) da concessionária:
+### 8. `dados_tecnicos/` (Tabelas de Referência Técnicas BT & MT: SQLite3, JSON e AutoLISP)
+- `tabelas_referencia.py` (390 linhas): Criação, exportação e consultas rápidas das tabelas normativas oficiais de Baixa Tensão (BT) e Média Tensão (MT) da concessionária (Fonte: OneNote `BASE.one` e diretório `CALC_ESF`):
   - **Tabela 9 - Condutores de Baixa Tensão**: Dados elétricos e mecânicos reais (`3x150+1x80`, `3x95+1x54,6`, `3x50+1x54,6`, `3x35+1x54,6`), incluindo corrente admissível ($I_n$), tração nominal em daN, diâmetro total (mm), massa linear (kg/km), resistência ($R$ em $\Omega/km$) e reatância ($X$ em $\Omega/km$).
   - **Tabela 7 - Estruturas de Baixa Tensão**: Matriz completa de estruturas (`SI1`, `SI1.AF`, `SI1.2AF`, `SI1B.SI3`, `SI1A.SI3`, `SI1.SI4`, `SI3.S3`, `SI4.SI3`, `SI4`, `SI3`, `SI3.SI3`, `DERIV_VAO`, `FLYTAP`), com seções de neutro/fase, esforço mínimo do poste (300/600 daN), ângulo de aplicação e tipo de fixação mecânica.
-  - **Interoperabilidade SQLite3 & JSON**: Gera automaticamente `tabelas_referencia.sqlite3` com índices e `tabelas_referencia.json` para integração transparente.
-- `tabelas_referencia.lsp` (220 linhas): Biblioteca AutoLISP de alto desempenho com dados em memória nativa (zero latência):
-  - Funções de API LISP: `(tb-get-condutor chave)`, `(tb-get-tracao chave)`, `(tb-get-estrutura cod fase)`, `(tb-list-condutores)`, `(tb-list-estruturas)`.
-  - Comandos interativos no console do AutoCAD: **`TABELAS`**, **`CONDUTORES_BT`**, **`ESTRUTURAS_BT`** e **`CONSULTAR_TABELA`**.
-  - Integração com `mecanico/CALC_RESULTANTE_v1.0.lsp`: permite informar tanto a força em daN quanto o código do cabo (`150`, `95`, `50`, `35`) com resolução automática de tração.
+  - **Tabelas de Média Tensão (MT)**: Esforços mecânicos por vão (daN) para cabos de alumínio com alma de aço (`CAA`), alumínio puro (`CA`) e protegidos (`XLPE`): `1/0 CAA`, `4/0 CAA`, `336,4 CAA`, `4 CAA`, `1/0 CA`, `4/0 CA`, `336,4 CA`, `2 CA`, `35/50 XLPE` e `185 XLPE`.
+  - **Interoperabilidade SQLite3 & JSON**: Gera automaticamente `tabelas_referencia.sqlite3` com tabelas `condutores_bt`, `estruturas_bt` e `cabos_mt_esforcos` indexadas, além do arquivo padronizado `tabelas_referencia.json` (v2.0.0).
+- `tabelas_referencia.lsp` (280 linhas): Biblioteca AutoLISP de alto desempenho com dados em memória nativa (zero latência):
+  - Funções de API LISP: `(tb-get-condutor chave)`, `(tb-get-tracao chave)`, `(tb-get-tracao-mt chave n_fases)`, `(tb-get-estrutura cod fase)`, `(tb-list-condutores)`, `(tb-list-estruturas)`.
+  - Comandos interativos no console do AutoCAD: **`TABELAS`**, **`CONDUTORES_BT`**, **`ESTRUTURAS_BT`**, **`CABOS_MT`** e **`CONSULTAR_TABELA`**.
+  - Integração com `mecanico/CALC_RESULTANTE_v1.0.lsp`: aceita tração em daN digitada manualmente (ex: `150d`, `250`, `300`, `=150`) OU código de cabo (`PR150`, `PR95`, `PR50`, `PR35`, `150`, `95`, `50`, `35`, `1/0CAA`, `4/0CAA`), com tecla `?` para ajuda rápida.
 
 ### 9. `softwares/` (Instaladores e Aplicações Externas)
 - `sisRUA-Installer-1.1.0-Optimized.exe` & `sisRUA-Installer-1.1.0.zip`
@@ -122,10 +123,10 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
 
 ## Validação e Qualidade
-- Suíte completa com **62 testes unitários passando 100%** (`python -m pytest --cov`):
+- Suíte completa com **63 testes unitários passando 100%** (`python -m pytest --cov`):
   - `orcamento\orcamento_excel.py`: 99%
   - `ambiental\postes_detalhador.py`: 98%
-  - `dados_tecnicos\tabelas_referencia.py`: 94%
+  - `dados_tecnicos\tabelas_referencia.py`: 95%
   - `topografia\kmz_pontos_importer.py`: 93%
   - `ambiental\checklist_ambiental_manager.py`: 92%
   - `cqt\cqt_live_calc.py`: 91%

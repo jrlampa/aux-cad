@@ -37,6 +37,16 @@ class EstruturaBT:
     fixacao_rede: str
 
 
+@dataclass
+class CaboMTEsforco:
+    tipo_cabo: str
+    vao_m: int
+    fase_1_dan: float
+    fase_2_dan: float
+    fase_3_dan: float
+    neutro_dan: float
+
+
 # ==============================================================================
 # DADOS REAIS - TABELA 9: CONDUTORES DE BAIXA TENSÃO
 # ==============================================================================
@@ -203,6 +213,82 @@ ESTRUTURAS_BT_DADOS.extend(
 
 
 # ==============================================================================
+# DADOS REAIS - ESFORÇOS CABOS MÉDIA TENSÃO (MT) POR VÃO (daN)
+# Fonte: Diretório "CALC_ESF" (Cálculo de Esforço / IM3 Brasil)
+# ==============================================================================
+_MT_TABELAS_RAW: Dict[str, Dict[int, tuple]] = {
+    "1/0 CAA": {
+        20: (125, 250, 375, 100), 30: (140, 280, 420, 112), 40: (160, 320, 480, 128),
+        50: (189, 378, 566, 151), 60: (218, 435, 653, 174), 70: (246, 493, 739, 197),
+        80: (275, 550, 825, 220), 100: (315, 630, 945, 252), 120: (355, 710, 1065, 284),
+        150: (400, 800, 1200, 320), 200: (465, 930, 1395, 372),
+    },
+    "4/0 CAA": {
+        20: (180, 360, 540, 144), 30: (250, 500, 750, 200), 40: (320, 640, 960, 256),
+        50: (378, 756, 1133, 302), 60: (436, 871, 1307, 348), 70: (493, 987, 1480, 395),
+        80: (551, 1102, 1653, 441), 100: (602, 1203, 1805, 481), 120: (652, 1304, 1956, 522),
+        150: (706, 1412, 2118, 565), 200: (784, 1568, 2352, 627),
+    },
+    "336,4 CAA": {
+        20: (389, 778, 1167, 311), 30: (489, 978, 1467, 391), 40: (589, 1178, 1767, 471),
+        50: (661, 1322, 1982, 529), 60: (733, 1465, 2198, 586), 70: (804, 1609, 2413, 643),
+        80: (876, 1752, 2628, 701), 100: (956, 1911, 2867, 764), 120: (1035, 2070, 3105, 828),
+        150: (1140, 2280, 3420, 912), 200: (1295, 2590, 3885, 1036),
+    },
+    "4 CAA": {
+        20: (60, 120, 180, 48), 30: (68, 135, 203, 54), 40: (75, 150, 225, 60),
+        50: (90, 180, 270, 72), 60: (105, 210, 315, 84), 70: (120, 240, 360, 96),
+        80: (135, 270, 405, 108), 100: (155, 310, 465, 124), 120: (175, 350, 525, 140),
+        150: (204, 407, 611, 163), 200: (249, 498, 747, 199),
+    },
+    "1/0 CA": {
+        20: (110, 220, 330, 88), 30: (120, 240, 360, 96), 40: (125, 250, 375, 100),
+        50: (140, 281, 421, 112), 60: (156, 311, 467, 124), 70: (171, 342, 512, 137),
+        80: (186, 372, 558, 149),
+    },
+    "4/0 CA": {
+        20: (155, 310, 465, 124), 30: (170, 340, 510, 136), 40: (190, 380, 570, 152),
+        50: (221, 443, 664, 177), 60: (253, 505, 758, 202), 70: (284, 568, 851, 227),
+        80: (315, 630, 945, 252), 100: (375, 750, 1125, 300),
+    },
+    "336,4 CA": {
+        20: (246, 492, 738, 197), 30: (286, 571, 857, 228), 40: (325, 650, 975, 260),
+        50: (365, 729, 1094, 292), 60: (404, 808, 1212, 323), 70: (444, 887, 1331, 355),
+        80: (483, 966, 1449, 386), 100: (561, 1122, 1683, 449), 120: (639, 1278, 1917, 511),
+    },
+    "2 CA": {
+        20: (76, 152, 228, 61), 30: (91, 182, 273, 73), 40: (96, 192, 288, 77),
+        50: (105, 211, 316, 84), 60: (115, 229, 344, 92), 70: (124, 248, 371, 99),
+        80: (133, 266, 399, 106), 100: (152, 303, 455, 121),
+    },
+    "35/50 XLPE": {
+        10: (154, 307, 461, 42), 20: (188, 375, 563, 48), 30: (226, 453, 679, 54),
+        40: (259, 517, 776, 60), 50: (286, 571, 857, 72), 60: (309, 617, 926, 84),
+        70: (328, 656, 984, 96), 80: (345, 690, 1035, 108),
+    },
+    "185 XLPE": {
+        10: (171, 343, 514, 82), 20: (235, 471, 706, 88), 30: (280, 561, 841, 96),
+        40: (336, 672, 1008, 100), 50: (375, 751, 1126, 112), 60: (410, 819, 1229, 124),
+        70: (440, 880, 1320, 137), 80: (466, 933, 1399, 149),
+    },
+}
+
+CABOS_MT_DADOS: List[CaboMTEsforco] = []
+for cabo_nome, vaos in _MT_TABELAS_RAW.items():
+    for vao, (f1, f2, f3, neu) in vaos.items():
+        CABOS_MT_DADOS.append(
+            CaboMTEsforco(
+                tipo_cabo=cabo_nome,
+                vao_m=vao,
+                fase_1_dan=float(f1),
+                fase_2_dan=float(f2),
+                fase_3_dan=float(f3),
+                neutro_dan=float(neu),
+            )
+        )
+
+
+# ==============================================================================
 # PERSISTÊNCIA: SQLITE3 E JSON
 # ==============================================================================
 BASE_DIR = Path(__file__).resolve().parent
@@ -214,13 +300,18 @@ def exportar_para_json(caminho: Path = JSON_PATH) -> Path:
     """Exporta as tabelas para formato JSON estruturado."""
     payload = {
         "_metadados": {
-            "titulo": "Tabelas Técnicas de Referência - Baixa Tensão (BT)",
-            "fonte": "OneNote BASE.one - INFO DE PROJETO IMPORTANTE",
-            "tabelas": ["Tabela 7 - Estruturas de Baixa Tensão", "Tabela 9 - Condutores de Baixa Tensão"],
-            "versao": "1.0.0",
+            "titulo": "Tabelas Técnicas de Referência - Redes BT e MT",
+            "fonte": "OneNote BASE.one e Diretório CALC_ESF (IM3 Brasil)",
+            "tabelas": [
+                "Tabela 7 - Estruturas de Baixa Tensão",
+                "Tabela 9 - Condutores de Baixa Tensão",
+                "Tabelas MT - Esforços de Cabos CA, CAA e XLPE por Vão (daN)",
+            ],
+            "versao": "2.0.0",
         },
         "condutores_bt": [asdict(c) for c in CONDUTORES_BT_DADOS],
         "estruturas_bt": [asdict(e) for e in ESTRUTURAS_BT_DADOS],
+        "cabos_mt_esforcos": [asdict(m) for m in CABOS_MT_DADOS],
     }
     with open(caminho, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
@@ -290,6 +381,31 @@ def inicializar_sqlite(caminho_db: Path = DB_PATH) -> sqlite3.Connection:
             e.resistencia_min_poste_dan, e.angulo_utilizacao, e.fixacao_rede
         ))
 
+    # Tabela de Esforços MT
+    cursor.execute("DROP TABLE IF EXISTS cabos_mt_esforcos;")
+    cursor.execute("""
+        CREATE TABLE cabos_mt_esforcos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo_cabo TEXT NOT NULL,
+            vao_m INTEGER NOT NULL,
+            fase_1_dan REAL NOT NULL,
+            fase_2_dan REAL NOT NULL,
+            fase_3_dan REAL NOT NULL,
+            neutro_dan REAL NOT NULL
+        );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_mt_cabo ON cabos_mt_esforcos (tipo_cabo);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_mt_vao ON cabos_mt_esforcos (vao_m);")
+
+    for m in CABOS_MT_DADOS:
+        cursor.execute("""
+            INSERT INTO cabos_mt_esforcos (
+                tipo_cabo, vao_m, fase_1_dan, fase_2_dan, fase_3_dan, neutro_dan
+            ) VALUES (?, ?, ?, ?, ?, ?);
+        """, (
+            m.tipo_cabo, m.vao_m, m.fase_1_dan, m.fase_2_dan, m.fase_3_dan, m.neutro_dan
+        ))
+
     conn.commit()
     return conn
 
@@ -315,6 +431,38 @@ def obter_tracao_condutor(condutor: str) -> float:
     """Retorna o valor da tração nominal em daN do condutor ou 0.0 se não encontrado."""
     c = buscar_condutor(condutor)
     return c.tracao_dan if c else 0.0
+
+
+def buscar_tracao_mt(tipo_cabo: str, vao_m: int = 40, condutores: int = 3) -> float:
+    """Retorna a tração em daN do cabo de MT para o vão especificado."""
+    cabo_norm = tipo_cabo.strip().upper().replace(" ", "")
+    # Procura cabo mais próximo
+    chave_encontrada = None
+    for k in _MT_TABELAS_RAW:
+        if cabo_norm in k.upper().replace(" ", ""):
+            chave_encontrada = k
+            break
+    if not chave_encontrada:
+        return 0.0
+
+    vaos_map = _MT_TABELAS_RAW[chave_encontrada]
+    # Se vão exato existe
+    if vao_m in vaos_map:
+        dados = vaos_map[vao_m]
+    else:
+        # Vão mais próximo
+        vao_proximo = min(vaos_map.keys(), key=lambda v: abs(v - vao_m))
+        dados = vaos_map[vao_proximo]
+
+    # dados: (1_fase, 2_fases, 3_fases, neutro)
+    if condutores == 1:
+        return float(dados[0])
+    elif condutores == 2:
+        return float(dados[1])
+    elif condutores == 4 or condutores == "neutro":
+        return float(dados[3])
+    else:
+        return float(dados[2])  # 3 fases padrão
 
 
 def buscar_estrutura(codigo_ou_nome: str, fase: Optional[str] = None) -> List[EstruturaBT]:

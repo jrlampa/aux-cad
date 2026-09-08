@@ -6,10 +6,12 @@ import pytest
 from dados_tecnicos.tabelas_referencia import (
     CONDUTORES_BT_DADOS,
     ESTRUTURAS_BT_DADOS,
+    CABOS_MT_DADOS,
     buscar_condutor,
     obter_tracao_condutor,
     buscar_estrutura,
     consultar_resistencia_poste,
+    buscar_tracao_mt,
     exportar_para_json,
     inicializar_sqlite,
 )
@@ -114,11 +116,35 @@ def test_inicializar_sqlite(tmp_path: Path):
     assert row[0] == "3x150+1x80"
     assert row[1] == 554.0
 
-    # Checa tabela de estruturas
-    cursor.execute("SELECT codigo, resistencia_min_poste_dan FROM estruturas_bt WHERE codigo = 'SI1.AF' AND cabo_fase = '3X95';")
-    row_est = cursor.fetchone()
-    assert row_est is not None
-    assert row_est[0] == "SI1.AF"
-    assert row_est[1] == 600
+    # Checa tabela de esforços MT
+    cursor.execute("SELECT tipo_cabo, fase_3_dan FROM cabos_mt_esforcos WHERE tipo_cabo = '1/0 CAA' AND vao_m = 40;")
+    row_mt = cursor.fetchone()
+    assert row_mt is not None
+    assert row_mt[0] == "1/0 CAA"
+    assert row_mt[1] == 480.0
 
     conn.close()
+
+
+def test_buscar_tracao_mt():
+    """Valida consultas de esforços nominais em daN para cabos de Média Tensão (MT)."""
+    # 1/0 CAA em vão de 40m (padrão urbano)
+    assert buscar_tracao_mt("1/0 CAA", vao_m=40, condutores=3) == 480.0
+    assert buscar_tracao_mt("1/0 CAA", vao_m=40, condutores=1) == 160.0
+    assert buscar_tracao_mt("1/0 CAA", vao_m=40, condutores="neutro") == 128.0
+
+    # 4/0 CAA
+    assert buscar_tracao_mt("4/0 CAA", vao_m=40, condutores=3) == 960.0
+    assert buscar_tracao_mt("4/0 CAA", vao_m=20, condutores=3) == 540.0
+
+    # 336,4 CAA
+    assert buscar_tracao_mt("336,4 CAA", vao_m=40, condutores=3) == 1767.0
+
+    # 185 XLPE
+    assert buscar_tracao_mt("185 XLPE", vao_m=40, condutores=3) == 1008.0
+
+    # Vão interpolado/mais próximo
+    assert buscar_tracao_mt("1/0 CAA", vao_m=42, condutores=3) == 480.0
+
+    # Cabo inexistente
+    assert buscar_tracao_mt("CABO_FANTASMA", vao_m=40) == 0.0

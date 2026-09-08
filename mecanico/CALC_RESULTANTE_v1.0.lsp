@@ -32,7 +32,7 @@
 )
 
 (defun C:CALC_RESULTANTE (/ p0 p0_2d ss_blk blk_name f_nom f_nom_input ss i ent obj p1 p2 d1 d2 p_ext 
-                            angle_rad force force_input fx fy f_res ang_rad ang_deg taxa status_str color_code
+                            angle_rad force force_input force_clean fx fy f_res ang_rad ang_deg taxa status_str color_code
                             text_lines full_text ins_pt acadObj doc ms mtextObj h_texto)
 
   (princ "\n==============================================================")
@@ -105,14 +105,71 @@
     
     (setq angle_rad (angle p0_2d p_ext))
 
-    (setq force_input (getstring (strcat "\nInforme a tração em daN [ou cabo: 150, 95, 50, 35] para Linha " (itoa (1+ i)) ": ")))
+    (setq force_input (getstring (strcat "\nInforme o esforço da Linha " (itoa (1+ i)) " em daN [ou cabo: PR150, PR95, PR50, PR35 / digite '?' p/ ajuda]: ")))
+    (setq force_input (strcase (vl-string-trim " \t\r\n" force_input)))
     (cond
+      ;; Ajuda / Consulta
+      ((or (= force_input "?") (= force_input "TABELA") (= force_input "CABO"))
+       (if (fboundp 'c:CONDUTORES_BT) (c:CONDUTORES_BT))
+       (setq force_input (getstring (strcat "\nInforme a tração em daN [ou cabo] para Linha " (itoa (1+ i)) ": ")))
+       (setq force_input (strcase (vl-string-trim " \t\r\n" force_input)))
+      )
+    )
+
+    (cond
+      ;; 1. Vazio ou cancelado
+      ((= force_input "")
+       (setq force 0.0)
+       (princ " -> 0 daN"))
+
+      ;; 2. Forçar valor manual via sufixo 'd', 'dan' ou prefixo '=' (ex: 150d, 50dan, =150)
+      ((or (wcmatch force_input "*DAN") (wcmatch force_input "*D") (wcmatch force_input "=*"))
+       (setq force_clean (vl-string-subst "" "DAN" force_input))
+       (setq force_clean (vl-string-subst "" "D" force_clean))
+       (setq force_clean (vl-string-subst "" "=" force_clean))
+       (setq force (distof force_clean 2))
+       (if (not force) (setq force 0.0))
+       (princ (strcat " -> Valor manual definido: " (rtos force 2 0) " daN"))
+      )
+
+      ;; 3. Cabo Pré-Reunido por prefixo explícito (PR150, PR95, PR50, PR35, 3X150, etc.)
+      ((or (wcmatch force_input "PR*") (wcmatch force_input "*3X*") (wcmatch force_input "*CABO*"))
+       (setq force (if (fboundp 'tb-get-tracao) (tb-get-tracao force_input) 0.0))
+       (if (> force 0.0)
+         (princ (strcat " -> Cabo " force_input " adotado da tabela: " (rtos force 2 0) " daN"))
+         (progn
+           (setq force (distof force_input 2))
+           (if (not force) (setq force 0.0))
+           (princ (strcat " -> Tração manual: " (rtos force 2 0) " daN"))
+         )
+       )
+      )
+
+      ;; 4. Bitolas padrão digitadas como número (150, 95, 50, 35)
+      ((member force_input '("150" "95" "50" "35"))
+       (setq force (if (fboundp 'tb-get-tracao) (tb-get-tracao force_input) 0.0))
+       (if (> force 0.0)
+         (princ (strcat " -> Cabo BT " force_input "mm²: " (rtos force 2 0) " daN (para " force_input " daN manual digite " force_input "d)"))
+         (setq force (distof force_input 2))
+       )
+      )
+
+      ;; 5. Valor manual numérico direto (ex: 200, 235, 300, 350, 400, 554, etc.)
+      ((distof force_input 2)
+       (setq force (distof force_input 2))
+       (princ (strcat " -> Tração manual: " (rtos force 2 0) " daN"))
+      )
+
+      ;; 6. Demais nomes de condutores na biblioteca
       ((and (fboundp 'tb-get-tracao) (> (tb-get-tracao force_input) 0.0))
        (setq force (tb-get-tracao force_input))
-       (princ (strcat " -> Cabo " force_input " = " (rtos force 2 0) " daN")))
-      ((distof force_input 2)
-       (setq force (distof force_input 2)))
-      (t (setq force 0.0))
+       (princ (strcat " -> Cabo " force_input " = " (rtos force 2 0) " daN"))
+      )
+
+      (t
+       (setq force 0.0)
+       (princ " -> [AVISO] Valor não reconhecido, adotado 0 daN")
+      )
     )
     
     (setq fx (+ fx (* force (cos angle_rad))))
