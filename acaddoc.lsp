@@ -36,6 +36,7 @@
 (add-support-path (strcat *aux-cad-root* "topografia"))
 (add-support-path (strcat *aux-cad-root* "orcamento"))
 (add-support-path (strcat *aux-cad-root* "mapa_postes"))
+(add-support-path (strcat *aux-cad-root* "dados_tecnicos"))
 
 (defun load-aux-safe (subpath / fullpath res)
   (setq fullpath (strcat *aux-cad-root* subpath))
@@ -82,6 +83,9 @@
 ;; 7. Módulo Estúdio Web de Satélite de Postes & Cargas
 (load-aux-safe "mapa_postes\\mapa_cad_launcher.lsp")
 
+;; 8. Módulo Dados Técnicos e Tabelas de Referência (Tabela 7 e Tabela 9 BT)
+(load-aux-safe "dados_tecnicos\\tabelas_referencia.lsp")
+
 
 ;; =============================================================================
 ;;  COMANDOS DE CONSULTA E AJUDA (COMANDOS / AJUDA / AUXCAD / ROTINAS)
@@ -109,6 +113,11 @@
   (princ "\n")
   (princ "\n  [CÁLCULO ESTRUTURAL & MECÂNICO]")
   (princ "\n   - CALC_RESULTANTE ou TRACAO ou ESFORCO : Tração resultante em postes")
+  (princ "\n")
+  (princ "\n  [TABELAS TÉCNICAS & CONSULTA RÁPIDA (BT)]")
+  (princ "\n   - TABELAS ou CONSULTAR_TABELA : Menu de consulta de Condutores e Estruturas BT")
+  (princ "\n   - CONDUTORES_BT : Consulta rápida da Tabela 9 (Tração, Corrente, Diâmetro, Massa, R, X)")
+  (princ "\n   - ESTRUTURAS_BT : Consulta rápida da Tabela 7 (Resistência mínima, Ângulo, Fixação)")
   (princ "\n")
   (princ "\n  [TOPOGRAFIA, KMZ & MAPA WEB]")
   (princ "\n   - MAPAPOSTES ou MAPA : Estúdio Web de Satélite (lançar coordenadas, postes e clientes)")
@@ -154,6 +163,8 @@
 (defun c:QUEDATENSAO () (c:CQT))
 (defun c:TRACAO () (c:CALC_RESULTANTE))
 (defun c:ESFORCO () (c:CALC_RESULTANTE))
+(defun c:CONSULTAR_TABELA () (c:TABELAS))
+(defun c:TABELAS_BT () (c:TABELAS))
 
 ;; Mensagem informativa na linha de comando ao abrir qualquer desenho
 (princ "\n[AUX CAD] Ferramentas carregadas! Digite COMANDOS ou AJUDA para listar todas.")

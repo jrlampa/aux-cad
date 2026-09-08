@@ -32,7 +32,7 @@
 )
 
 (defun C:CALC_RESULTANTE (/ p0 p0_2d ss_blk blk_name f_nom f_nom_input ss i ent obj p1 p2 d1 d2 p_ext 
-                            angle_rad force fx fy f_res ang_rad ang_deg taxa status_str color_code
+                            angle_rad force force_input fx fy f_res ang_rad ang_deg taxa status_str color_code
                             text_lines full_text ins_pt acadObj doc ms mtextObj h_texto)
 
   (princ "\n==============================================================")
@@ -105,8 +105,15 @@
     
     (setq angle_rad (angle p0_2d p_ext))
 
-    (setq force (getreal (strcat "\nInforme a tração/força em daN para a Linha " (itoa (1+ i)) ": ")))
-    (if (not force) (setq force 0.0))
+    (setq force_input (getstring (strcat "\nInforme a tração em daN [ou cabo: 150, 95, 50, 35] para Linha " (itoa (1+ i)) ": ")))
+    (cond
+      ((and (fboundp 'tb-get-tracao) (> (tb-get-tracao force_input) 0.0))
+       (setq force (tb-get-tracao force_input))
+       (princ (strcat " -> Cabo " force_input " = " (rtos force 2 0) " daN")))
+      ((distof force_input 2)
+       (setq force (distof force_input 2)))
+      (t (setq force 0.0))
+    )
     
     (setq fx (+ fx (* force (cos angle_rad))))
     (setq fy (+ fy (* force (sin angle_rad))))

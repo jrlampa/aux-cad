@@ -111,16 +111,26 @@ aux cad/
   - **`ATUALIZAR_MAPAPOSTES`**: Lê os postes enviados pelo mapa web e gera os blocos `POSTE_`, `PONTO` e os textos técnicos empilhados no AutoCAD.
 - `Abrir_Mapa_Postes.bat`: Atalho executável de 2 cliques para abertura direta do estúdio.
 
-### 7. Carregamento Universal (`acaddoc.lsp`)
+### 7. Módulo de Dados Técnicos e Tabelas de Referência (`dados_tecnicos/`)
+- `tabelas_referencia.py` (220 linhas): Motor analítico e gerador dos bancos de dados técnicos oficiais das redes BT:
+  - **Tabela 9 - Condutores de Baixa Tensão**: Relação de cabos (`3x150+1x80`, `3x95+1x54,6`, `3x50+1x54,6`, `3x35+1x54,6`) com correntes nominais, trações em daN (554, 393, 260, 235 daN), diâmetros, massas e impedâncias nominais ($R$ e $X$).
+  - **Tabela 7 - Estruturas de Baixa Tensão**: Matriz completa de estruturas BT (`SI1`, `SI1.AF`, `SI1.2AF`, `SI1B.SI3`, `SI1A.SI3`, `SI1.SI4`, `SI3.S3`, `SI4.SI3`, `SI4`, `SI3`, `SI3.SI3`, `DERIV_VAO`, `FLYTAP`), limites angulares e resistências mecânicas de poste (300/600 daN).
+  - **Interoperabilidade SQLite3 & JSON**: Banco relacional `tabelas_referencia.sqlite3` com tabelas `condutores_bt` e `estruturas_bt` indexadas, além do arquivo padronizado `tabelas_referencia.json`.
+- `tabelas_referencia.lsp` (220 linhas): Biblioteca AutoLISP de altíssima velocidade para consulta direta de LISPs:
+  - Comandos: **`TABELAS`**, **`CONDUTORES_BT`**, **`ESTRUTURAS_BT`** e **`CONSULTAR_TABELA`**.
+  - Funções reutilizáveis: `(tb-get-condutor chave)`, `(tb-get-tracao chave)`, `(tb-get-estrutura cod fase)`, `(tb-list-condutores)`, `(tb-list-estruturas)`.
+  - Integração com `CALC_RESULTANTE_v1.0.lsp`: permite informar bitola de cabo diretamente para cálculo mecânico automatizado.
+
+### 8. Carregamento Universal (`acaddoc.lsp`)
 O arquivo `acaddoc.lsp` foi projetado para:
 1. Localizar o caminho absoluto da pasta raiz `aux cad`.
-2. Adicionar dinamicamente as pastas `orcamento`, `cqt`, `ambiental`, `mecanico`, `topografia` e `mapa_postes` ao `SupportPath` de arquivos de suporte do AutoCAD.
+2. Adicionar dinamicamente as pastas `orcamento`, `cqt`, `ambiental`, `mecanico`, `topografia`, `mapa_postes` e `dados_tecnicos` ao `SupportPath` de arquivos de suporte do AutoCAD.
 3. Carregar as rotinas modulares de forma resiliente com tratamento de erros (`vl-catch-all-apply`).
 
-### 8. Validação e Testes
-- Suíte com **56 testes unitários passando 100%** (`python -m pytest --cov`).
-- Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes`).
-- Cobertura total do projeto em **84%** (todos os módulos de lógica de negócio entre 81% e 99%).
+### 9. Validação e Testes
+- Suíte com **62 testes unitários passando 100%** (`python -m pytest --cov`).
+- Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos`).
+- Cobertura total do projeto em **85%** (todos os módulos de lógica de negócio entre 81% e 99%).
 - Resolução dinâmica de diretórios no `acaddoc.lsp` para independência de máquina.
 - Rotinas e saídas geradas em tempo de execução organizadas com proteção no `.gitignore`.
 

@@ -1,0 +1,644 @@
+{
+  "_metadados": {
+    "titulo": "Tabelas Técnicas de Referência - Baixa Tensão (BT)",
+    "fonte": "OneNote BASE.one - INFO DE PROJETO IMPORTANTE",
+    "tabelas": [
+      "Tabela 7 - Estruturas de Baixa Tensão",
+      "Tabela 9 - Condutores de Baixa Tensão"
+    ],
+    "versao": "1.0.0"
+  },
+  "condutores_bt": [
+    {
+      "condutor": "3x150+1x80",
+      "fase": "3x150",
+      "neutro": "1x80",
+      "corrente_a": 326.0,
+      "tracao_dan": 554.0,
+      "diametro_total_mm": 51.0,
+      "massa_total_kg_km": 1878.0,
+      "resistencia_r_ohm_km": 0.2775,
+      "reatancia_x_ohm_km": 0.0867
+    },
+    {
+      "condutor": "3x95+1x54,6",
+      "fase": "3x95",
+      "neutro": "1x54,6",
+      "corrente_a": 244.0,
+      "tracao_dan": 393.0,
+      "diametro_total_mm": 43.0,
+      "massa_total_kg_km": 1270.0,
+      "resistencia_r_ohm_km": 0.4311,
+      "reatancia_x_ohm_km": 0.0902
+    },
+    {
+      "condutor": "3x50+1x54,6",
+      "fase": "3x50",
+      "neutro": "1x54,6",
+      "corrente_a": 169.0,
+      "tracao_dan": 260.0,
+      "diametro_total_mm": 37.0,
+      "massa_total_kg_km": 765.0,
+      "resistencia_r_ohm_km": 0.8634,
+      "reatancia_x_ohm_km": 0.0943
+    },
+    {
+      "condutor": "3x35+1x54,6",
+      "fase": "3x35",
+      "neutro": "1x54,6",
+      "corrente_a": 136.0,
+      "tracao_dan": 235.0,
+      "diametro_total_mm": 37.0,
+      "massa_total_kg_km": 700.0,
+      "resistencia_r_ohm_km": 1.1694,
+      "reatancia_x_ohm_km": 0.0974
+    }
+  ],
+  "estruturas_bt": [
+    {
+      "estrutura": "Tangente",
+      "codigo": "SI1",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente",
+      "codigo": "SI1",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente",
+      "codigo": "SI1",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente",
+      "codigo": "SI1",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente",
+      "codigo": "SI1",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente Afastamento",
+      "codigo": "SI1.AF",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente Afastamento",
+      "codigo": "SI1.AF",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente Afastamento",
+      "codigo": "SI1.AF",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente Afastamento",
+      "codigo": "SI1.AF",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente Afastamento",
+      "codigo": "SI1.AF",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente Afastamento Duplo",
+      "codigo": "SI1.2AF",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente Afastamento Duplo",
+      "codigo": "SI1.2AF",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente Afastamento Duplo",
+      "codigo": "SI1.2AF",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente Afastamento Duplo",
+      "codigo": "SI1.2AF",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente Afastamento Duplo",
+      "codigo": "SI1.2AF",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão"
+    },
+    {
+      "estrutura": "Tangente com Derivação Oposta",
+      "codigo": "SI1B.SI3",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com Derivação Oposta",
+      "codigo": "SI1B.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com Derivação Oposta",
+      "codigo": "SI1B.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com Derivação Oposta",
+      "codigo": "SI1B.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com Derivação Oposta",
+      "codigo": "SI1B.SI3",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com Derivação do mesmo Lado",
+      "codigo": "SI1A.SI3",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com Derivação do mesmo Lado",
+      "codigo": "SI1A.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com Derivação do mesmo Lado",
+      "codigo": "SI1A.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com Derivação do mesmo Lado",
+      "codigo": "SI1A.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com Derivação do mesmo Lado",
+      "codigo": "SI1A.SI3",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0° a 30°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com duas derivações",
+      "codigo": "SI1.SI4",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com duas derivações",
+      "codigo": "SI1.SI4",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com duas derivações",
+      "codigo": "SI1.SI4",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com duas derivações",
+      "codigo": "SI1.SI4",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Tangente com duas derivações",
+      "codigo": "SI1.SI4",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Conjunto de suspensão / Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Derivação em alinhamento com a Rede Aérea Nua",
+      "codigo": "SI3.S3",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem / isolador roldana"
+    },
+    {
+      "estrutura": "Derivação em alinhamento com a Rede Aérea Nua",
+      "codigo": "SI3.S3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem / isolador roldana"
+    },
+    {
+      "estrutura": "Derivação em alinhamento com a Rede Aérea Nua",
+      "codigo": "SI3.S3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem / isolador roldana"
+    },
+    {
+      "estrutura": "Derivação em alinhamento com a Rede Aérea Nua",
+      "codigo": "SI3.S3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem / isolador roldana"
+    },
+    {
+      "estrutura": "Derivação em alinhamento com a Rede Aérea Nua",
+      "codigo": "SI3.S3",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem / isolador roldana"
+    },
+    {
+      "estrutura": "Ancoragem Dupla com derivação",
+      "codigo": "SI4.SI3",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem / Isolador castanha"
+    },
+    {
+      "estrutura": "Ancoragem Dupla com derivação",
+      "codigo": "SI4.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem / Isolador castanha"
+    },
+    {
+      "estrutura": "Ancoragem Dupla com derivação",
+      "codigo": "SI4.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem / Isolador castanha"
+    },
+    {
+      "estrutura": "Ancoragem Dupla com derivação",
+      "codigo": "SI4.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem / Isolador castanha"
+    },
+    {
+      "estrutura": "Ancoragem Dupla com derivação",
+      "codigo": "SI4.SI3",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem / Isolador castanha"
+    },
+    {
+      "estrutura": "Ancoragem Dupla",
+      "codigo": "SI4",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Ancoragem Dupla",
+      "codigo": "SI4",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Ancoragem Dupla",
+      "codigo": "SI4",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Ancoragem Dupla",
+      "codigo": "SI4",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Ancoragem Dupla",
+      "codigo": "SI4",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "0°",
+      "fixacao_rede": "Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Ancoragem",
+      "codigo": "SI3",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "30° a 90°",
+      "fixacao_rede": "Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Ancoragem",
+      "codigo": "SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "30° a 90°",
+      "fixacao_rede": "Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Ancoragem",
+      "codigo": "SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "30° a 90°",
+      "fixacao_rede": "Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Ancoragem",
+      "codigo": "SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "30° a 90°",
+      "fixacao_rede": "Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Ancoragem",
+      "codigo": "SI3",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "30° a 90°",
+      "fixacao_rede": "Suporte de ancoragem"
+    },
+    {
+      "estrutura": "Ancoragem dupla",
+      "codigo": "SI3.SI3",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "60° a 90°",
+      "fixacao_rede": "Suporte de ancoragem / isolador castanha"
+    },
+    {
+      "estrutura": "Ancoragem dupla",
+      "codigo": "SI3.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "60° a 90°",
+      "fixacao_rede": "Suporte de ancoragem / isolador castanha"
+    },
+    {
+      "estrutura": "Ancoragem dupla",
+      "codigo": "SI3.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": 300,
+      "angulo_utilizacao": "60° a 90°",
+      "fixacao_rede": "Suporte de ancoragem / isolador castanha"
+    },
+    {
+      "estrutura": "Ancoragem dupla",
+      "codigo": "SI3.SI3",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "60° a 90°",
+      "fixacao_rede": "Suporte de ancoragem / isolador castanha"
+    },
+    {
+      "estrutura": "Ancoragem dupla",
+      "codigo": "SI3.SI3",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": 600,
+      "angulo_utilizacao": "60° a 90°",
+      "fixacao_rede": "Suporte de ancoragem / isolador castanha"
+    },
+    {
+      "estrutura": "Derivação no Vão da Rede Secundária",
+      "codigo": "DERIV_VAO",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": null,
+      "angulo_utilizacao": "-",
+      "fixacao_rede": "-"
+    },
+    {
+      "estrutura": "Derivação no Vão da Rede Secundária",
+      "codigo": "DERIV_VAO",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": null,
+      "angulo_utilizacao": "-",
+      "fixacao_rede": "-"
+    },
+    {
+      "estrutura": "Derivação no Vão da Rede Secundária",
+      "codigo": "DERIV_VAO",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": null,
+      "angulo_utilizacao": "-",
+      "fixacao_rede": "-"
+    },
+    {
+      "estrutura": "Derivação no Vão da Rede Secundária",
+      "codigo": "DERIV_VAO",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": null,
+      "angulo_utilizacao": "-",
+      "fixacao_rede": "-"
+    },
+    {
+      "estrutura": "Derivação no Vão da Rede Secundária",
+      "codigo": "DERIV_VAO",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": null,
+      "angulo_utilizacao": "-",
+      "fixacao_rede": "-"
+    },
+    {
+      "estrutura": "Cruzamento (flytap) - com Conexão",
+      "codigo": "FLYTAP",
+      "cabo_neutro_mm2": "54,5",
+      "cabo_fase": "1x35 ou 2x25",
+      "resistencia_min_poste_dan": null,
+      "angulo_utilizacao": "-",
+      "fixacao_rede": "-"
+    },
+    {
+      "estrutura": "Cruzamento (flytap) - com Conexão",
+      "codigo": "FLYTAP",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X35",
+      "resistencia_min_poste_dan": null,
+      "angulo_utilizacao": "-",
+      "fixacao_rede": "-"
+    },
+    {
+      "estrutura": "Cruzamento (flytap) - com Conexão",
+      "codigo": "FLYTAP",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X50",
+      "resistencia_min_poste_dan": null,
+      "angulo_utilizacao": "-",
+      "fixacao_rede": "-"
+    },
+    {
+      "estrutura": "Cruzamento (flytap) - com Conexão",
+      "codigo": "FLYTAP",
+      "cabo_neutro_mm2": "54,6",
+      "cabo_fase": "3X95",
+      "resistencia_min_poste_dan": null,
+      "angulo_utilizacao": "-",
+      "fixacao_rede": "-"
+    },
+    {
+      "estrutura": "Cruzamento (flytap) - com Conexão",
+      "codigo": "FLYTAP",
+      "cabo_neutro_mm2": "80",
+      "cabo_fase": "3X150",
+      "resistencia_min_poste_dan": null,
+      "angulo_utilizacao": "-",
+      "fixacao_rede": "-"
+    }
+  ]
+}
