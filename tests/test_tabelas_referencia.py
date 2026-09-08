@@ -12,6 +12,7 @@ from dados_tecnicos.tabelas_referencia import (
     buscar_estrutura,
     consultar_resistencia_poste,
     buscar_tracao_mt,
+    calcular_esforco_linha,
     exportar_para_json,
     inicializar_sqlite,
 )
@@ -128,8 +129,9 @@ def test_inicializar_sqlite(tmp_path: Path):
 
 def test_buscar_tracao_mt():
     """Valida consultas de esforços nominais em daN para cabos de Média Tensão (MT)."""
-    # 1/0 CAA em vão de 40m (padrão urbano)
+    # 1/0 CAA em vão tabelado de 40m e 150m
     assert buscar_tracao_mt("1/0 CAA", vao_m=40, condutores=3) == 480.0
+    assert buscar_tracao_mt("1/0 CAA", vao_m=150, condutores=3) == 1200.0
     assert buscar_tracao_mt("1/0 CAA", vao_m=40, condutores=1) == 160.0
     assert buscar_tracao_mt("1/0 CAA", vao_m=40, condutores="neutro") == 128.0
 
@@ -143,8 +145,68 @@ def test_buscar_tracao_mt():
     # 185 XLPE
     assert buscar_tracao_mt("185 XLPE", vao_m=40, condutores=3) == 1008.0
 
-    # Vão interpolado/mais próximo
-    assert buscar_tracao_mt("1/0 CAA", vao_m=42, condutores=3) == 480.0
+    # Interpolação linear contínua para vão intermediário:
+    # 1/0 CAA em vão de 35m: entre 30m (420 daN) e 40m (480 daN) -> 450.0 daN
+    assert buscar_tracao_mt("1/0 CAA", vao_m=35, condutores=3) == 450.0
+
+    # Regra de 3 para vão curto (< 20m):
+    # 1/0 CAA em vão de 10m: base 20m é 375 daN -> (375 * 10 / 20) = 187.5 daN
+    assert buscar_tracao_mt("1/0 CAA", vao_m=10, condutores=3) == 187.5
+
+    # Extrapolação linear para vão longo (> 200m):
+    # 1/0 CAA em 220m: último intervalo 150m-200m (1200 -> 1395, taxa = 3.9 daN/m) -> 1395 + 3.9 * 20 = 1473.0 daN
+    assert buscar_tracao_mt("1/0 CAA", vao_m=220, condutores=3) == 1473.0
 
     # Cabo inexistente
     assert buscar_tracao_mt("CABO_FANTASMA", vao_m=40) == 0.0
+
+
+def test_calcular_esforco_linha_cenarios():
+    """Valida a resolução integrada de esforços por linha: manual, BT, MT interpolado e MT + BT colinear."""
+    # 1. Entrada manual pura
+    res_man1 = calcular_esforco_linha("350")
+    assert res_man1["total_dan"] == 350.0
+    assert res_man1["modo"] == "manual"
+
+    res_man2 = calcular_esforco_linha("150d")
+    assert res_man2["total_dan"] == 150.0
+    assert res_man2["modo"] == "manual"
+
+    res_man3 = calcular_esforco_linha("=400")
+    assert res_man3["total_dan"] == 400.0
+
+    # 2. Cabo de BT isolado
+    res_bt = calcular_esforco_linha("150")
+    assert res_bt["total_dan"] == 554.0
+    assert res_bt["bt_dan"] == 554.0
+    assert res_bt["modo"] == "bt"
+
+    res_bt_pr = calcular_esforco_linha("PR95")
+    assert res_bt_pr["total_dan"] == 393.0
+    assert res_bt_pr["modo"] == "bt"
+
+    # 3. Cabo de MT isolado com vão interpolado (35m) e tabelado (150m)
+    res_mt_35 = calcular_esforco_linha("1/0 CAA", vao_m=35.0)
+    assert res_mt_35["total_dan"] == 450.0
+    assert res_mt_35["mt_dan"] == 450.0
+    assert res_mt_35["modo"] == "mt"
+
+    res_mt_150 = calcular_esforco_linha("1/0 CAA", vao_m=150.0)
+    assert res_mt_150["total_dan"] == 1200.0
+    assert res_mt_150["mt_dan"] == 1200.0
+
+    # 4. Combinação MT + BT colineares (mesma linha física no DWG)
+    # 1/0 CAA (vão 35m = 450 daN) + PR150 (554 daN) -> soma = 1004 daN
+    res_paralelo = calcular_esforco_linha("1/0 + 150", vao_m=35.0)
+    assert res_paralelo["total_dan"] == 1004.0
+    assert res_paralelo["mt_dan"] == 450.0
+    assert res_paralelo["bt_dan"] == 554.0
+    assert res_paralelo["modo"] == "combinado"
+    assert "SOMA = 1004 daN" in res_paralelo["descricao"]
+
+    # 4/0 CAA (vão 40m = 960 daN) + PR95 (393 daN) -> soma = 1353 daN
+    res_paralelo_2 = calcular_esforco_linha("4/0 CAA + PR95", vao_m=40.0)
+    assert res_paralelo_2["total_dan"] == 1353.0
+    assert res_paralelo_2["mt_dan"] == 960.0
+    assert res_paralelo_2["bt_dan"] == 393.0
+

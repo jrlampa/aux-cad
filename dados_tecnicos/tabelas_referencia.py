@@ -414,8 +414,12 @@ def inicializar_sqlite(caminho_db: Path = DB_PATH) -> sqlite3.Connection:
 # API DE CONSULTA EM MEMÓRIA / SQLITE
 # ==============================================================================
 def buscar_condutor(termo: str) -> Optional[CondutorBT]:
-    """Busca condutor por nome exato ou aproximação (ex: '150', '3x150+1x80', '95')."""
-    termo_limpo = termo.strip().lower().replace(".", ",")
+    """Busca condutor por nome exato ou aproximação (ex: '150', '3x150+1x80', '95', 'PR95', 'PR150')."""
+    termo_limpo = termo.strip().lower().replace(".", ",").replace("-", "")
+    for prefixo in ("pr", "bt", "cabo"):
+        if termo_limpo.startswith(prefixo) and len(termo_limpo) > len(prefixo):
+            termo_limpo = termo_limpo[len(prefixo):].strip()
+
     # 1. Match exato
     for c in CONDUTORES_BT_DADOS:
         if c.condutor.lower() == termo_limpo:
@@ -433,36 +437,114 @@ def obter_tracao_condutor(condutor: str) -> float:
     return c.tracao_dan if c else 0.0
 
 
-def buscar_tracao_mt(tipo_cabo: str, vao_m: int = 40, condutores: int = 3) -> float:
-    """Retorna a tração em daN do cabo de MT para o vão especificado."""
+def buscar_tracao_mt(tipo_cabo: str, vao_m: float = 40.0, condutores: int = 3) -> float:
+    """Retorna a tração em daN do cabo de MT para o vão especificado, com interpolação e extrapolação contínua."""
     cabo_norm = tipo_cabo.strip().upper().replace(" ", "")
-    # Procura cabo mais próximo
     chave_encontrada = None
     for k in _MT_TABELAS_RAW:
-        if cabo_norm in k.upper().replace(" ", ""):
+        if cabo_norm in k.upper().replace(" ", "") or k.upper().replace(" ", "") in cabo_norm:
             chave_encontrada = k
             break
     if not chave_encontrada:
         return 0.0
 
     vaos_map = _MT_TABELAS_RAW[chave_encontrada]
-    # Se vão exato existe
-    if vao_m in vaos_map:
-        dados = vaos_map[vao_m]
-    else:
-        # Vão mais próximo
-        vao_proximo = min(vaos_map.keys(), key=lambda v: abs(v - vao_m))
-        dados = vaos_map[vao_proximo]
+    vaos_ordenados = sorted(vaos_map.keys())
+    col_idx = 0 if condutores == 1 else (1 if condutores == 2 else (3 if condutores in (4, "neutro") else 2))
 
-    # dados: (1_fase, 2_fases, 3_fases, neutro)
-    if condutores == 1:
-        return float(dados[0])
-    elif condutores == 2:
-        return float(dados[1])
-    elif condutores == 4 or condutores == "neutro":
-        return float(dados[3])
-    else:
-        return float(dados[2])  # 3 fases padrão
+    if int(vao_m) in vaos_map and vao_m == int(vao_m):
+        return float(vaos_map[int(vao_m)][col_idx])
+
+    # Abaixo do menor vão tabelado: regra de 3 proporcional ao menor vão
+    v_min = vaos_ordenados[0]
+    if vao_m < v_min:
+        f_min = float(vaos_map[v_min][col_idx])
+        return round(f_min * (max(vao_m, 1.0) / v_min), 1)
+
+    # Acima do maior vão tabelado: extrapolação linear baseada no último intervalo
+    v_max = vaos_ordenados[-1]
+    if vao_m > v_max:
+        v_prev = vaos_ordenados[-2]
+        f_prev = float(vaos_map[v_prev][col_idx])
+        f_max = float(vaos_map[v_max][col_idx])
+        taxa = (f_max - f_prev) / (v_max - v_prev)
+        return round(f_max + taxa * (vao_m - v_max), 1)
+
+    # Interpolação linear entre os dois vãos adjacentes
+    v1, v2 = v_min, v_max
+    for i in range(len(vaos_ordenados) - 1):
+        if vaos_ordenados[i] <= vao_m <= vaos_ordenados[i + 1]:
+            v1, v2 = vaos_ordenados[i], vaos_ordenados[i + 1]
+            break
+
+    f1 = float(vaos_map[v1][col_idx])
+    f2 = float(vaos_map[v2][col_idx])
+    f_interp = f1 + ((vao_m - v1) / (v2 - v1)) * (f2 - f1)
+    return round(f_interp, 1)
+
+
+def calcular_esforco_linha(expressao: str, vao_m: float = 40.0) -> Dict[str, Any]:
+    """Calcula a tração total da linha em daN, suportando valor manual, cabo BT, cabo MT ou combinação MT + BT."""
+    expr = expressao.strip()
+    if not expr:
+        return {"total_dan": 0.0, "mt_dan": 0.0, "bt_dan": 0.0, "descricao": "0 daN", "modo": "vazio"}
+
+    # Combinação MT + BT colineares (ex: '1/0 + 150' ou '4/0CAA + PR95')
+    if "+" in expr and not expr.startswith("+"):
+        partes = [p.strip() for p in expr.split("+") if p.strip()]
+        resultados = [calcular_esforco_linha(p, vao_m) for p in partes]
+        total = sum(r["total_dan"] for r in resultados)
+        mt_total = sum(r["mt_dan"] for r in resultados)
+        bt_total = sum(r["bt_dan"] for r in resultados)
+        desc = " + ".join(r["descricao"] for r in resultados)
+        return {
+            "total_dan": round(total, 1),
+            "mt_dan": round(mt_total, 1),
+            "bt_dan": round(bt_total, 1),
+            "descricao": f"{desc} -> SOMA = {total:.0f} daN",
+            "modo": "combinado",
+        }
+
+    s_upper = expr.upper()
+    # Valor manual forçado com sufixo 'd', 'dan' ou '='
+    if s_upper.endswith("DAN") or s_upper.endswith("D") or s_upper.startswith("="):
+        num_str = s_upper.replace("DAN", "").replace("D", "").replace("=", "").strip()
+        try:
+            val = float(num_str.replace(",", "."))
+            return {"total_dan": val, "mt_dan": 0.0, "bt_dan": 0.0, "descricao": f"Manual {val:.0f} daN", "modo": "manual"}
+        except ValueError:
+            pass
+
+    # Identifica se é cabo de MT
+    eh_mt = any(t in s_upper for t in ["CAA", "XLPE", "MCM", "1/0", "4/0", "336", "2CA", "4CA"])
+    if eh_mt:
+        tracao_mt = buscar_tracao_mt(expr, vao_m=vao_m, condutores=3)
+        if tracao_mt > 0.0:
+            return {
+                "total_dan": tracao_mt,
+                "mt_dan": tracao_mt,
+                "bt_dan": 0.0,
+                "descricao": f"MT {expr} ({vao_m:.0f}m: {tracao_mt:.0f} daN)",
+                "modo": "mt",
+            }
+
+    # Identifica se é cabo de BT (PR150, PR95, PR50, PR35, 150, 95, etc.)
+    c_bt = buscar_condutor(expr)
+    if c_bt and (s_upper.startswith("PR") or expr in ["150", "95", "50", "35"] or "3X" in s_upper):
+        return {
+            "total_dan": c_bt.tracao_dan,
+            "mt_dan": 0.0,
+            "bt_dan": c_bt.tracao_dan,
+            "descricao": f"BT {c_bt.condutor} ({c_bt.tracao_dan:.0f} daN)",
+            "modo": "bt",
+        }
+
+    # Valor numérico puro digitado diretamente em daN
+    try:
+        val = float(expr.replace(",", "."))
+        return {"total_dan": val, "mt_dan": 0.0, "bt_dan": 0.0, "descricao": f"Manual {val:.0f} daN", "modo": "manual"}
+    except ValueError:
+        return {"total_dan": 0.0, "mt_dan": 0.0, "bt_dan": 0.0, "descricao": "Não identificado (0 daN)", "modo": "erro"}
 
 
 def buscar_estrutura(codigo_ou_nome: str, fase: Optional[str] = None) -> List[EstruturaBT]:

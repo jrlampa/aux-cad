@@ -112,15 +112,24 @@ aux cad/
 - `Abrir_Mapa_Postes.bat`: Atalho executável de 2 cliques para abertura direta do estúdio.
 
 ### 7. Módulo de Dados Técnicos e Tabelas de Referência (`dados_tecnicos/`)
-- `tabelas_referencia.py` (390 linhas): Motor analítico e gerador dos bancos de dados técnicos oficiais das redes BT e MT (Fontes: OneNote `BASE.one` e diretório `CALC_ESF` da IM3 Brasil):
+- `tabelas_referencia.py` (520 linhas): Motor analítico e gerador dos bancos de dados técnicos oficiais das redes BT e MT (Fontes: OneNote `BASE.one` e diretório `CALC_ESF` da IM3 Brasil):
   - **Tabela 9 - Condutores de Baixa Tensão**: Relação de cabos (`3x150+1x80`, `3x95+1x54,6`, `3x50+1x54,6`, `3x35+1x54,6`) com correntes nominais, trações em daN (554, 393, 260, 235 daN), diâmetros, massas e impedâncias nominais ($R$ e $X$).
   - **Tabela 7 - Estruturas de Baixa Tensão**: Matriz completa de estruturas BT (`SI1`, `SI1.AF`, `SI1.2AF`, `SI1B.SI3`, `SI1A.SI3`, `SI1.SI4`, `SI3.S3`, `SI4.SI3`, `SI4`, `SI3`, `SI3.SI3`, `DERIV_VAO`, `FLYTAP`), limites angulares e resistências mecânicas de poste (300/600 daN).
   - **Tabelas de Média Tensão (MT)**: Esforços nominais por vão para condutores de MT: `1/0 CAA`, `4/0 CAA`, `336,4 CAA`, `4 CAA`, `1/0 CA`, `4/0 CA`, `336,4 CA`, `2 CA`, `35/50 XLPE` e `185 XLPE`.
+  - **Interpolação Contínua & Regra de 3**:
+    - *Vãos intermediários*: Interpolação linear precisa entre os dois pontos tabelados adjacentes (ex: 35m no 1/0 CAA = 450 daN).
+    - *Vãos curtos (<20m)*: Regra de três proporcional ao menor vão tabelado (ex: 10m no 1/0 CAA = 187,5 daN).
+    - *Vãos longos (>200m)*: Extrapolação linear pela inclinação final (ex: 220m no 1/0 CAA = 1.473 daN).
+  - **Combinações Paralelas Colineares MT + BT**:
+    - Suporte nativo à expressão com `+` (ex: `1/0 + 150`, `4/0 CAA + PR95`). Os vetores colineares compartilham ângulo e direção geométrica no DWG, somando algebricamente seus módulos vetoriais: $\vec{F}_{total} = \vec{F}_{MT} + \vec{F}_{BT}$ (ex: 450 daN MT + 554 daN BT = 1.004 daN total).
   - **Interoperabilidade SQLite3 & JSON**: Banco relacional `tabelas_referencia.sqlite3` com tabelas `condutores_bt`, `estruturas_bt` e `cabos_mt_esforcos` indexadas, além do arquivo padronizado `tabelas_referencia.json` (v2.0.0).
-- `tabelas_referencia.lsp` (280 linhas): Biblioteca AutoLISP de altíssima velocidade para consulta direta de LISPs:
+- `tabelas_referencia.lsp` (390 linhas): Biblioteca AutoLISP de altíssima velocidade para consulta direta de LISPs:
   - Comandos: **`TABELAS`**, **`CONDUTORES_BT`**, **`ESTRUTURAS_BT`**, **`CABOS_MT`** e **`CONSULTAR_TABELA`**.
-  - Funções reutilizáveis: `(tb-get-condutor chave)`, `(tb-get-tracao chave)`, `(tb-get-tracao-mt chave n_fases)`, `(tb-get-estrutura cod fase)`, `(tb-list-condutores)`, `(tb-list-estruturas)`.
-  - Integração com `CALC_RESULTANTE_v1.0.lsp`: permite informar tração em daN digitada manualmente com total liberdade (ex: `150d`, `250`, `300`, `=150`) OU código de cabo BT/MT (`PR150`, `PR95`, `PR50`, `PR35`, `150`, `95`, `50`, `35`, `1/0CAA`, `4/0CAA`), com tecla `?` para ajuda rápida.
+  - Funções reutilizáveis: `(tb-get-condutor chave)`, `(tb-get-tracao chave)`, `(tb-get-tracao-mt chave n_fases)`, `(tb-interpolar-mt chave vao_m)`, `(tb-calcular-linha-esforco input vao_m)`, `(tb-get-estrutura cod fase)`, `(tb-list-condutores)`, `(tb-list-estruturas)`.
+  - Integração no `CALC_RESULTANTE_v1.0.lsp`:
+    - Medição geométrica automática do vão no CAD (`vlax-curve-getDistAtParam`).
+    - Exibição da extensão medida no prompt: `[Vão medido no CAD: X.X m]`.
+    - Suporte a valor manual puro em daN (`350`, `150d`, `=400`), código de cabo MT/BT ou expressão colinear MT+BT (`1/0 + 150`), com tecla `?` para consulta das tabelas.
 
 ### 8. Carregamento Universal (`acaddoc.lsp`)
 O arquivo `acaddoc.lsp` foi projetado para:
@@ -129,9 +138,9 @@ O arquivo `acaddoc.lsp` foi projetado para:
 3. Carregar as rotinas modulares de forma resiliente com tratamento de erros (`vl-catch-all-apply`).
 
 ### 9. Validação e Testes
-- Suíte com **63 testes unitários passando 100%** (`python -m pytest --cov`).
+- Suíte com **64 testes unitários passando 100%** (`python -m pytest --cov`).
 - Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos`).
-- Cobertura total do projeto em **85%** (todos os módulos de lógica de negócio entre 81% e 99%).
+- Cobertura total do projeto em **86%** (módulo `dados_tecnicos` com 94% de cobertura).
 - Resolução dinâmica de diretórios no `acaddoc.lsp` para independência de máquina.
 - Rotinas e saídas geradas em tempo de execução organizadas com proteção no `.gitignore`.
 
