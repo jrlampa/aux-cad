@@ -118,8 +118,10 @@ O arquivo `acaddoc.lsp` foi projetado para:
 3. Carregar as rotinas modulares de forma resiliente com tratamento de erros (`vl-catch-all-apply`).
 
 ### 8. Validação e Testes
-- Suíte com **52 testes unitários passando 100%** (`python -m pytest`).
+- Suíte com **56 testes unitários passando 100%** (`python -m pytest --cov`).
 - Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes`).
-- Cobertura nos módulos centrais de regras de negócio entre 83% e 99% (com `kmz_pontos_importer.py` em 93% e `mapa_postes` em 83%).
+- Cobertura total do projeto em **84%** (todos os módulos de lógica de negócio entre 81% e 99%).
+- Resolução dinâmica de diretórios no `acaddoc.lsp` para independência de máquina.
+- Rotinas e saídas geradas em tempo de execução organizadas com proteção no `.gitignore`.
 
 

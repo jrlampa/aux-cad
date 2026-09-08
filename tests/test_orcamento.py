@@ -186,6 +186,13 @@ def test_carregar_dados_json(tmp_path):
     assert len(dados["postes"]) == 1
     assert dados["postes"][0]["id"] == "P1"
 
+    # Teste com JSON corrompido / inválido
+    arq_corrompido = tmp_path / "corrompido.json"
+    arq_corrompido.write_text("{json invalido:", encoding="utf-8")
+    dados_inv = carregar_dados_json(str(arq_corrompido))
+    assert dados_inv == {"postes": [], "cabos": [], "estruturas": [], "equipamentos": []}
+
+
 
 def test_orcamento_manager_cli(tmp_path, monkeypatch):
     import json

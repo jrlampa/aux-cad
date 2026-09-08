@@ -112,16 +112,22 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
 
 ## Validação e Qualidade
-- Suíte completa com **52 testes unitários passando 100%**:
-  - `topografia\kmz_pontos_importer.py`: 93%
-  - `mapa_postes\mapa_servidor.py`: 83%
+- Suíte completa com **56 testes unitários passando 100%** (`python -m pytest --cov`):
   - `orcamento\orcamento_excel.py`: 99%
-  - `orcamento\orcamento_core.py`: 89%
-  - `orcamento\orcamento_manager.py`: 75%
   - `ambiental\postes_detalhador.py`: 98%
-  - `ambiental\croqui_ambiental_generator.py`: 96%
+  - `topografia\kmz_pontos_importer.py`: 93%
   - `ambiental\checklist_ambiental_manager.py`: 92%
   - `cqt\cqt_live_calc.py`: 91%
   - `cqt\cqt_quadros_generator.py`: 90%
+  - `orcamento\orcamento_core.py`: 89%
+  - `ambiental\croqui_ambiental_generator.py`: 88%
   - `ambiental\cad_to_kmz_exporter.py`: 86%
+  - `cqt\cqt_excel_io.py`: 85%
+  - `mapa_postes\mapa_servidor.py`: 83%
+  - `orcamento\orcamento_manager.py`: 81%
+- Cobertura global do projeto: **84%** (todos os módulos de lógica de negócio acima de 80%).
+- Sintaxe AutoLISP (.lsp): 23 arquivos verificados com 100% de parênteses balanceados.
+- Scripts Batch (.bat): Limpeza modernizada e atalhos testados.
+- Detecção dinâmica de caminho raiz em `acaddoc.lsp` com fallback resiliente.
+
 

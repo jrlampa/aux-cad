@@ -55,3 +55,89 @@ def test_cqt_cad_input_json_interchange(tmp_path):
     assert carregado["trechos"][0]["letra"] == "A"
     assert carregado["trechos"][0]["comprimento_m"] == 75.50
 
+
+def test_load_cables_from_valid_excel(tmp_path):
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "BASE DE DADOS"
+    ws.cell(4, 1, "3x70+1x70 - Al - F.P 1")
+    ws.cell(5, 1, "3x95+1x54,6 - Al - F.P 1")
+    fpath = str(tmp_path / "cables_test.xlsx")
+    wb.save(fpath)
+
+    cables = load_cables_from_database(fpath)
+    assert "3x70+1x70 - Al - F.P 1" in cables
+    assert "3x95+1x54,6 - Al - F.P 1" in cables
+
+
+def test_load_scenario_and_update_excel(tmp_path):
+    import openpyxl
+
+    # 1. Cria template mínimo
+    template_path = str(tmp_path / "template_cqt.xlsx")
+    dest_path = str(tmp_path / "output_cqt.xlsx")
+
+    wb = openpyxl.Workbook()
+    ws_proj = wb.active
+    ws_proj.title = "PROJETADO"
+    ws_cqt = wb.create_sheet("CQT PROJETADO")
+
+    # Estrutura esperada
+    ws_cqt.cell(1, 2, "PROJ_ORIGINAL")
+    ws_cqt.cell(4, 6, "TRAFO_ORIG")
+    ws_proj.cell(3, 3, "CLASSE B")
+    ws_proj.cell(10, 3, 30.0)
+
+    # Trecho de exemplo
+    ws_cqt.cell(11, 1, "A")
+    ws_cqt.cell(11, 2, "TRAFO")
+    ws_cqt.cell(11, 3, 0.50)  # 50m
+    ws_cqt.cell(11, 9, "3x70+1x70 - Al - F.P 1")
+    ws_proj.cell(3, 12, 5)  # mono
+
+    wb.save(template_path)
+
+    # 2. Testa leitura do cenário
+    scen_data = load_scenario_from_excel(template_path, "PROJETADO")
+    assert scen_data["projeto"] == "PROJ_ORIGINAL"
+    assert scen_data["ponto_trafo"] == "TRAFO_ORIG"
+    assert len(scen_data["trechos"]) >= 1
+    assert scen_data["trechos"][0]["letra"] == "A"
+    assert scen_data["trechos"][0]["comprimento_m"] == 50.0
+
+    # 3. Testa gravação de novos dados via update_cqt_excel
+    novos_dados = {
+        "projeto": "PROJ_NOVO_99",
+        "ponto_trafo": "TRAFO_99",
+        "classe": "CLASSE C",
+        "potencia_trafo": "45",
+        "scenarios": {
+            "PROJETADO": [
+                {
+                    "letra": "A",
+                    "montante": "TRAFO",
+                    "comprimento_m": 80.0,
+                    "condutor": "3x70+1x70 - Al - F.P 1",
+                    "mono": 3,
+                    "bi": 2,
+                    "tri": 1,
+                    "ip70": 2,
+                }
+            ]
+        }
+    }
+
+    res = update_cqt_excel(template_path, dest_path, novos_dados)
+    assert "PROJETADO" in res
+    assert os.path.exists(dest_path)
+
+    # 4. Verifica se gravou corretamente no destino
+    wb_dest = openpyxl.load_workbook(dest_path)
+    assert wb_dest["CQT PROJETADO"].cell(1, 2).value == "PROJ_NOVO_99"
+    assert wb_dest["CQT PROJETADO"].cell(4, 6).value == "TRAFO_99"
+    assert wb_dest["CQT PROJETADO"].cell(11, 3).value == 0.80  # 80m / 100
+    assert wb_dest["PROJETADO"].cell(3, 12).value == 3
+
+

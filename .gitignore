@@ -27,9 +27,10 @@ htmlcov/
 # Softwares e instaladores pesados
 softwares/
 
-# Saídas geradas em tempo de execução pelo Mapa de Postes
+# Saídas geradas em tempo de execução
 mapa_postes/dados_postes.json
 mapa_postes/desenhar_postes_gerados.lsp
 mapa_postes/postes_rede_campo.kmz
 mapa_postes/mapa_postes_exec.lsp
+kmz_import_postes_exec.lsp
 

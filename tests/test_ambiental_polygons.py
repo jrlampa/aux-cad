@@ -113,3 +113,34 @@ def test_parse_kml_multigeometry_multiple_polygons():
     assert "bbox" in polys[1]
     assert polys[0]["bbox"][0] < polys[0]["bbox"][1]
 
+
+def test_is_point_in_polygon():
+    from kmz_point_layer_report import is_point_in_polygon
+
+    poly = [
+        (0.0, 0.0),
+        (10.0, 0.0),
+        (10.0, 10.0),
+        (0.0, 10.0)
+    ]
+    # Ponto dentro
+    assert is_point_in_polygon((5.0, 5.0), poly) is True
+    # Ponto fora
+    assert is_point_in_polygon((15.0, 5.0), poly) is False
+    assert is_point_in_polygon((-1.0, 5.0), poly) is False
+
+
+def test_classify_environmental_layer():
+    from kmz_point_layer_report import classify_environmental_layer
+
+    cat, spec = classify_environmental_layer("UNIDADES", "ZONA DE AMORTECIMENTO DO PARQUE ESTADUAL")
+    assert "ZONA DE AMORTECIMENTO" in cat
+    assert "PARQUE ESTADUAL" in spec
+
+    cat_app, _ = classify_environmental_layer("APPs", "APP RIO")
+    assert cat_app == "ÁREA DE PRESERVAÇÃO PERMANENTE"
+
+    cat_apa, _ = classify_environmental_layer("UC", "APA PETROPOLIS")
+    assert "USO SUSTENTÁVEL" in cat_apa
+
+

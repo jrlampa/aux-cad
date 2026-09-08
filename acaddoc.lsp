@@ -21,8 +21,14 @@
   )
 )
 
-;; Registra raiz e subpastas de projetos
-(setq *aux-cad-root* "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\")
+;; Registra raiz e subpastas de projetos dinamicamente
+(setq *aux-cad-root*
+  (cond
+    ((findfile "acaddoc.lsp")
+     (strcat (vl-filename-directory (findfile "acaddoc.lsp")) "\\"))
+    (t "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\")
+  )
+)
 (add-support-path *aux-cad-root*)
 (add-support-path (strcat *aux-cad-root* "cqt"))
 (add-support-path (strcat *aux-cad-root* "ambiental"))
