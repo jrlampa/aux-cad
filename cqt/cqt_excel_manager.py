@@ -22,6 +22,7 @@ from cqt_excel_io import (
     DEFAULT_TEMPLATE_PATH,
     load_cables_from_database,
     load_scenario_from_excel,
+    load_all_scenarios_from_excel,
     update_cqt_excel,
 )
 
@@ -87,6 +88,9 @@ class CQTManagerGUI:
         self.cb_classe = ttk.Combobox(f1, values=["CLASSE A", "CLASSE B", "CLASSE C", "CLASSE D"], width=12)
         self.cb_classe.grid(row=0, column=7, padx=4, sticky="w")
         self.cb_classe.set("CLASSE C")
+
+        btn_import = ttk.Button(f1, text="📥 Importar Planilha Existente", command=self._on_importar_planilha_existente)
+        btn_import.grid(row=0, column=8, padx=(12, 4), sticky="e")
 
         self.cb_potencia.bind("<<ComboboxSelected>>", lambda e: self._recalcular_todas_abas())
         self.cb_classe.bind("<<ComboboxSelected>>", lambda e: self._recalcular_todas_abas())
@@ -187,6 +191,57 @@ class CQTManagerGUI:
             self.ent_dest_path.delete(0, tk.END)
             self.ent_dest_path.insert(0, chosen)
 
+    def _on_importar_planilha_existente(self, file_path: Optional[str] = None):
+        """Importa os dados cadastrais e trechos de todos os cenários de uma planilha existente."""
+        if not file_path:
+            file_path = filedialog.askopenfilename(
+                title="Selecionar Planilha CQT Preenchida",
+                filetypes=[("Planilhas Excel", "*.xlsx;*.xlsm"), ("Todos os Arquivos", "*.*")]
+            )
+        if not file_path or not os.path.exists(file_path):
+            return
+
+        dados = load_all_scenarios_from_excel(file_path)
+        cenarios = dados.get("cenarios", {})
+        if not cenarios:
+            messagebox.showwarning(
+                "Aviso de Importação",
+                f"Nenhum trecho de cenário (ATUAL, ATUAL+NC ou PROJETADO) foi localizado na planilha:\n{os.path.basename(file_path)}"
+            )
+            return
+
+        # Atualiza campos cadastrais
+        if dados.get("projeto"):
+            self.ent_proj.delete(0, tk.END)
+            self.ent_proj.insert(0, dados["projeto"])
+
+        if dados.get("ponto_trafo"):
+            self.ent_ponto.delete(0, tk.END)
+            self.ent_ponto.insert(0, dados["ponto_trafo"])
+
+        if dados.get("potencia_trafo"):
+            self.cb_potencia.set(str(dados["potencia_trafo"]))
+
+        if dados.get("classe"):
+            self.cb_classe.set(str(dados["classe"]))
+
+        # Atualiza caminho de destino sugerindo salvar na própria planilha
+        self.ent_dest_path.delete(0, tk.END)
+        self.ent_dest_path.insert(0, file_path)
+
+        # Preenche as abas de cada cenário existente
+        resumo_cenarios = []
+        for cid in ["ATUAL", "ATUAL+NC", "PROJETADO"]:
+            if cid in cenarios and cid in self.tabs:
+                tr_list = cenarios[cid]
+                self.tabs[cid].set_trechos_data(tr_list)
+                resumo_cenarios.append(f"• {cid}: {len(tr_list)} trechos carregados")
+
+        self._recalcular_todas_abas()
+
+        msg = f"Planilha importada com sucesso!\n\nArquivo: {os.path.basename(file_path)}\n\n" + "\n".join(resumo_cenarios)
+        messagebox.showinfo("Importação Concluída", msg)
+
     def _recalcular_todas_abas(self):
         for tab in self.tabs.values():
             tab.recalcular_live()
@@ -226,6 +281,28 @@ class CQTManagerGUI:
                         return
             except Exception:
                 pass
+
+        # Se foi fornecido um arquivo Excel existente que possui dados, carrega-o
+        if self.initial_dest_path and os.path.exists(self.initial_dest_path):
+            ext = os.path.splitext(self.initial_dest_path)[1].lower()
+            if ext in [".xlsm", ".xlsx"]:
+                dados_auto = load_all_scenarios_from_excel(self.initial_dest_path)
+                if dados_auto and dados_auto.get("cenarios"):
+                    for cid, tr_list in dados_auto["cenarios"].items():
+                        if cid in self.tabs and tr_list:
+                            self.tabs[cid].set_trechos_data(tr_list)
+                    if dados_auto.get("projeto"):
+                        self.ent_proj.delete(0, tk.END)
+                        self.ent_proj.insert(0, dados_auto["projeto"])
+                    if dados_auto.get("ponto_trafo"):
+                        self.ent_ponto.delete(0, tk.END)
+                        self.ent_ponto.insert(0, dados_auto["ponto_trafo"])
+                    if dados_auto.get("potencia_trafo"):
+                        self.cb_potencia.set(str(dados_auto["potencia_trafo"]))
+                    if dados_auto.get("classe"):
+                        self.cb_classe.set(str(dados_auto["classe"]))
+                    self._recalcular_todas_abas()
+                    return
 
         default_trechos = [
             {"montante": "TRAFO", "vaos": 2, "comprimento_m": 75.0, "condutor": "3x150+70 - Al - F.P 1", "tri": 1, "ip70": 2},

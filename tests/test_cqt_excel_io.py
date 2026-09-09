@@ -1,8 +1,10 @@
 import os
+import openpyxl
 import pytest
 from cqt_excel_io import (
     load_cables_from_database,
     load_scenario_from_excel,
+    load_all_scenarios_from_excel,
     update_cqt_excel,
     DEFAULT_TEMPLATE_PATH,
 )
@@ -139,5 +141,66 @@ def test_load_scenario_and_update_excel(tmp_path):
     assert wb_dest["CQT PROJETADO"].cell(4, 6).value == "TRAFO_99"
     assert wb_dest["CQT PROJETADO"].cell(11, 3).value == 0.80  # 80m / 100
     assert wb_dest["PROJETADO"].cell(3, 12).value == 3
+
+
+def test_load_all_scenarios_from_excel(tmp_path):
+    # Teste de arquivo inexistente
+    assert load_all_scenarios_from_excel("inexistente.xlsx") == {}
+
+    test_file = str(tmp_path / "cqt_multi_teste.xlsx")
+    wb = openpyxl.Workbook()
+    
+    # Cria abas ATUAL e CQT ATUAL
+    ws_at = wb.active
+    ws_at.title = "ATUAL"
+    ws_cqt_at = wb.create_sheet("CQT ATUAL")
+
+    ws_cqt_at.cell(1, 2, "PROJ_MULTI_10")
+    ws_cqt_at.cell(4, 6, "TR_100")
+    ws_at.cell(3, 3, "CLASSE C")
+    ws_at.cell(10, 3, 45.0)
+
+    # Trecho ATUAL
+    ws_cqt_at.cell(11, 1, "A")
+    ws_cqt_at.cell(11, 2, "TRAFO")
+    ws_cqt_at.cell(11, 3, 0.40)  # 40m
+    ws_cqt_at.cell(11, 9, "3x70+1x70 - Al - F.P 1")
+    ws_at.cell(3, 12, 2)  # mono
+    ws_at.cell(3, 14, 1)  # tri
+
+    # Cria abas PROJETADO e CQT PROJETADO
+    ws_proj = wb.create_sheet("PROJETADO")
+    ws_cqt_proj = wb.create_sheet("CQT PROJETADO")
+
+    ws_cqt_proj.cell(1, 2, "PROJ_MULTI_10")
+    ws_cqt_proj.cell(4, 6, "TR_100")
+    ws_proj.cell(3, 3, "CLASSE C")
+    ws_proj.cell(10, 3, 75.0)
+
+    # Trecho PROJETADO
+    ws_cqt_proj.cell(11, 1, "A")
+    ws_cqt_proj.cell(11, 2, "TRAFO")
+    ws_cqt_proj.cell(11, 3, 0.85)  # 85m
+    ws_cqt_proj.cell(11, 9, "3x150+70 - Al - F.P 1")
+    ws_proj.cell(3, 12, 4)  # mono
+    ws_proj.cell(3, 14, 2)  # tri
+
+    wb.save(test_file)
+    wb.close()
+
+    # Importa usando load_all_scenarios_from_excel
+    importado = load_all_scenarios_from_excel(test_file)
+    assert importado["projeto"] == "PROJ_MULTI_10"
+    assert importado["ponto_trafo"] == "TR_100"
+    assert importado["classe"] == "CLASSE C"
+    assert importado["potencia_trafo"] in ["45", "75", 45.0, 75.0, "45.0", "75.0"]
+    assert "ATUAL" in importado["cenarios"]
+    assert "PROJETADO" in importado["cenarios"]
+    assert len(importado["cenarios"]["ATUAL"]) == 1
+    assert importado["cenarios"]["ATUAL"][0]["comprimento_m"] == 40.0
+    assert importado["cenarios"]["ATUAL"][0]["mono"] == "2"
+    assert len(importado["cenarios"]["PROJETADO"]) == 1
+    assert importado["cenarios"]["PROJETADO"][0]["comprimento_m"] == 85.0
+    assert importado["cenarios"]["PROJETADO"][0]["mono"] == "4"
 
 

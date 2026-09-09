@@ -120,6 +120,42 @@ def load_scenario_from_excel(xlsm_path: str, cenario: str) -> Dict:
         return {}
 
 
+def load_all_scenarios_from_excel(xlsm_path: str) -> Dict:
+    """
+    Carrega todos os cenários disponíveis (ATUAL, ATUAL+NC, PROJETADO) e dados cadastrais
+    de uma planilha Excel existente (.xlsx ou .xlsm).
+    """
+    if not os.path.exists(xlsm_path):
+        return {}
+
+    resultado = {
+        "projeto": "",
+        "ponto_trafo": "",
+        "classe": "CLASSE C",
+        "potencia_trafo": "45",
+        "cenarios": {}
+    }
+
+    try:
+        wb = openpyxl.load_workbook(xlsm_path, data_only=True)
+        for cenario in ["ATUAL", "ATUAL+NC", "PROJETADO"]:
+            data_cen = load_scenario_from_excel(xlsm_path, cenario)
+            if data_cen and data_cen.get("trechos"):
+                resultado["cenarios"][cenario] = data_cen["trechos"]
+                if not resultado["projeto"] and data_cen.get("projeto"):
+                    resultado["projeto"] = data_cen["projeto"]
+                if not resultado["ponto_trafo"] and data_cen.get("ponto_trafo"):
+                    resultado["ponto_trafo"] = data_cen["ponto_trafo"]
+                if data_cen.get("classe"):
+                    resultado["classe"] = data_cen["classe"]
+                if data_cen.get("potencia_trafo"):
+                    resultado["potencia_trafo"] = data_cen["potencia_trafo"]
+        wb.close()
+        return resultado
+    except Exception:
+        return {}
+
+
 def update_cqt_excel(template_path: str, dest_path: str, data: Dict) -> List[str]:
     """
     Grava os dados preenchidos na planilha CQT de destino (preservando o template intacto).
