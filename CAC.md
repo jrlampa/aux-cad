@@ -144,15 +144,21 @@ aux cad/
   - Camada de manipulação de planilhas via `openpyxl`.
   - Injeção precisa nos campos cadastrais (`C11:G11`, `C13:G13`, `C15:G15`, `C17:G17`, `C19:G19`), custos (`C24`, `F30`, `F31`) e demandas elétricas (`C41`, `C43`, `G66`, `G80`).
   - Preservação estrita de fórmulas nativas (`F32`, `G70`, `G72`, `G74`, `G76`, `G82`, `G84`, `G86`, `G88`, `G93`), estilos de formatação e imagens do cabeçalho.
-- `cpfc_gui.py` (270 linhas):
+- `cpfc_gui.py` (494 linhas):
   - Interface moderna em Tkinter 100% em pt-BR com tema corporativo `#1B365D`.
   - Layout dividido em 4 cards: Dados Cadastrais, Custos da Obra, Demandas Elétricas e Live Preview de Indicadores.
   - Indicadores em tempo real para ERD, Fator de Proporcionalização e COP.
   - Banner dinâmico de status: Destaque verde para Isenção de PF ou âmbar para Valor Devido.
+  - Botão integrado no cabeçalho: **"📘 Regras REN 1.059 (Casos de PF)"** abrindo modal explicativo.
   - Diálogo nativo `filedialog.asksaveasfilename` com sugestão inteligente de nome (`PE_{PROJETO}_CPFC_REN1.059.xlsx`).
   - Atalhos de pós-geração: Abrir no Excel ou Abrir Pasta de Destino.
+- `cpfc_guia_ren1059.py` (28 linhas):
+  - Guia didático das regras da REN 1.059/2023 e REN 1.000/2021 detalhando quando há incidência de PF (COP > ERD, MMGD, tensão diferenciada, trafo exclusivo) e quando há gratuidade.
 - `cpfc_manager.py` (36 linhas): Orquestrador com suporte a CLI, pasta padrão do DWG e intercâmbio JSON.
-- `cpfc_cad_launcher.lsp` (85 linhas): Comandos do AutoCAD **`CPFC`** / **`CPFCUI`** (abertura direta) e **`CPFCCAD`** (com leitura do projeto e pasta do DWG aberto).
+- `cpfc_cad_launcher.lsp` (98 linhas):
+  - Comandos do AutoCAD **`CPFC`** / **`CPFCUI`** (abertura direta com aviso regulatório).
+  - Comando **`CPFCCAD`** (com leitura do projeto e pasta do DWG aberto).
+  - Comando **`CPFCALERTA`** / **`CPFCREGRA`** (caixa de diálogo visual detalhando os casos que geram PF).
 - `modelos/cpfc_modelo.xlsx`: Planilha modelo de referência padronizada.
 - `Abrir_CPFC.bat`: Atalho executável na raiz e em `cpfc/`.
 
@@ -163,9 +169,9 @@ O arquivo `acaddoc.lsp` foi projetado para:
 3. Carregar as rotinas modulares de forma resiliente com tratamento de erros (`vl-catch-all-apply`).
 
 ### 10. Validação e Testes
-- Suíte com **74 testes unitários passando 100%** (`python -m pytest --cov`).
+- Suíte com **75 testes unitários passando 100%** (`python -m pytest --cov`).
 - Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos cpfc`).
-- Cobertura total do projeto em **86%** (módulo `cpfc` com 87% de cobertura, `cpfc_core` com 98%).
+- Cobertura total do projeto em **86%** (módulo `cpfc` com **89%** de cobertura, `cpfc_core` com 98%).
 - Resolução dinâmica de diretórios no `acaddoc.lsp` para independência de máquina.
 - Rotinas e saídas geradas em tempo de execução organizadas com proteção no `.gitignore`.
 

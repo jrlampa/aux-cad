@@ -129,13 +129,18 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `cpfc_excel.py` (43 linhas): Camada de persistência em planilha oficial via `openpyxl`:
   - Preenchimento atômico dos dados cadastrais (`C11` a `C19`), orçamento (`C24`, `F30`, `F31`), demandas (`C41`, `C43`, `G66`, `G80`).
   - Preservação integral de fórmulas nativas (`F32`, `G70`, `G72`, `G74`, `G76`, `G82`, `G84`, `G86`, `G88`, `G93`), formatações e imagens de cabeçalho.
-- `cpfc_gui.py` (270 linhas): Interface gráfica moderna em Tkinter 100% em pt-BR (#1B365D):
+- `cpfc_gui.py` (494 linhas): Interface gráfica moderna em Tkinter 100% em pt-BR (#1B365D):
   - Cards visuais organizados para Dados Cadastrais, Orçamento da Obra e Demandas Elétricas.
   - Painel de **Live Preview** em tempo real com KPIs (ERD, Fator Proporc., COP e Banner com destaque de PF ou Isenção).
+  - Botão de acesso direto ao **Guia Regulatório da REN 1.059** com modal explicativo dos casos que geram PF.
   - Diálogo de salvamento nativo do Windows (`Salvar Como`) sugerindo `PE_{PROJETO}_CPFC_REN1.059.xlsx`.
   - Diálogo de conclusão com ações de 1 clique para "Abrir no Excel" ou "Abrir Pasta".
+- `cpfc_guia_ren1059.py` (28 linhas): Componente didático e regulatório com a síntese dos casos objetivos que geram Participação Financeira (COP > ERD, MMGD Geração > Carga, Obras de Interesse Restrito, Fator Prop = 100%) e hipóteses de gratuidade.
 - `cpfc_manager.py` (36 linhas): Orquestrador CLI/GUI com suporte a argumentos de pasta/projeto e JSON de intercâmbio.
-- `cpfc_cad_launcher.lsp` (85 linhas): Comandos do AutoCAD **`CPFC`** / **`CPFCUI`** (abertura imediata) e **`CPFCCAD`** (com extração de projeto e pasta do DWG).
+- `cpfc_cad_launcher.lsp` (98 linhas): Comandos do AutoCAD:
+  - **`CPFC`** / **`CPFCUI`**: Disparo direto com exibição de alerta regulatório no prompt.
+  - **`CPFCCAD`**: Disparo com extração de DWG e alerta no prompt.
+  - **`CPFCALERTA`** / **`CPFCREGRA`**: Exibe caixa de diálogo visual (`alert`) com o resumo dos casos que geram PF.
 - `modelos/cpfc_modelo.xlsx`: Template base oficial mantido na pasta de modelos.
 - `Abrir_CPFC.bat`: Atalho executável de 2 cliques na raiz e em `cpfc/`.
 
@@ -152,9 +157,10 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
 
 ## Validação e Qualidade
-- Suíte completa com **74 testes unitários passando 100%** (`python -m pytest --cov`):
+- Suíte completa com **75 testes unitários passando 100%** (`python -m pytest --cov`):
   - `orcamento\orcamento_excel.py`: 99%
   - `cpfc\cpfc_core.py`: 98%
+  - `cpfc\cpfc_guia_ren1059.py`: 100%
   - `ambiental\postes_detalhador.py`: 98%
   - `dados_tecnicos\tabelas_referencia.py`: 94%
   - `topografia\kmz_pontos_importer.py`: 93%
@@ -166,11 +172,11 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `cpfc\cpfc_excel.py`: 88%
   - `ambiental\cad_to_kmz_exporter.py`: 86%
   - `cqt\cqt_excel_io.py`: 85%
-  - `cpfc\cpfc_gui.py`: 83%
+  - `cpfc\cpfc_gui.py`: 85%
   - `cpfc\cpfc_manager.py`: 83%
   - `mapa_postes\mapa_servidor.py`: 83%
   - `orcamento\orcamento_manager.py`: 81%
-- Cobertura global do projeto: **86%** (todos os módulos de lógica de negócio e o novo módulo CPFC acima de 80%).
+- Cobertura global do projeto: **86%** (módulo `cpfc` com **89%** de cobertura).
 - Sintaxe AutoLISP (.lsp): 25 arquivos verificados com 100% de parênteses balanceados.
 - Scripts Batch (.bat): Limpeza modernizada e atalhos testados.
 - Detecção dinâmica de caminho raiz em `acaddoc.lsp` com fallback resiliente.

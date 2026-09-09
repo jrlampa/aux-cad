@@ -113,6 +113,7 @@
   (princ "\n  [PARTICIPAÇÃO FINANCEIRA - CPFC REN 1.059]")
   (princ "\n   - CPFC ou CPFCUI : Abre a interface de cálculo de Participação Financeira")
   (princ "\n   - CPFCCAD : Captura dados do DWG e abre a interface para preencher o modelo")
+  (princ "\n   - CPFCALERTA ou CPFCREGRA : Exibe resumo dos casos que geram PF (COP > ERD, MMGD, etc.)")
   (princ "\n")
   (princ "\n  [QUEDA DE TENSÃO BT - CQT]")
   (princ "\n   - CQT ou CQTUI ou QUEDATENSAO : Interface de cálculo CQT (QT <= 6%)")

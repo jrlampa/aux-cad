@@ -345,3 +345,20 @@ def test_cpfc_manager_main(monkeypatch):
     finally:
         if os.path.exists(tmp_name):
             os.remove(tmp_name)
+
+
+def test_exibir_modal_guia_ren1059():
+    """Valida o conteúdo e a exibição do guia regulatório da REN 1.059."""
+    from cpfc.cpfc_gui import CPFCManagerGUI
+    from cpfc.cpfc_guia_ren1059 import exibir_modal_guia_ren1059, TEXTO_GUIA_REN1059
+
+    assert "SITUAÇÕES EM QUE OCORRE PARTICIPAÇÃO FINANCEIRA" in TEXTO_GUIA_REN1059
+    assert "COP > ERD" in TEXTO_GUIA_REN1059
+    assert "GERAÇÃO DISTRIBUÍDA" in TEXTO_GUIA_REN1059
+    assert "HIPÓTESES DE ISENÇÃO" in TEXTO_GUIA_REN1059
+
+    app = CPFCManagerGUI()
+    try:
+        exibir_modal_guia_ren1059(app)
+    finally:
+        app.destroy()

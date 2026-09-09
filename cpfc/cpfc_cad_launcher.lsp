@@ -3,8 +3,10 @@
 ;;; Módulo CPFC - Cálculo de Participação Financeira do Consumidor (REN 1.059 ANEEL)
 ;;;
 ;;; Comandos disponíveis no AutoCAD:
-;;;   CPFC / CPFCUI - Abre imediatamente a interface gráfica interativa
-;;;   CPFCCAD       - Captura dados do DWG atual e dispara a interface com pasta do projeto
+;;;   CPFC / CPFCUI   - Abre imediatamente a interface gráfica interativa
+;;;   CPFCCAD         - Captura dados do DWG atual e dispara a interface com pasta do projeto
+;;;   CPFCALERTA      - Exibe caixa com as regras da REN 1.059 sobre casos que geram PF
+;;;   CPFCREGRA       - Alias para CPFCALERTA
 ;;; =============================================================================
 
 (vl-load-com)
@@ -27,8 +29,25 @@
   py_script
 )
 
-;; Comando Direto CPFC / CPFCUI - Abertura instantânea
+;; Exibe alerta e resumo normativo no prompt do console sobre casos que geram PF
+(defun cpfc-exibir-alerta-ren1059 ()
+  (princ "\n-------------------------------------------------------------------------")
+  (princ "\n [AVISO REGULATÓRIO - PARTICIPAÇÃO FINANCEIRA (REN 1.059 / REN 1.000)]  ")
+  (princ "\n-------------------------------------------------------------------------")
+  (princ "\n ⚠ CASOS QUE GERAM PARTICIPAÇÃO FINANCEIRA (PF > 0):                    ")
+  (princ "\n   1. COP > ERD: Custo proporcionalizado supera o limite da concessionária;")
+  (princ "\n   2. GERAÇÃO DISTRIBUÍDA: Quando Geração > Carga (Kg incide no excedente); ")
+  (princ "\n   3. ALTO CUSTO POR kW: Extensões longas (MT/BT) p/ atender carga moderada;")
+  (princ "\n   4. OBRAS EXCLUSIVAS / INTERESSE RESTRITO: Tensão especial ou sem rateio.  ")
+  (princ "\n ✔ CASOS DE ISENÇÃO (PF = 0):                                           ")
+  (princ "\n   - Quando COP <= ERD (custo absorvido 100% pela distribuidora)        ")
+  (princ "\n   - Conexões do Grupo B dentro dos limites de gratuidade da ANEEL.      ")
+  (princ "\n-------------------------------------------------------------------------")
+)
+
+;; Comando Direto CPFC / CPFCUI - Abertura instantânea com alerta regulatório
 (defun c:CPFCUI (/ py_script dwg_dir dwg_name proj_num cmd)
+  (cpfc-exibir-alerta-ren1059)
   (setq py_script (cpfc-get-py-script))
   
   (setq dwg_dir (getvar "DWGPREFIX"))
@@ -57,6 +76,8 @@
   (princ "\n=======================================================")
   (princ "\n  CPFC - CÁLCULO DE PARTICIPAÇÃO FINANCEIRA (REN 1.059)")
   (princ "\n=======================================================")
+  
+  (cpfc-exibir-alerta-ren1059)
 
   (setq py_script (cpfc-get-py-script))
   (setq dwg_dir (getvar "DWGPREFIX"))
@@ -91,5 +112,31 @@
   (princ)
 )
 
-(princ "\n[CPFC] Rotina carregada! Digite CPFC ou CPFCUI para abrir o formulário.")
+;; Comando de Alerta e Consulta Visual das Regras da REN 1.059
+(defun c:CPFCALERTA (/ msg)
+  (setq msg (strcat
+    "=== REGRAS DE PARTICIPAÇÃO FINANCEIRA (REN 1.059 / ANEEL) ===\n\n"
+    "A Participação Financeira do Consumidor (PF) ocorre quando:\n"
+    "PF = max(0, COP - ERD)\n\n"
+    "🚨 SITUAÇÕES QUE GERAM PARTICIPAÇÃO FINANCEIRA (PF > 0):\n"
+    "1. COP > ERD: Custo proporcionalizado da obra supera o limite de\n"
+    "   investimento regulatório da concessionária (ERD).\n"
+    "2. GERAÇÃO DISTRIBUÍDA (MMGD): Quando a demanda de geração supera a\n"
+    "   demanda de carga, incide o Fator Kgeração (Kg) sobre o excedente,\n"
+    "   resultando em menor cobertura de ERD e eventual cobrança de reforço.\n"
+    "3. EXTENSÕES LONGAS: Redes extensas em MT/BT com elevado custo de\n"
+    "   materiais para atender demanda concentrada moderada.\n"
+    "4. OBRAS DE INTERESSE RESTRITO: Atendimento em tensão fora do padrão,\n"
+    "   redes expressas ou transformadores exclusivos do cliente (100% PF).\n\n"
+    "✔ ISENÇÃO (PF = 0):\n"
+    "• Quando COP <= ERD (a distribuidora arca com 100% dos custos).\n"
+    "• Conexões do Grupo B atendidas pela gratuidade regulatória (Art. 104)."
+  ))
+  (alert msg)
+  (princ)
+)
+
+(defun c:CPFCREGRA () (c:CPFCALERTA))
+
+(princ "\n[CPFC] Rotina carregada! Digite CPFC, CPFCUI ou CPFCALERTA.")
 (princ)

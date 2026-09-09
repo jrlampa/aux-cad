@@ -50,6 +50,8 @@
   (princ "\n=======================================================")
   (princ "\n   AUX CAD - LEVANTAMENTO AUTOMATICO DE MATERIAIS      ")
   (princ "\n=======================================================")
+  (princ "\n[AVISO REN 1.059] Este orçamento serve de base para o cálculo do CPFC.")
+  (princ "\nHaverá Participação Financeira (PF > 0) se o COP da obra superar o ERD.")
 
   (setq dwg_prefix (getvar "DWGPREFIX"))
   (if (or (null dwg_prefix) (= dwg_prefix ""))
@@ -215,6 +217,8 @@
   )
   (if py_path
     (progn
+      (princ "\n[AVISO REN 1.059] O orçamento serve de base para o cálculo de Participação Financeira (CPFC).")
+      (princ "\nSe o custo proporcionalizado da obra superar o ERD da distribuidora, haverá cobrança de PF.")
       (setq cmd_line (strcat "python \"" py_path "\""))
       (princ "\nIniciando interface grafica de orcamento...")
       (startapp "cmd.exe" (strcat "/c " cmd_line))

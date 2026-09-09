@@ -1,14 +1,5 @@
-"""
-cpfc_gui.py - Interface Gráfica Interativa para Preenchimento de CPFC
-Módulo CPFC - Cálculo de Participação Financeira do Consumidor (IM3 Brasil / Concessionária)
-
-Características:
-  - 100% em pt-BR com design executivo (#1B365D, cards táteis, tipografia moderna)
-  - Live Preview instantâneo dos cálculos da REN 1.059 (ERD, COP e PF)
-  - Diálogo nativo 'Salvar Como' para o usuário escolher o destino do arquivo .xlsx
-  - Ações de 1 clique pós-geração: Abrir no Excel ou Abrir Pasta
-  - Respeita o limite estrito < 500 linhas
-"""
+"""cpfc_gui.py - Interface Gráfica Interativa para Preenchimento de CPFC (REN 1.059 ANEEL).
+Design executivo #1B365D, Live Preview de ERD/COP/PF, salvamento interativo de planilha."""
 
 import os
 import subprocess
@@ -27,6 +18,7 @@ from cpfc.cpfc_core import (
     ORIGENS_ORCAMENTO_PADRAO,
 )
 from cpfc.cpfc_excel import preencher_e_salvar_cpfc
+from cpfc.cpfc_guia_ren1059 import exibir_modal_guia_ren1059
 
 
 class CPFCManagerGUI(tk.Tk):
@@ -76,8 +68,11 @@ class CPFCManagerGUI(tk.Tk):
         header_frame = tk.Frame(self, bg="#1B365D", height=70, padx=20, pady=12)
         header_frame.pack(fill=tk.X, side=tk.TOP)
 
+        left_box = tk.Frame(header_frame, bg="#1B365D")
+        left_box.pack(side=tk.LEFT, fill=tk.Y)
+
         lbl_titulo = tk.Label(
-            header_frame,
+            left_box,
             text="💰 Participação Financeira do Consumidor (CPFC)",
             font=("Segoe UI", 14, "bold"),
             bg="#1B365D",
@@ -86,13 +81,27 @@ class CPFCManagerGUI(tk.Tk):
         lbl_titulo.pack(anchor="w")
 
         lbl_sub = tk.Label(
-            header_frame,
+            left_box,
             text="Resolução Normativa ANEEL Nº 1.059 | Preenchimento Oficial de Planilha de Distribuição",
             font=("Segoe UI", 9),
             bg="#1B365D",
             fg="#94A3B8",
         )
         lbl_sub.pack(anchor="w")
+
+        btn_guia = tk.Button(
+            header_frame,
+            text="📘 Regras REN 1.059 (Casos de PF)",
+            font=("Segoe UI", 9, "bold"),
+            bg="#0D8269",
+            fg="#FFFFFF",
+            padx=12,
+            pady=6,
+            relief="flat",
+            cursor="hand2",
+            command=lambda: exibir_modal_guia_ren1059(self),
+        )
+        btn_guia.pack(side=tk.RIGHT, pady=4)
 
     def _criar_corpo_com_rolagem(self):
         container = tk.Frame(self, bg="#F1F5F9")
@@ -137,13 +146,12 @@ class CPFCManagerGUI(tk.Tk):
 
         tk.Label(card, text="1. Dados Cadastrais do Projeto", font=("Segoe UI", 11, "bold"), bg="#FFFFFF", fg="#1B365D").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 10))
 
-        # Projeto Nº
+        # Projeto Nº e Município
         tk.Label(card, text="Número do Projeto/Ordem:", bg="#FFFFFF").grid(row=1, column=0, sticky="w", padx=4, pady=4)
         self.ent_projeto = ttk.Entry(card, width=22)
         self.ent_projeto.grid(row=1, column=1, sticky="w", padx=4, pady=4)
         self.ent_projeto.bind("<KeyRelease>", lambda e: self._calcular_em_tempo_real())
 
-        # Município
         tk.Label(card, text="Município:", bg="#FFFFFF").grid(row=1, column=2, sticky="w", padx=4, pady=4)
         self.ent_municipio = ttk.Entry(card, width=24)
         self.ent_municipio.grid(row=1, column=3, sticky="ew", padx=4, pady=4)
@@ -153,15 +161,13 @@ class CPFCManagerGUI(tk.Tk):
         self.ent_endereco = ttk.Entry(card)
         self.ent_endereco.grid(row=2, column=1, columnspan=3, sticky="ew", padx=4, pady=4)
 
-        # Tipo de Ligação
+        # Tipo de Ligação e Subgrupo
         tk.Label(card, text="Tipo de Ligação:", bg="#FFFFFF").grid(row=3, column=0, sticky="w", padx=4, pady=4)
         self.cb_tipo_ligacao = ttk.Combobox(card, values=TIPOS_LIGACAO_PADRAO, state="readonly")
         self.cb_tipo_ligacao.grid(row=3, column=1, sticky="ew", padx=4, pady=4)
 
-        # Subgrupo Tarifário
         tk.Label(card, text="Subgrupo Tarifário:", bg="#FFFFFF").grid(row=3, column=2, sticky="w", padx=4, pady=4)
-        subgrupos = list(SUBGRUPOS_LOOKUP.keys())
-        self.cb_subgrupo = ttk.Combobox(card, values=subgrupos, state="readonly", width=28)
+        self.cb_subgrupo = ttk.Combobox(card, values=list(SUBGRUPOS_LOOKUP.keys()), state="readonly", width=28)
         self.cb_subgrupo.grid(row=3, column=3, sticky="ew", padx=4, pady=4)
         self.cb_subgrupo.bind("<<ComboboxSelected>>", lambda e: self._calcular_em_tempo_real())
 
@@ -174,24 +180,20 @@ class CPFCManagerGUI(tk.Tk):
 
         tk.Label(card, text="2. Orçamento e Custos da Obra (R$)", font=("Segoe UI", 11, "bold"), bg="#FFFFFF", fg="#1B365D").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 10))
 
-        # Origem
         tk.Label(card, text="Origem do Orçamento:", bg="#FFFFFF").grid(row=1, column=0, sticky="w", padx=4, pady=4)
         self.cb_origem = ttk.Combobox(card, values=ORIGENS_ORCAMENTO_PADRAO, state="readonly", width=18)
         self.cb_origem.grid(row=1, column=1, sticky="w", padx=4, pady=4)
 
-        # Serviços de Terceiros
         tk.Label(card, text="Serviço de Terceiros (R$):", bg="#FFFFFF").grid(row=1, column=2, sticky="w", padx=4, pady=4)
         self.ent_terceiros = ttk.Entry(card, width=20)
         self.ent_terceiros.grid(row=1, column=3, sticky="w", padx=4, pady=4)
         self.ent_terceiros.bind("<KeyRelease>", lambda e: self._calcular_em_tempo_real())
 
-        # Material
         tk.Label(card, text="Material da Obra (R$):", bg="#FFFFFF").grid(row=2, column=0, sticky="w", padx=4, pady=4)
         self.ent_material = ttk.Entry(card, width=20)
         self.ent_material.grid(row=2, column=1, sticky="w", padx=4, pady=4)
         self.ent_material.bind("<KeyRelease>", lambda e: self._calcular_em_tempo_real())
 
-        # Total Calculado
         tk.Label(card, text="Custo Total da Obra:", font=("Segoe UI", 9, "bold"), bg="#FFFFFF").grid(row=2, column=2, sticky="w", padx=4, pady=4)
         self.lbl_total_obra = tk.Label(card, text="R$ 0,00", font=("Segoe UI", 10, "bold"), bg="#FFFFFF", fg="#0284C7")
         self.lbl_total_obra.grid(row=2, column=3, sticky="w", padx=4, pady=4)
@@ -205,28 +207,25 @@ class CPFCManagerGUI(tk.Tk):
 
         tk.Label(card, text="3. Demandas Elétricas - REN 1.059 (kW)", font=("Segoe UI", 11, "bold"), bg="#FFFFFF", fg="#1B365D").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 10))
 
-        # Demanda de Carga
         tk.Label(card, text="Demanda de Carga (kW):", bg="#FFFFFF").grid(row=1, column=0, sticky="w", padx=4, pady=4)
         self.ent_dem_carga = ttk.Entry(card, width=18)
         self.ent_dem_carga.grid(row=1, column=1, sticky="w", padx=4, pady=4)
         self.ent_dem_carga.bind("<KeyRelease>", lambda e: self._on_dem_carga_change())
 
-        # Demanda de Geração
         tk.Label(card, text="Demanda de Geração (kW):", bg="#FFFFFF").grid(row=1, column=2, sticky="w", padx=4, pady=4)
         self.ent_dem_geracao = ttk.Entry(card, width=18)
         self.ent_dem_geracao.grid(row=1, column=3, sticky="w", padx=4, pady=4)
         self.ent_dem_geracao.bind("<KeyRelease>", lambda e: self._calcular_em_tempo_real())
 
-        # Demanda para cálculo do ERD (G66)
         tk.Label(card, text="Demanda Cliente p/ ERD (kW):", bg="#FFFFFF").grid(row=2, column=0, sticky="w", padx=4, pady=4)
         self.ent_dem_erd = ttk.Entry(card, width=18)
         self.ent_dem_erd.grid(row=2, column=1, sticky="w", padx=4, pady=4)
         self.ent_dem_erd.bind("<KeyRelease>", lambda e: self._on_dem_erd_change())
 
-        # Demanda Disponibilizada no Orçamento
         tk.Label(card, text="Demanda Disp. Orçamento (kW):", bg="#FFFFFF").grid(row=2, column=2, sticky="w", padx=4, pady=4)
         self.ent_dem_disp = ttk.Entry(card, width=18)
         self.ent_dem_disp.grid(row=2, column=3, sticky="w", padx=4, pady=4)
+        self.ent_dem_disp.bind("<KeyRelease>", lambda e: self._calcular_em_tempo_real())
         self.ent_dem_disp.bind("<KeyRelease>", lambda e: self._calcular_em_tempo_real())
 
         card.columnconfigure(1, weight=1)
@@ -472,29 +471,24 @@ class CPFCManagerGUI(tk.Tk):
 
     def _preencher_dados_iniciais(self, projeto: str, dados: Optional[Dict[str, Any]]):
         self.ent_projeto.insert(0, projeto)
-        self.cb_tipo_ligacao.set("Acréscimo de carga")
-        self.cb_subgrupo.set("Subgrupo B1")
-        self.ent_municipio.insert(0, "PETRÓPOLIS")
+        self.cb_tipo_ligacao.set((dados and dados.get("tipo_ligacao")) or "Acréscimo de carga")
+        self.cb_subgrupo.set((dados and dados.get("subgrupo")) or "Subgrupo B1")
         self.cb_origem.set("GOM")
-
-        if dados:
-            if "endereco" in dados: self.ent_endereco.insert(0, str(dados["endereco"]))
-            if "municipio" in dados:
-                self.ent_municipio.delete(0, tk.END)
-                self.ent_municipio.insert(0, str(dados["municipio"]))
-            if "tipo_ligacao" in dados: self.cb_tipo_ligacao.set(str(dados["tipo_ligacao"]))
-            if "subgrupo" in dados: self.cb_subgrupo.set(str(dados["subgrupo"]))
-            if "servico_terceiros" in dados: self.ent_terceiros.insert(0, str(dados["servico_terceiros"]))
-            if "material" in dados: self.ent_material.insert(0, str(dados["material"]))
-            if "demanda_carga" in dados: self.ent_dem_carga.insert(0, str(dados["demanda_carga"]))
-            if "demanda_geracao" in dados: self.ent_dem_geracao.insert(0, str(dados["demanda_geracao"]))
-            if "demanda_erd" in dados: self.ent_dem_erd.insert(0, str(dados["demanda_erd"]))
-            if "demanda_disponibilizada" in dados: self.ent_dem_disp.insert(0, str(dados["demanda_disponibilizada"]))
-        else:
-            # Padrões do modelo oficial de referência
-            self.ent_endereco.insert(0, "Rua Jose Timoteo Caldara 834")
-            self.ent_terceiros.insert(0, "17172.51")
-            self.ent_material.insert(0, "29988.28")
-            self.ent_dem_carga.insert(0, "40")
-            self.ent_dem_erd.insert(0, "39.52")
-            self.ent_dem_disp.insert(0, "69")
+        val = dados or {
+            "endereco": "Rua Jose Timoteo Caldara 834",
+            "municipio": "PETRÓPOLIS",
+            "servico_terceiros": "17172.51",
+            "material": "29988.28",
+            "demanda_carga": "40",
+            "demanda_erd": "39.52",
+            "demanda_disponibilizada": "69",
+        }
+        for campo, widget in [
+            ("municipio", self.ent_municipio), ("endereco", self.ent_endereco),
+            ("servico_terceiros", self.ent_terceiros), ("material", self.ent_material),
+            ("demanda_carga", self.ent_dem_carga), ("demanda_geracao", self.ent_dem_geracao),
+            ("demanda_erd", self.ent_dem_erd), ("demanda_disponibilizada", self.ent_dem_disp),
+        ]:
+            if campo in val and val[campo] is not None:
+                widget.delete(0, tk.END)
+                widget.insert(0, str(val[campo]))
