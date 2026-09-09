@@ -135,9 +135,9 @@
 ;; =============================================================================
 ;; COMANDO PRINCIPAL: UNIFILAR
 ;; =============================================================================
-(defun c:UNIFILAR (/ *error* mod-dir py-script tmp-json ponto sel ent t-ext cmd
-                     fp json-content sucesso se alim prot-rot cli-a cli-b kva
-                     pt-ins h-txt opc ss i ent-i txt-i)
+(defun c:UNIFILAR (/ *error* mod-dir py-script tmp-json tmp-log ponto sel ent t-ext cmd
+                     wsh t0 fp fp-log l-err msg-err json-content sucesso se alim prot-rot
+                     cli-a cli-b kva pt-ins h-txt opc ss i ent-i txt-i cnt-upd x y sp x-al y-cur)
 
   (defun *error* (msg)
     (if (and msg (not (member msg '("Function cancelled" "quit / exit abort"))))
@@ -189,23 +189,41 @@
     )
   )
 
-  ;; Prepara arquivo temporário de intercâmbio JSON
+  ;; Prepara arquivo temporário de intercâmbio JSON e log de diagnóstico
   (setq tmp-json (vl-filename-mktemp "unifilar_" nil ".json"))
-  (setq cmd (strcat "python \"" py-script "\" --ponto \"" ponto "\" --out \"" tmp-json "\""))
+  (setq tmp-log (vl-filename-mktemp "unifilar_log_" nil ".txt"))
+  (setq cmd (strcat "\"python \"" py-script "\" --ponto \"" ponto "\" --out \"" tmp-json "\" > \"" tmp-log "\" 2>&1\""))
 
   (princ (strcat "\n[UNIFILAR] Consultando proteção a montante para '" ponto "'..."))
-  (startapp cmd)
 
-  ;; Aguarda a conclusão com timeout de até 8 segundos
-  (setq timeout-count 0)
-  (while (and (not (findfile tmp-json)) (< timeout-count 80))
-    (vl-sleep 100)
-    (setq timeout-count (1+ timeout-count))
+  ;; Execução síncrona protegida via WScript.Shell (sem piscar tela preta e sem vl-sleep)
+  (setq wsh (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
+  (if (and wsh (not (vl-catch-all-error-p wsh)))
+    (progn
+      (vl-catch-all-apply 'vlax-invoke-method (list wsh "Run" (strcat "cmd.exe /c " cmd) 0 :vlax-true))
+      (vlax-release-object wsh)
+    )
+    (progn
+      (startapp "cmd.exe" (strcat "/c " cmd))
+      (setq t0 (getvar "MILLISECS"))
+      (while (and (not (findfile tmp-json)) (< (- (getvar "MILLISECS") t0) 6000))
+      )
+    )
   )
 
   (if (not (findfile tmp-json))
     (progn
-      (alert (strcat "Tempo limite excedido na consulta do ponto: " ponto))
+      (setq msg-err "")
+      (if (findfile tmp-log)
+        (progn
+          (setq fp-log (open tmp-log "r"))
+          (while (setq l-err (read-line fp-log))
+            (setq msg-err (strcat msg-err l-err "\n"))
+          )
+          (close fp-log)
+        )
+      )
+      (alert (strcat "Não foi possível consultar o ponto " ponto ":\n" (if (/= msg-err "") msg-err "Tempo limite excedido ou Python inacessível.")))
       (exit)
     )
   )
