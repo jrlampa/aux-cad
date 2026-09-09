@@ -5,8 +5,15 @@
 
 (vl-load-com)
 
-;; Compatibilidade para checagem de tipo string em rotinas LISP legadas/portadas
+;; Compatibilidade para checagem de tipo string e função em rotinas LISP legadas/portadas
 (defun stringp (x) (= (type x) 'STR))
+(defun fboundp (sym)
+  (and sym
+       (or (= (type sym) 'SUBR)
+           (= (type sym) 'USUBR)
+           (and (= (type sym) 'SYM)
+                (or (= (type (eval sym)) 'SUBR)
+                    (= (type (eval sym)) 'USUBR))))))
 
 ;; Adiciona pastas dos projetos ao SupportPath do AutoCAD dinamicamente
 (defun add-support-path (dir / files acadApp pref filesObj curPaths newPath)

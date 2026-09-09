@@ -21,7 +21,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `CAC.md` & `RAG/MEMORY.md`: Diretrizes arquiteturais e histórico da base de conhecimento.
 
 ### 2. `cqt/` (Projeto Queda de Tensão BT)
-- `cqt_cad_extractor.lsp` (427 linhas): Rotina AutoLISP com comandos **`CQTCAD`**, **`CQT`**, **`CQTUI`**, **`CQTQUADROS`** e **`RECARREGAR_CQT`**:
+- `cqt_cad_extractor.lsp` (434 linhas): Rotina AutoLISP com comandos **`CQTCAD`**, **`CQT`**, **`CQTUI`**, **`CQTQUADROS`** e **`RECARREGAR_CQT`**:
   - `CQT` / `CQTUI`: Abre imediatamente a interface gráfica interativa para estudos de viabilidade.
   - `CQTCAD`: Extrai vãos e trechos do CAD graficamente ou via prompt, grava com segurança o arquivo de intercâmbio JSON via `vl-filename-mktemp`, garante compatibilidade estrita AutoLISP (`(= (type x) 'STR)` e definição global de `stringp`) e dispara a interface gráfica de forma desacoplada via `(startapp "cmd.exe" ...)`, carregando dados de projeto, trafo e vãos automaticamente.
   - `CQTQUADROS` (e `CQTEXCEL`): Desenha no CAD os Quadros de Resumo do Trafo (47.03 x 47.10 - Verde) e Quadros de CQT por Trecho (33.21 x 13.64 - Vermelho) com suporte a seleção direta de planilha Excel existente (.xlsx / .xlsm) via diálogo Windows (getfiled flag 16) com resolução de caminho absoluto ou reuso do último gerado em C:\Temp.

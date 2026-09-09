@@ -12,8 +12,15 @@
 
 (vl-load-com)
 
-;; Compatibilidade para checagem de tipo string
+;; Compatibilidade para checagem de tipo string e função
 (defun stringp (x) (= (type x) 'STR))
+(defun fboundp (sym)
+  (and sym
+       (or (= (type sym) 'SUBR)
+           (= (type sym) 'USUBR)
+           (and (= (type sym) 'SYM)
+                (or (= (type (eval sym)) 'SUBR)
+                    (= (type (eval sym)) 'USUBR))))))
 
 ;; Função auxiliar para calcular o comprimento exato de qualquer entidade linear
 (defun get-curve-length (ent / obj len data)
@@ -366,7 +373,7 @@
             (progn
               (princ "\n[CQTQUADROS] Dados extraídos com sucesso! Carregando rotina gráfica...")
               (load lsp_file)
-              (if (and (boundp 'cqt-exec-draw-quadros) (fboundp 'cqt-exec-draw-quadros))
+              (if (or (= (type cqt-exec-draw-quadros) 'USUBR) (= (type cqt-exec-draw-quadros) 'SUBR))
                 (cqt-exec-draw-quadros)
                 (c:CQTQUADROS)
               )
@@ -395,7 +402,7 @@
         (progn
           (princ "\n[CQTQUADROS] Carregando últimos quadros gerados em C:\\Temp\\cqt_draw_quadros.lsp...")
           (load lsp_file)
-          (if (and (boundp 'cqt-exec-draw-quadros) (fboundp 'cqt-exec-draw-quadros))
+          (if (or (= (type cqt-exec-draw-quadros) 'USUBR) (= (type cqt-exec-draw-quadros) 'SUBR))
             (cqt-exec-draw-quadros)
             (c:CQTQUADROS)
           )

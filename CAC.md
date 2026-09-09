@@ -52,7 +52,7 @@ aux cad/
 - `preferencias_ambiental.json`: Smart Cache de parâmetros de formulário.
 
 ### 2. Módulo de Queda de Tensão BT (`cqt/`)
-- `cqt_cad_extractor.lsp` (427 linhas):
+- `cqt_cad_extractor.lsp` (434 linhas):
   - **`CQT`** e **`CQTUI`**: Disparo instantâneo da Interface Gráfica para estudo prévio sem desenho.
   - **`CQTCAD`**: Extração interativa de vãos no CAD (seleção gráfica com soma automática de LINE, LWPOLYLINE, ARC) ou entrada manual de metragens; exportação segura de parâmetros e topologia em JSON via `vl-filename-mktemp`; disparo desacoplado via `(startapp "cmd.exe" ...)` idêntico ao `CQTUI`; garantia de robustez sem dependência de predicados não-nativos como `STRINGP` (uso de `(= (type x) 'STR)` e definição de compatibilidade); preenchimento automático do projeto, ponto trafo, potência, classe e trechos na UI.
   - **`CQTQUADROS`** (e **`CQTEXCEL`**): Desenha no CAD os Quadros de Resumo do Trafo (Verdes: 47,03 x 47,10) e Quadros de Trechos (Vermelhos: 33,21 x 13,64) com suporte nativo a seleção de planilha Excel existente (`.xlsx` ou `.xlsm`) via diálogo do Windows (`getfiled` com flag 16 e resolução absoluta com `DWGPREFIX`) ou reuso dos últimos quadros gerados em `C:\Temp\cqt_draw_quadros.lsp`.
