@@ -30,7 +30,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `cqt_excel_io.py` (276 linhas): Camada de persistência e I/O de planilhas Excel (`load_cables_from_database`, `load_scenario_from_excel`, `load_all_scenarios_from_excel`, `update_cqt_excel`).
 - `cqt_scenario_tab.py` (365 linhas): Componente visual de edição de trechos por cenário (`ScenarioTab`), botões de cópia inteligente e painel de Live Preview.
 - `cqt_excel_manager.py` (390 linhas): Interface gráfica principal orquestradora (`CQTManagerGUI`) e CLI com botão integrado **"📥 Importar Planilha Existente"** para carregamento dos dados cadastrais e todos os cenários (ATUAL, ATUAL+NC, PROJETADO) a partir de arquivos `.xlsx` ou `.xlsm`, respeitando rigorosamente o limite < 500 linhas.
-- `cqt_quadros_generator.py` (493 linhas): Ponte analítica entre a planilha calculada e o CAD via extração openpyxl, CLI flexível (`--excel`, `--trafo`, `--out`) e rotina LISP de desenho vetorial (`cqt-draw-trafo-box`, `cqt-draw-cqt-box`, `cqt-exec-draw-quadros`).
+- `cqt_quadros_generator.py` (485 linhas): Ponte analítica entre a planilha e o CAD via extração de dados brutos e recálculo topológico instantâneo (`calcular_cqt_topologia`), garantindo preenchimento total e exato de demandas, carregamento e quedas de tensão por trecho mesmo sem cache de fórmulas do Excel, CLI flexível (`--excel`, `--trafo`, `--out`) e rotina LISP de desenho vetorial (`cqt-draw-trafo-box`, `cqt-draw-cqt-box`, `cqt-exec-draw-quadros`).
 - `Abrir_CQT.bat`: Atalho local na pasta do projeto.
 
 ### 3. `ambiental/` (Projeto Ambiental & Cartografia)
