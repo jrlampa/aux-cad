@@ -21,6 +21,7 @@ aux cad/
 ├── orcamento/                      # Módulo Orçamento e Levantamento de Materiais (AutoLISP + Python + GUI)
 ├── cqt/                            # Módulo Queda de Tensão BT (AutoLISP + Python + GUI)
 ├── cpfc/                           # Módulo Participação Financeira REN 1.059 (AutoLISP + Python + GUI)
+├── unifilar/                       # Módulo Diagrama Unifilar & Árvore de Dispositivos (AutoLISP + Python + SQLite)
 ├── ambiental/                      # Módulo Ambiental, KMZ, Ortofoto, Memorial e Checklist
 ├── mecanico/                       # Módulo Cálculo Estrutural e Resultante de Postes
 ├── topografia/                     # Módulo Topografia, Eixos Viários e Importação CSV
@@ -163,17 +164,38 @@ aux cad/
 - `modelos/cpfc_modelo.xlsx`: Planilha modelo de referência padronizada.
 - `Abrir_CPFC.bat`: Atalho executável na raiz e em `cpfc/`.
 
-### 9. Carregamento Universal (`acaddoc.lsp`)
+### 9. Módulo Diagrama Unifilar & Árvore de Dispositivos (`unifilar/`)
+- `arvore_parser.py` (274 linhas):
+  - Parser analítico de caminhos elétricos (` > ` ou `|`) com responsabilidade única de localizar a **primeira proteção a montante** a partir de um Ponto Elétrico alvo (ex: `SG40995` $\rightarrow$ `Chave Fusivel - SG59356`).
+  - Reconhece os 3 tipos elegíveis de proteção: `Chave Fusivel`, `Religador` ou `Saida do Alimentador`.
+  - Extração de Subestação e Alimentador a partir da saída (`RBN02` $\rightarrow$ `SE.: RBN`, `ALIM.: 02`).
+  - Extração e enriquecimento de `Clientes Grupo A`, `Clientes Grupo B` e potência `KVA`.
+  - Formatação padronizada das linhas do Diagrama Unifilar para o AutoCAD.
+- `arvore_database.py` (227 linhas):
+  - Camada de indexação e persistência local em SQLite (`unifilar/arvore_cache.sqlite3`).
+  - Povoa a base a partir da planilha oficial `documentos/Árvore de Dispositivos.xlsx` com busca indexada em menos de 10ms.
+- `arvore_client.py` (162 linhas):
+  - Cliente com suporte a requisições web à intranet (`URL_ARVORE_DISPOSITIVOS`), autenticação NTLM com credenciais do `.env` e fallback automático e transparente para a base local.
+- `unifilar_manager.py` (108 linhas):
+  - Orquestrador CLI e ponte de intercâmbio JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`).
+- `unifilar_cad.lsp` (360 linhas):
+  - Comandos do AutoCAD **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**).
+  - Suporta digitação do ponto elétrico ou seleção direta de textos/blocos no DWG (`entsel`).
+  - Dois modos de desenho:
+    - **Inserir Novo**: Desenha o título verde `DIAGRAMA  UNIFILAR` sublinhado com linha e textos técnicos alinhados à direita.
+    - **Atualizar Existente**: Seleciona textos existentes no DWG e substitui placeholders (`SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO...`, `Clientes Grupo...`) preservando a diagramação original.
+
+### 10. Carregamento Universal (`acaddoc.lsp`)
 O arquivo `acaddoc.lsp` foi projetado para:
 1. Localizar o caminho absoluto da pasta raiz `aux cad`.
-2. Adicionar dinamicamente as pastas `orcamento`, `cqt`, `cpfc`, `ambiental`, `mecanico`, `topografia`, `mapa_postes` e `dados_tecnicos` ao `SupportPath` de arquivos de suporte do AutoCAD.
+2. Adicionar dinamicamente as pastas `orcamento`, `cqt`, `cpfc`, `unifilar`, `ambiental`, `mecanico`, `topografia`, `mapa_postes` e `dados_tecnicos` ao `SupportPath` de arquivos de suporte do AutoCAD.
 3. Carregar as rotinas modulares de forma resiliente com tratamento de erros (`vl-catch-all-apply`).
 
-### 10. Validação e Testes
-- Suíte com **75 testes unitários passando 100%** (`python -m pytest --cov`).
-- Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos cpfc`).
-- Cobertura total do projeto em **86%** (módulo `cpfc` com **89%** de cobertura, `cpfc_core` com 98%).
+### 11. Validação e Testes
+- Suíte com **93 testes unitários passando 100%** (`python -m pytest --cov`).
+- Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos cpfc unifilar`).
+- Cobertura total do novo módulo `unifilar`: **88%** (`arvore_parser.py`: 92%, `arvore_database.py`: 92%, `arvore_client.py`: 82%, `unifilar_manager.py`: 80%).
 - Resolução dinâmica de diretórios no `acaddoc.lsp` para independência de máquina.
-- Rotinas e saídas geradas em tempo de execução organizadas com proteção no `.gitignore`.
+- Rotinas e saídas geradas em tempo de execução organizadas com proteção no `.gitignore` (incluindo `unifilar/arvore_cache.sqlite3`).
 
 

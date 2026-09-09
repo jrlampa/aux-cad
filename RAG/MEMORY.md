@@ -145,12 +145,22 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `modelos/cpfc_modelo.xlsx`: Template base oficial mantido na pasta de modelos.
 - `Abrir_CPFC.bat`: Atalho executável de 2 cliques na raiz e em `cpfc/`.
 
-### 10. `softwares/` (Instaladores e Aplicações Externas)
+### 10. `unifilar/` (Projeto Diagrama Unifilar & Árvore de Dispositivos)
+- `arvore_parser.py` (274 linhas): Motor de interpretação de caminhos elétricos (` > ` e `|`), localização da **primeira proteção a montante** (Chave Fusível, Religador ou Saída do Alimentador), separação de Subestação e Alimentador (`RBN02` $\rightarrow$ `SE.: RBN`, `ALIM.: 02`), quantificação de Clientes A/B e potência kVA, e geração das linhas formatadas para o CAD.
+- `arvore_database.py` (227 linhas): Motor de persistência e indexação local em SQLite (`unifilar/arvore_cache.sqlite3`) a partir da planilha `documentos/Árvore de Dispositivos.xlsx`, com busca indexada ultrarrápida (<10ms).
+- `arvore_client.py` (162 linhas): Cliente com suporte a consultas online à intranet (`URL_ARVORE_DISPOSITIVOS`), autenticação corporativa NTLM com credenciais do `.env` e fallback automático e resiliente para o banco local.
+- `unifilar_manager.py` (108 linhas): Orquestrador de linha de comando e ponte de dados JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`).
+- `unifilar_cad.lsp` (360 linhas): Rotina AutoLISP com comandos **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**):
+  - Permite digitar o Ponto Elétrico ou selecionar no DWG (`entsel`).
+  - **Modo Inserir**: Desenha o título verde `DIAGRAMA  UNIFILAR` sublinhado com linha e textos técnicos alinhados à direita.
+  - **Modo Atualizar**: Seleciona textos existentes no DWG (onde há `SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO`, `Clientes Grupo...`) e substitui os dados reais mantendo a prancha intacta.
+
+### 11. `softwares/` (Instaladores e Aplicações Externas)
 - `sisRUA-Installer-1.1.0-Optimized.exe` & `sisRUA-Installer-1.1.0.zip`
 - `ArkanceSystems_CADStudio_Job-Time.msi`
 - `sisrua2/` & `Lampa/`
 
-### 11. `documentos/` (Pranchas, Referências e Notas)
+### 12. `documentos/` (Pranchas, Referências e Notas)
 - `PRANCHA LIGHT.dwg` e `PRANCHA LIGHT.bak`: Templates de prancha oficial.
 - `PLAN_MEDIÇÃO_ELETTRICA_PROJETOS_BASE(1).xlsx` & `Árvore de Dispositivos.xlsx`: Planilhas de medição e dispositivos.
 - `anotações-2.one`: Caderno técnico de anotações.
@@ -158,7 +168,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
 
 ## Validação e Qualidade
-- Suíte completa com **75 testes unitários passando 100%** (`python -m pytest --cov`):
+- Suíte completa com **93 testes unitários passando 100%** (`python -m pytest --cov`):
   - `orcamento\orcamento_excel.py`: 99%
   - `cpfc\cpfc_core.py`: 98%
   - `cpfc\cpfc_guia_ren1059.py`: 100%
@@ -166,6 +176,8 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `dados_tecnicos\tabelas_referencia.py`: 94%
   - `topografia\kmz_pontos_importer.py`: 93%
   - `ambiental\checklist_ambiental_manager.py`: 92%
+  - `unifilar\arvore_parser.py`: 92%
+  - `unifilar\arvore_database.py`: 92%
   - `cqt\cqt_live_calc.py`: 91%
   - `cqt\cqt_quadros_generator.py`: 90%
   - `orcamento\orcamento_core.py`: 89%
@@ -175,11 +187,13 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `cqt\cqt_excel_io.py`: 85%
   - `cpfc\cpfc_gui.py`: 85%
   - `cpfc\cpfc_manager.py`: 83%
+  - `unifilar\arvore_client.py`: 82%
+  - `unifilar\unifilar_manager.py`: 80%
   - `mapa_postes\mapa_servidor.py`: 83%
   - `orcamento\orcamento_manager.py`: 81%
-- Cobertura global do projeto: **86%** (módulo `cpfc` com **89%** de cobertura).
-- Sintaxe AutoLISP (.lsp): 25 arquivos verificados com 100% de parênteses balanceados.
-- Scripts Batch (.bat): Limpeza modernizada e atalhos testados.
-- Detecção dinâmica de caminho raiz em `acaddoc.lsp` com fallback resiliente.
+- Cobertura global do módulo `unifilar`: **88%**.
+- Sintaxe AutoLISP (.lsp): 26 arquivos verificados com 100% de parênteses balanceados.
+- Integração no `acaddoc.lsp` com carregamento modular seguro e inclusão no `SupportPath`.
+- Botão "⚡ Diagrama Unifilar" integrado à barra `AUXCADBAR`.
 
 

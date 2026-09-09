@@ -35,4 +35,7 @@ mapa_postes/desenhar_postes_gerados.lsp
 mapa_postes/postes_rede_campo.kmz
 mapa_postes/mapa_postes_exec.lsp
 kmz_import_postes_exec.lsp
+unifilar/arvore_cache.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
 

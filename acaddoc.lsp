@@ -38,6 +38,7 @@
 (add-support-path (strcat *aux-cad-root* "mapa_postes"))
 (add-support-path (strcat *aux-cad-root* "dados_tecnicos"))
 (add-support-path (strcat *aux-cad-root* "cpfc"))
+(add-support-path (strcat *aux-cad-root* "unifilar"))
 
 (defun load-aux-safe (subpath / fullpath res)
   (setq fullpath (strcat *aux-cad-root* subpath))
@@ -90,6 +91,9 @@
 ;; 9. Módulo Participação Financeira do Consumidor (CPFC - REN 1.059 ANEEL)
 (load-aux-safe "cpfc\\cpfc_cad_launcher.lsp")
 
+;; 10. Módulo Diagrama Unifilar e Consulta da Árvore de Dispositivos
+(load-aux-safe "unifilar\\unifilar_cad.lsp")
+
 
 ;; =============================================================================
 ;;  COMANDOS DE CONSULTA E AJUDA (COMANDOS / AJUDA / AUXCAD / ROTINAS)
@@ -100,6 +104,9 @@
   (princ "\n==============================================================")
   (princ "\n               GUIA RÁPIDO DE COMANDOS - AUX CAD              ")
   (princ "\n==============================================================")
+  (princ "\n")
+  (princ "\n  [DIAGRAMA UNIFILAR & ÁRVORE DE DISPOSITIVOS]")
+  (princ "\n   - UNIFILAR ou PROTECAO : Localiza proteção a montante e insere/atualiza no DWG")
   (princ "\n")
   (princ "\n  [AMBIENTAL & ORTOFOTO]")
   (princ "\n   - INSCROQUI ou ORTOFOTO ou CROQUI : Insere Ortofoto/Croqui no CAD")
@@ -142,11 +149,13 @@
   ;; Exibe também caixa de diálogo visual na tela
   (setq msg (strcat
     "=== GUIA DE COMANDOS AUX CAD ===\n\n"
+    "• DIAGRAMA UNIFILAR: Digite UNIFILAR (ou PROTECAO)\n"
     "• ESTÚDIO MAPA WEB: Digite MAPAPOSTES (ou MAPA)\n"
     "• KMZ PARA POSTES: Digite IMPORTAR_KMZ_POSTES (ou KMZPOSTES)\n"
     "• ORTOFOTO / CROQUI: Digite INSCROQUI (ou ORTOFOTO)\n"
     "• MEMORIAL / CHECKLIST: Digite KMZCHECK (ou MEMORIAL)\n"
     "• ORÇAMENTO DE MATERIAIS: Digite ORCAD (ou ORCAMENTO)\n"
+    "• PARTICIPAÇÃO FINANCEIRA: Digite CPFC (ou CPFCUI)\n"
     "• QUEDA DE TENSÃO BT: Digite CQT (ou CQTCAD)\n"
     "• TRAÇÃO EM POSTES: Digite CALC_RESULTANTE (ou TRACAO)\n"
     "• EXPORTAR GOOGLE EARTH: Digite CAD2KMZ\n"
