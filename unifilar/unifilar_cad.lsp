@@ -192,7 +192,7 @@
   ;; Prepara arquivo temporário de intercâmbio JSON e log de diagnóstico
   (setq tmp-json (vl-filename-mktemp "unifilar_" nil ".json"))
   (setq tmp-log (vl-filename-mktemp "unifilar_log_" nil ".txt"))
-  (setq cmd (strcat "\"python \"" py-script "\" --ponto \"" ponto "\" --out \"" tmp-json "\" > \"" tmp-log "\" 2>&1\""))
+  (setq cmd (strcat "python \"" py-script "\" --ponto \"" ponto "\" --out \"" tmp-json "\" > \"" tmp-log "\" 2>&1"))
 
   (princ (strcat "\n[UNIFILAR] Consultando proteção a montante para '" ponto "'..."))
 

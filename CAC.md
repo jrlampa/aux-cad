@@ -52,7 +52,7 @@ aux cad/
 - `preferencias_ambiental.json`: Smart Cache de parâmetros de formulário.
 
 ### 2. Módulo de Queda de Tensão BT (`cqt/`)
-- `cqt_cad_extractor.lsp` (325 linhas):
+- `cqt_cad_extractor.lsp` (417 linhas):
   - **`CQT`** e **`CQTUI`**: Disparo instantâneo da Interface Gráfica para estudo prévio sem desenho.
   - **`CQTCAD`**: Extração interativa de vãos no CAD (seleção gráfica com soma automática de LINE, LWPOLYLINE, ARC) ou entrada manual de metragens; exportação segura de parâmetros e topologia em JSON via `vl-filename-mktemp`; disparo desacoplado via `(startapp "cmd.exe" ...)` idêntico ao `CQTUI`; garantia de robustez sem dependência de predicados não-nativos como `STRINGP` (uso de `(= (type x) 'STR)` e definição de compatibilidade); preenchimento automático do projeto, ponto trafo, potência, classe e trechos na UI.
   - **`CQTQUADROS`** (e **`CQTEXCEL`**): Desenha no CAD os Quadros de Resumo do Trafo (Verdes: 47,03 x 47,10) e Quadros de Trechos (Vermelhos: 33,21 x 13,64) com suporte nativo a seleção de planilha Excel existente (`.xlsx` ou `.xlsm`) via diálogo do Windows (`getfiled`) ou reuso dos últimos quadros gerados em `C:\Temp\cqt_draw_quadros.lsp`.
@@ -178,7 +178,7 @@ aux cad/
   - Cliente com suporte a requisições web à intranet (`URL_ARVORE_DISPOSITIVOS`), autenticação NTLM com credenciais do `.env` e fallback automático e transparente para a base local.
 - `unifilar_manager.py` (108 linhas):
   - Orquestrador CLI e ponte de intercâmbio JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`).
-- `unifilar_cad.lsp` (360 linhas):
+- `unifilar_cad.lsp` (376 linhas):
   - Comandos do AutoCAD **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**).
   - Suporta digitação do ponto elétrico ou seleção direta de textos/blocos no DWG (`entsel`).
   - Dois modos de desenho:

@@ -329,11 +329,11 @@
           (setq pt_trafo (getstring "\nPonto Elétrico do Trafo [ou Enter para detectar automaticamente]: "))
           (if (or (null pt_trafo) (= pt_trafo "")) (setq pt_trafo "auto"))
 
-          (princ (strcat "\n[CQTQUADROS] Extraindo dados da planilha: " (vl-filename-nxname xls_path) " ..."))
+          (princ (strcat "\n[CQTQUADROS] Extraindo dados da planilha: " (vl-filename-base xls_path) (vl-filename-extension xls_path) " ..."))
 
           ;; Prepara execução via WScript.Shell
           (setq tmp_log (vl-filename-mktemp "cqt_log_" nil ".txt"))
-          (setq cmd (strcat "\"python \"" py_script "\" \"" xls_path "\" \"" pt_trafo "\" > \"" tmp_log "\" 2>&1\""))
+          (setq cmd (strcat "python \"" py_script "\" \"" xls_path "\" \"" pt_trafo "\" > \"" tmp_log "\" 2>&1"))
 
           ;; Remove o lsp anterior para ter certeza do novo
           (if (findfile lsp_file) (vl-file-delete lsp_file))

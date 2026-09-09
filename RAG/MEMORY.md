@@ -21,7 +21,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `CAC.md` & `RAG/MEMORY.md`: Diretrizes arquiteturais e histórico da base de conhecimento.
 
 ### 2. `cqt/` (Projeto Queda de Tensão BT)
-- `cqt_cad_extractor.lsp` (325 linhas): Rotina AutoLISP com comandos **`CQTCAD`**, **`CQT`**, **`CQTUI`**, **`CQTQUADROS`** e **`RECARREGAR_CQT`**:
+- `cqt_cad_extractor.lsp` (417 linhas): Rotina AutoLISP com comandos **`CQTCAD`**, **`CQT`**, **`CQTUI`**, **`CQTQUADROS`** e **`RECARREGAR_CQT`**:
   - `CQT` / `CQTUI`: Abre imediatamente a interface gráfica interativa para estudos de viabilidade.
   - `CQTCAD`: Extrai vãos e trechos do CAD graficamente ou via prompt, grava com segurança o arquivo de intercâmbio JSON via `vl-filename-mktemp`, garante compatibilidade estrita AutoLISP (`(= (type x) 'STR)` e definição global de `stringp`) e dispara a interface gráfica de forma desacoplada via `(startapp "cmd.exe" ...)`, carregando dados de projeto, trafo e vãos automaticamente.
   - `CQTQUADROS` (e `CQTEXCEL`): Desenha no CAD os Quadros de Resumo do Trafo (47.03 x 47.10 - Verde) e Quadros de CQT por Trecho (33.21 x 13.64 - Vermelho) com suporte a seleção direta de planilha Excel existente (.xlsx / .xlsm) via diálogo Windows (getfiled) ou reuso do último gerado em C:\Temp.
@@ -150,7 +150,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `arvore_database.py` (227 linhas): Motor de persistência e indexação local em SQLite (`unifilar/arvore_cache.sqlite3`) a partir da planilha `documentos/Árvore de Dispositivos.xlsx`, com busca indexada ultrarrápida (<10ms).
 - `arvore_client.py` (162 linhas): Cliente com suporte a consultas online à intranet (`URL_ARVORE_DISPOSITIVOS`), autenticação corporativa NTLM com credenciais do `.env` e fallback automático e resiliente para o banco local.
 - `unifilar_manager.py` (108 linhas): Orquestrador de linha de comando e ponte de dados JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`).
-- `unifilar_cad.lsp` (360 linhas): Rotina AutoLISP com comandos **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**):
+- `unifilar_cad.lsp` (376 linhas): Rotina AutoLISP com comandos **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**):
   - Permite digitar o Ponto Elétrico ou selecionar no DWG (`entsel`).
   - **Modo Inserir**: Desenha o título verde `DIAGRAMA  UNIFILAR` sublinhado com linha e textos técnicos alinhados à direita.
   - **Modo Atualizar**: Seleciona textos existentes no DWG (onde há `SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO`, `Clientes Grupo...`) e substitui os dados reais mantendo a prancha intacta.
