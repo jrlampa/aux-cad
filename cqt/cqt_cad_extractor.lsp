@@ -322,10 +322,20 @@
   )
   (if (or (null opc) (= opc "") (= opc "S") (= opc "Selecionar"))
     (progn
-      ;; Diálogo nativo do Windows para selecionar a planilha
-      (setq xls_path (getfiled "Selecione a Planilha CQT (.xlsx ou .xlsm)" "" "xlsx;xlsm" 8))
+      ;; Diálogo nativo do Windows para selecionar a planilha (flag 16 garante caminho absoluto completo)
+      (setq cur_dir (getvar "DWGPREFIX"))
+      (if (null cur_dir) (setq cur_dir ""))
+      (setq xls_path (getfiled "Selecione a Planilha CQT (.xlsx ou .xlsm)" cur_dir "xlsx;xlsm" 16))
       (if (and xls_path (/= xls_path ""))
         (progn
+          ;; Garante caminho absoluto completo caso o AutoCAD tenha retornado caminho relativo
+          (cond
+            ((findfile xls_path)
+             (setq xls_path (findfile xls_path)))
+            ((and (/= cur_dir "") (findfile (strcat cur_dir xls_path)))
+             (setq xls_path (findfile (strcat cur_dir xls_path))))
+          )
+
           (setq pt_trafo (getstring "\nPonto Elétrico do Trafo [ou Enter para detectar automaticamente]: "))
           (if (or (null pt_trafo) (= pt_trafo "")) (setq pt_trafo "auto"))
 

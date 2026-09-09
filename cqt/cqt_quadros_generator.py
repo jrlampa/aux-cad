@@ -481,8 +481,12 @@ if __name__ == "__main__":
         pt = None
 
     if not os.path.exists(caminho):
-        print(f"[ERRO] Planilha Excel não encontrada: {caminho}", file=sys.stderr)
-        sys.exit(1)
+        cand = os.path.abspath(caminho)
+        if os.path.exists(cand):
+            caminho = cand
+        else:
+            print(f"[ERRO] Planilha Excel não encontrada: {caminho}", file=sys.stderr)
+            sys.exit(1)
 
     out = save_quadros_json(caminho, json_out_path=args.opt_out, custom_ponto_trafo=pt)
     print(f"[SUCESSO] Quadros gerados em: C:\\Temp\\cqt_draw_quadros.lsp a partir de {caminho}")
