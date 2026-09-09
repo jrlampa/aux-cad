@@ -435,7 +435,8 @@ def generate_cad_lisp(data: Dict, lsp_out_path: str = r"C:\Temp\cqt_draw_quadros
         lines.append('  )')
 
     lines.append("")
-    lines.append("  (princ \"\\nQuadros de Queda de Tensão por Trecho gerados com sucesso!\")")
+    lines.append('  (setvar "QTEXTMODE" 0)')
+    lines.append('  (princ "\\nQuadros de Queda de Tensão por Trecho gerados com sucesso!")')
     lines.append("  (princ)")
     lines.append(")")
     lines.append("")
