@@ -292,22 +292,114 @@
 )
 
 ;; ============================================================
-;;  Comando: CQTQUADROS
+;;  Comando: CQTQUADROS / CQTEXCEL
 ;;  Carrega e executa a rotina gerada para desenhar os quadros:
 ;;  - Quadro de Resumo do Trafo (47.03 x 47.10 - Verde)
 ;;  - Quadros de CQT por Trecho (33.21 x 13.64 - Vermelho)
+;;  Suporta:
+;;   - Selecionar planilha Excel existente (.xlsx / .xlsm)
+;;   - Usar últimos quadros gerados em C:\Temp\cqt_draw_quadros.lsp
 ;; ============================================================
-(defun c:CQTQUADROS (/ lsp_file)
+(defun c:CQTQUADROS (/ lsp_file py_script opc xls_path pt_trafo tmp_log cmd wsh fp l msg_err t0)
   (setq lsp_file "C:\\Temp\\cqt_draw_quadros.lsp")
-  (if (findfile lsp_file)
-    (progn
-      (load lsp_file)
-      (c:CQTQUADROS)
+
+  ;; Localiza o script Python gerador de quadros
+  (setq py_script (findfile "cqt_quadros_generator.py"))
+  (if (not py_script)
+    (if (boundp '*aux-cad-root*)
+      (setq py_script (strcat *aux-cad-root* "cqt\\cqt_quadros_generator.py"))
     )
-    (princ "\n[AVISO] Arquivo de quadros não encontrado. Grave a planilha no Gerenciador CQT primeiro para gerar os dados.")
+  )
+  (if (not (and py_script (findfile py_script)))
+    (setq py_script "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\cqt\\cqt_quadros_generator.py")
+  )
+
+  ;; Pergunta se deseja selecionar planilha Excel existente ou usar o último gerado
+  (initget "Selecionar Usar S U")
+  (if (findfile lsp_file)
+    (setq opc (getkword "\n[CQTQUADROS] Desenhar a partir de: [S]elecionar planilha Excel / [U]sar últimos quadros em C:\\Temp <Selecionar>: "))
+    (setq opc "S")
+  )
+  (if (or (null opc) (= opc "") (= opc "S") (= opc "Selecionar"))
+    (progn
+      ;; Diálogo nativo do Windows para selecionar a planilha
+      (setq xls_path (getfiled "Selecione a Planilha CQT (.xlsx ou .xlsm)" "" "xlsx;xlsm" 8))
+      (if (and xls_path (/= xls_path ""))
+        (progn
+          (setq pt_trafo (getstring "\nPonto Elétrico do Trafo [ou Enter para detectar automaticamente]: "))
+          (if (or (null pt_trafo) (= pt_trafo "")) (setq pt_trafo "auto"))
+
+          (princ (strcat "\n[CQTQUADROS] Extraindo dados da planilha: " (vl-filename-nxname xls_path) " ..."))
+
+          ;; Prepara execução via WScript.Shell
+          (setq tmp_log (vl-filename-mktemp "cqt_log_" nil ".txt"))
+          (setq cmd (strcat "\"python \"" py_script "\" \"" xls_path "\" \"" pt_trafo "\" > \"" tmp_log "\" 2>&1\""))
+
+          ;; Remove o lsp anterior para ter certeza do novo
+          (if (findfile lsp_file) (vl-file-delete lsp_file))
+
+          (setq wsh (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
+          (if (and wsh (not (vl-catch-all-error-p wsh)))
+            (progn
+              (vl-catch-all-apply 'vlax-invoke-method (list wsh "Run" (strcat "cmd.exe /c " cmd) 0 :vlax-true))
+              (vlax-release-object wsh)
+            )
+            (progn
+              (startapp "cmd.exe" (strcat "/c " cmd))
+              (setq t0 (getvar "MILLISECS"))
+              (while (and (not (findfile lsp_file)) (< (- (getvar "MILLISECS") t0) 8000))
+              )
+            )
+          )
+
+          (if (findfile lsp_file)
+            (progn
+              (princ "\n[CQTQUADROS] Dados extraídos com sucesso! Carregando rotina gráfica...")
+              (load lsp_file)
+              (if (and (boundp 'cqt-exec-draw-quadros) (fboundp 'cqt-exec-draw-quadros))
+                (cqt-exec-draw-quadros)
+                (c:CQTQUADROS)
+              )
+            )
+            (progn
+              (setq msg_err "")
+              (if (findfile tmp_log)
+                (progn
+                  (setq fp (open tmp_log "r"))
+                  (while (setq l (read-line fp))
+                    (setq msg_err (strcat msg_err l "\n"))
+                  )
+                  (close fp)
+                )
+              )
+              (alert (strcat "Erro ao processar planilha Excel:\n\n" (if (/= msg_err "") msg_err "Verifique se o arquivo possui as abas ATUAL / CQT ATUAL.")))
+            )
+          )
+        )
+        (princ "\n[CQTQUADROS] Operação cancelada pelo usuário.")
+      )
+    )
+    (progn
+      ;; Opção [U]: Usar o arquivo lsp existente
+      (if (findfile lsp_file)
+        (progn
+          (princ "\n[CQTQUADROS] Carregando últimos quadros gerados em C:\\Temp\\cqt_draw_quadros.lsp...")
+          (load lsp_file)
+          (if (and (boundp 'cqt-exec-draw-quadros) (fboundp 'cqt-exec-draw-quadros))
+            (cqt-exec-draw-quadros)
+            (c:CQTQUADROS)
+          )
+        )
+        (princ "\n[AVISO] Nenhum quadro gerado anteriormente foi encontrado.")
+      )
+    )
   )
   (princ)
 )
+
+;; Aliases diretos para desenhar quadros a partir do Excel
+(defun c:CQTEXCEL () (c:CQTQUADROS))
+(defun c:CQTQUADROS_EXCEL () (c:CQTQUADROS))
 
 ;; Comando para forçar recarga imediata da rotina na sessão atual do AutoCAD
 (defun c:RECARREGAR_CQT ()
@@ -319,6 +411,7 @@
 (princ "\nRotinas de Queda de Tensão (CQT) carregadas com sucesso!")
 (princ "\n  - CQTCAD     : Medir vãos no desenho ou inserir via prompt")
 (princ "\n  - CQT / CQTUI: Abrir diretamente a Interface (desenho vazio / estudo prévio)")
-(princ "\n  - CQTQUADROS : Desenhar os Quadros de Resumo e Queda de Tensão no CAD")
+(princ "\n  - CQTQUADROS : Desenhar os Quadros de Resumo e CQT (a partir de Excel ou gerador)")
+(princ "\n  - CQTEXCEL   : Atalho para selecionar planilha Excel e desenhar quadros")
 (princ "\n  - RECARREGAR_CQT : Recarregar a rotina na sessão atual")
 (princ)

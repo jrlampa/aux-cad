@@ -24,13 +24,13 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `cqt_cad_extractor.lsp` (325 linhas): Rotina AutoLISP com comandos **`CQTCAD`**, **`CQT`**, **`CQTUI`**, **`CQTQUADROS`** e **`RECARREGAR_CQT`**:
   - `CQT` / `CQTUI`: Abre imediatamente a interface gráfica interativa para estudos de viabilidade.
   - `CQTCAD`: Extrai vãos e trechos do CAD graficamente ou via prompt, grava com segurança o arquivo de intercâmbio JSON via `vl-filename-mktemp`, garante compatibilidade estrita AutoLISP (`(= (type x) 'STR)` e definição global de `stringp`) e dispara a interface gráfica de forma desacoplada via `(startapp "cmd.exe" ...)`, carregando dados de projeto, trafo e vãos automaticamente.
-  - `CQTQUADROS`: Desenha no CAD os Quadros de Resumo do Trafo (47.03 x 47.10) e Quadros de CQT por Trecho (33.21 x 13.64).
+  - `CQTQUADROS` (e `CQTEXCEL`): Desenha no CAD os Quadros de Resumo do Trafo (47.03 x 47.10 - Verde) e Quadros de CQT por Trecho (33.21 x 13.64 - Vermelho) com suporte a seleção direta de planilha Excel existente (.xlsx / .xlsm) via diálogo Windows (getfiled) ou reuso do último gerado em C:\Temp.
   - `RECARREGAR_CQT`: Recarrega a rotina imediatamente na memória da sessão do AutoCAD.
 - `cqt_live_calc.py` (249 linhas): Motor de cálculo instantâneo em tempo real (Live Preview) para CQT e carregamento do trafo ($QT \le 6,00\%$).
 - `cqt_excel_io.py` (240 linhas): Camada de persistência e I/O de planilhas Excel (`load_cables_from_database`, `load_scenario_from_excel`, `update_cqt_excel`).
 - `cqt_scenario_tab.py` (365 linhas): Componente visual de edição de trechos por cenário (`ScenarioTab`), botões de cópia inteligente e painel de Live Preview.
 - `cqt_excel_manager.py` (313 linhas): Interface gráfica principal orquestradora (`CQTManagerGUI`) e CLI, respeitando rigorosamente o limite < 500 linhas.
-- `cqt_quadros_generator.py` (464 linhas): Ponte entre a planilha calculada e o CAD via Excel COM e primitiva LISP.
+- `cqt_quadros_generator.py` (488 linhas): Ponte analítica entre a planilha calculada e o CAD via extração openpyxl, CLI flexível (`--excel`, `--trafo`, `--out`) e rotina LISP de desenho vetorial (`cqt-draw-trafo-box`, `cqt-draw-cqt-box`, `cqt-exec-draw-quadros`).
 - `Abrir_CQT.bat`: Atalho local na pasta do projeto.
 
 ### 3. `ambiental/` (Projeto Ambiental & Cartografia)

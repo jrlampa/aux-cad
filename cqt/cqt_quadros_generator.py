@@ -51,6 +51,9 @@ def extract_quadros_data(xlsm_path: str, active_scenarios: Optional[List[str]] =
 
     # Identifica o ponto do trafo e a descrição do trafo
     ponto_trafo_base = custom_ponto_trafo
+    if ponto_trafo_base and str(ponto_trafo_base).lower() in ["auto", "none", "null", "0", ""]:
+        ponto_trafo_base = None
+
     if not ponto_trafo_base:
         if "CQT ATUAL" in wb.sheetnames:
             ponto_trafo_base = str(wb["CQT ATUAL"]["F4"].value or "").strip()
@@ -436,6 +439,8 @@ def generate_cad_lisp(data: Dict, lsp_out_path: str = r"C:\Temp\cqt_draw_quadros
     lines.append("  (princ)")
     lines.append(")")
     lines.append("")
+    lines.append("(defun cqt-exec-draw-quadros () (c:CQTQUADROS))")
+    lines.append("(defun c:CQTQUADROS_DESENHAR () (c:CQTQUADROS))")
     lines.append('(princ "\\nComando CQTQUADROS carregado com sucesso! Digite CQTQUADROS para desenhar os quadros.")')
     lines.append("(princ)")
 
@@ -458,7 +463,26 @@ def save_quadros_json(xlsm_path: str, json_out_path: str = r"C:\Temp\cqt_quadros
 
 
 if __name__ == "__main__":
-    caminho = sys.argv[1] if len(sys.argv) > 1 else r"G:\Meu Drive\1-HBT\HBT\SETEMBRO\05\A057146257\AN_A057146257_CQT.xlsm"
-    pt = sys.argv[2] if len(sys.argv) > 2 else "77245"
-    out = save_quadros_json(caminho, custom_ponto_trafo=pt)
-    print(f"Dados e LISP dos quadros exportados com sucesso para: {out} e C:\\Temp\\cqt_draw_quadros.lsp")
+    import argparse
+    parser = argparse.ArgumentParser(description="Gera quadros CQT a partir de planilha Excel existente.")
+    parser.add_argument("excel", nargs="?", default="", help="Caminho da planilha (.xlsx/.xlsm)")
+    parser.add_argument("trafo", nargs="?", default="", help="Ponto do trafo (opcional)")
+    parser.add_argument("--excel", dest="opt_excel", default="", help="Caminho da planilha")
+    parser.add_argument("--trafo", dest="opt_trafo", default="", help="Ponto do trafo")
+    parser.add_argument("--out", dest="opt_out", default=r"C:\Temp\cqt_quadros_cad.json", help="JSON de saída")
+    args = parser.parse_args()
+
+    caminho = args.opt_excel or args.excel
+    pt = args.opt_trafo or args.trafo
+    if not caminho:
+        caminho = r"G:\Meu Drive\1-HBT\HBT\SETEMBRO\05\A057146257\AN_A057146257_CQT.xlsm"
+
+    if pt and pt.lower() in ["auto", "none", "null", "0", ""]:
+        pt = None
+
+    if not os.path.exists(caminho):
+        print(f"[ERRO] Planilha Excel não encontrada: {caminho}", file=sys.stderr)
+        sys.exit(1)
+
+    out = save_quadros_json(caminho, json_out_path=args.opt_out, custom_ponto_trafo=pt)
+    print(f"[SUCESSO] Quadros gerados em: C:\\Temp\\cqt_draw_quadros.lsp a partir de {caminho}")

@@ -55,13 +55,13 @@ aux cad/
 - `cqt_cad_extractor.lsp` (325 linhas):
   - **`CQT`** e **`CQTUI`**: Disparo instantâneo da Interface Gráfica para estudo prévio sem desenho.
   - **`CQTCAD`**: Extração interativa de vãos no CAD (seleção gráfica com soma automática de LINE, LWPOLYLINE, ARC) ou entrada manual de metragens; exportação segura de parâmetros e topologia em JSON via `vl-filename-mktemp`; disparo desacoplado via `(startapp "cmd.exe" ...)` idêntico ao `CQTUI`; garantia de robustez sem dependência de predicados não-nativos como `STRINGP` (uso de `(= (type x) 'STR)` e definição de compatibilidade); preenchimento automático do projeto, ponto trafo, potência, classe e trechos na UI.
-  - **`CQTQUADROS`**: Desenha no CAD os Quadros de Resumo do Trafo (Verdes: 47,03 x 47,10) e Quadros de Trechos (Vermelhos: 33,21 x 13,64).
+  - **`CQTQUADROS`** (e **`CQTEXCEL`**): Desenha no CAD os Quadros de Resumo do Trafo (Verdes: 47,03 x 47,10) e Quadros de Trechos (Vermelhos: 33,21 x 13,64) com suporte nativo a seleção de planilha Excel existente (`.xlsx` ou `.xlsm`) via diálogo do Windows (`getfiled`) ou reuso dos últimos quadros gerados em `C:\Temp\cqt_draw_quadros.lsp`.
   - **`RECARREGAR_CQT`**: Comando imediato para recarregar a rotina na memória do AutoCAD sem fechar o desenho.
 - `cqt_live_calc.py` (249 linhas): Motor de cálculo instantâneo em memória ($QT \le 6,00\%$).
 - `cqt_excel_io.py` (240 linhas): Persistência atômica e leitura de planilhas Excel (`load_cables_from_database`, `load_scenario_from_excel`, `update_cqt_excel`).
 - `cqt_scenario_tab.py` (365 linhas): Componente visual de edição de trechos por cenário (`ScenarioTab`) e painel de Live Preview.
 - `cqt_excel_manager.py` (313 linhas): Interface principal orquestradora (`CQTManagerGUI`) e CLI, rigorosamente dentro do limite de 500 linhas.
-- `cqt_quadros_generator.py` (464 linhas): Ponte entre planilha calculada e o CAD via Excel COM e rotina LISP primitivas (`entmake`).
+- `cqt_quadros_generator.py` (488 linhas): Ponte analítica entre a planilha calculada e o CAD via extração openpyxl, CLI flexível (`--excel`, `--trafo`, `--out`) e rotina LISP de desenho vetorial (`cqt-draw-trafo-box`, `cqt-draw-cqt-box`, `cqt-exec-draw-quadros`).
 - `Abrir_CQT.bat`: Atalho executável direto com 2 cliques.
 
 ### 3. Módulo Mecânico (`mecanico/`)
