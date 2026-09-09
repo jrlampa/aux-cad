@@ -5,10 +5,8 @@
 
 (vl-load-com)
 
-;; Função auxiliar para garantir tipo string
-(if (not (vl-symbol-p 'stringp))
-  (defun stringp (x) (= (type x) 'STR))
-)
+;; Função auxiliar para compatibilidade de checagem de tipo string
+(defun stringp (x) (= (type x) 'STR))
 
 (defun unifilar-get-module-path (/ f-lsp dir)
   (setq f-lsp (findfile "unifilar_cad.lsp"))
