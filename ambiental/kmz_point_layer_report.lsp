@@ -237,7 +237,7 @@
           )
 
           ;; Pergunta onde inserir as caixas no desenho
-          (setq ins_pt (getpoint "\nClique no local do desenho para posicionar as Caixas de Alerta Ambiental: "))
+          (setq ins_pt (getpoint "\nClique no local do desenho para posicionar as Caixas de Alerta Ambiental (ou Enter para pular): "))
           (if ins_pt
             (progn
               ;; Altura do texto
@@ -261,30 +261,45 @@
               )
               (close f)
               (princ "\n[SUCESSO] Caixas de notas ambientais desenhadas no AutoCAD com sucesso!")
-
-              ;; 8. Opção de gerar o Memorial Descritivo Ambiental em Word (.docx)
-              (initget "Sim Nao S N")
-              (setq ans_doc (getkword "\nDeseja abrir o formulário para gerar o Memorial Descritivo (.docx)? [Sim/Nao] <Sim>: "))
-              (if (or (null ans_doc) (= ans_doc "Sim") (= ans_doc "S"))
-                (progn
-                  (setq docx_template "G:\\Meu Drive\\1-HBT\\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx")
-                  (setq md_script "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\ambiental\\memorial_ambiental_generator.py")
-                  (if (not (findfile md_script)) (setq md_script (findfile "memorial_ambiental_generator.py")))
-                  (if (and (findfile docx_template) (findfile md_script))
-                    (progn
-                      (princ "\nAbrindo formulário do Memorial Descritivo Ambiental...")
-                      (setq cmd_md (strcat "python \"" md_script "\" \"" docx_template "\" \"" pts_file "\" \"" boxes_txt "\" " (itoa fuso)))
-                      (startapp "cmd.exe" (strcat "/c " cmd_md))
-                    )
-                    (princ "\n[AVISO] Modelo do Memorial Descritivo ou script auxiliar não localizado.")
-                  )
-                )
-              )
             )
-            (princ "\nInserção de caixas cancelada pelo usuário.")
+            (princ "\n[INFO] Inserção de caixas no desenho pulada pelo usuário.")
+          )
+
+          ;; 8. Opção de gerar o Memorial Descritivo e Checklist Ambiental
+          (initget "Sim Nao S N")
+          (setq ans_doc (getkword "\nDeseja abrir o formulário para gerar o Memorial Descritivo e Checklist Ambiental? [Sim/Nao] <Sim>: "))
+        )
+        (progn
+          (princ "\n\n[OK] Nenhum ponto do projeto incidiu em áreas restritas do KMZ (Livre de Restrições).")
+          ;; Para projetos sem restrição ambiental, gera-se obrigatoriamente o Checklist Ambiental (.xlsx)
+          (initget "Sim Nao S N")
+          (setq ans_doc (getkword "\nDeseja abrir o formulário para gerar o Checklist Ambiental (.xlsx)? [Sim/Nao] <Sim>: "))
+        )
+      )
+
+      ;; Execução unificada do formulário se o usuário confirmou (ou pressionou Enter)
+      (if (or (null ans_doc) (= ans_doc "Sim") (= ans_doc "S"))
+        (progn
+          (setq docx_template "G:\\Meu Drive\\1-HBT\\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx")
+          (if (not (findfile docx_template))
+            (setq docx_template "")
+          )
+          (setq md_script "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\ambiental\\memorial_ambiental_generator.py")
+          (if (not (findfile md_script))
+            (setq md_script (findfile "memorial_ambiental_generator.py"))
+          )
+          (if (and md_script (findfile md_script))
+            (progn
+              (if (> count_boxes 0)
+                (princ "\nAbrindo formulário do Memorial Descritivo e Checklist Ambiental...")
+                (princ "\nAbrindo formulário do Checklist Ambiental (Livre de Restrições)...")
+              )
+              (setq cmd_md (strcat "python \"" md_script "\" \"" docx_template "\" \"" pts_file "\" \"" boxes_txt "\" " (itoa fuso)))
+              (startapp "cmd.exe" (strcat "/c " cmd_md))
+            )
+            (princ "\n[AVISO] Script auxiliar 'memorial_ambiental_generator.py' não localizado.")
           )
         )
-        (princ "\n[OK] Nenhum ponto do projeto incidiu em áreas restritas do KMZ.")
       )
     )
     (princ "\n[AVISO] Não foi possível obter o resultado do processamento.")
@@ -300,5 +315,15 @@
   (princ)
 )
 
-(princ "\nRotina KMZCHECK atualizada e carregada com sucesso! Digite KMZCHECK.")
+;; Comando para recarregar a rotina na sessão atual do AutoCAD
+(defun c:RECARREGAR_KMZ ()
+  (load "ambiental/kmz_point_layer_report.lsp")
+  (princ "\n[KMZCHECK] Rotina ambiental e de checklist recarregada com sucesso!")
+  (princ)
+)
+
+(defun c:RECARREGAR_AMBIENTAL () (c:RECARREGAR_KMZ))
+(defun c:RECARREGAR_CHECKLIST () (c:RECARREGAR_KMZ))
+
+(princ "\nRotina KMZCHECK atualizada e carregada com sucesso! Digite KMZCHECK ou RECARREGAR_KMZ.")
 (princ)

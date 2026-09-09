@@ -34,13 +34,13 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Abrir_CQT.bat`: Atalho local na pasta do projeto.
 
 ### 3. `ambiental/` (Projeto Ambiental & Cartografia)
-- `kmz_point_layer_report.lsp` & `kmz_point_layer_report.py`: Checagem de pontos contra KMZ ambiental e geração de caixas de notas e **marcação gráfica de polígonos 2.5D no AutoCAD** (`KMZCHECK`):
+- `kmz_point_layer_report.lsp` & `kmz_point_layer_report.py`: Checagem de pontos contra KMZ ambiental e geração de caixas de notas, **marcação gráfica de polígonos 2.5D no AutoCAD** (`KMZCHECK`) e geração desacoplada do **Checklist Ambiental (.xlsx)** com ou sem incidência cartográfica (dispensando o Memorial quando sem restrição, mas gerando o Checklist atestando conformidade). Comandos de recarga rápida `RECARREGAR_KMZ` / `RECARREGAR_CHECKLIST`.
   - **Suporte Total a MultiGeometry & 2.504 Polígonos**: Lê todas as partes e ilhas poligonais de Placemarks complexos (como a Zona de Amortecimento do Parque Estadual dos Três Picos com 20 polígonos), eliminando descartes indevidos de polígonos.
   - **Indexação Espacial Bounding Box (`bbox`)**: Filtro preliminar ultrarrápido (<4s) para testar pontos georreferenciados contra milhares de geometrias sem degradação de desempenho.
   - **Marcação Gráfica de Polígonos**: Gera a rotina `kmz_draw_polygons.lsp` que desenha polilinhas fechadas (`LWPOLYLINE`) nas coordenadas UTM reais dos polígonos interceptados nos layers `AMBIENTAL_APP`, `AMBIENTAL_UC` ou `AMBIENTAL_EXCLUSAO`, com rótulo no centróide.
 - `memorial_ambiental_generator.py`: Interface gráfica moderna em Tkinter (100% pt-BR) com layout responsivo em 2 colunas (Cards), cabeçalho executivo (#1B365D), banner de status de restrições em tempo real, suporte a mousewheel e auto-ajuste de largura:
   - **COM Restrição Ambiental**: O **Memorial Descritivo (`.docx`) É OBRIGATORIAMENTE GERADO** juntamente com o **Checklist Ambiental (`.xlsx`)** (`SIM`).
-  - **SEM Restrição Ambiental**: O **Memorial Descritivo (`.docx`) É DISPENSADO**. Gera-se apenas o **Checklist Ambiental (`.xlsx`)** (`NÃO`).
+  - **SEM Restrição Ambiental**: O **Memorial Descritivo (`.docx`) É DISPENSADO**. Gera-se obrigatoriamente apenas o **Checklist Ambiental (`.xlsx`)** (`NÃO`).
 - `checklist_ambiental_manager.py`: Preenchimento automático do modelo `checklist.xlsx` da concessionária/HBT com marcas `✓` em APPs e identificação de UCs.
 - `croqui_ambiental_generator.py`: Geração automática de Ortofoto / Croqui de Satélite georreferenciado (`CROQUI_AMBIENTAL_{SOB}.png`):
   - **Cache de Tiles em Disco (`.tile_cache/`)**: Evita downloads redundantes de satélite ESRI/OSM, permitindo geração offline e instantânea (<50ms) para regiões já acessadas.

@@ -631,6 +631,20 @@ class MemorialGUI:
 
         # 4. Caso contrário (projeto COM restrições ambientais), gera obrigatoriamente o Memorial Descritivo
         try:
+            if not self.template_path or not os.path.exists(self.template_path):
+                messagebox.showwarning(
+                    "Aviso - Modelo Word Não Localizado",
+                    f"O modelo do Memorial Descritivo (.docx) não foi localizado em:\n{self.template_path}\n\n"
+                    f"✔ O Checklist Ambiental (.xlsx) foi gerado com sucesso em:\n{checklist_out_path}\n\n"
+                    "Para gerar também o arquivo Word (.docx), certifique-se de que o Google Drive ou modelo esteja acessível."
+                )
+                self.root.destroy()
+                if checklist_ok and os.path.exists(checklist_out_path):
+                    try:
+                        os.startfile(checklist_out_path)
+                    except Exception:
+                        pass
+                return
             generate_docx_memorial(self.template_path, out_path, dados)
         except Exception as e:
             messagebox.showerror("Erro", f"Falha ao gerar o Memorial Descritivo: {e}")
