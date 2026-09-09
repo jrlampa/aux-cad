@@ -113,13 +113,16 @@
     (setq force_input (getstring (strcat "\nInforme o esforço [Manual em daN, Cabo MT/BT ou MT+BT (ex: 1/0+150), '?' ajuda]: ")))
     (setq force_input (strcase (vl-string-trim " \t\r\n" force_input)))
 
-    ;; Ajuda rápida
-    (if (or (= force_input "?") (= force_input "TABELA") (= force_input "CABO"))
-      (progn
-        (if (fboundp 'c:TABELAS) (c:TABELAS))
-        (setq force_input (getstring (strcat "\nInforme o esforço da Linha " (itoa (1+ i)) " [Vão " (rtos vao_m 2 0) "m]: ")))
-        (setq force_input (strcase (vl-string-trim " \t\r\n" force_input)))
+    ;; Ajuda rápida com menu interativo das tabelas
+    (while (or (= force_input "?") (= force_input "TABELA") (= force_input "TABELAS")
+               (= force_input "CABO") (= force_input "CABOS") (= force_input "AJUDA")
+               (= force_input "H") (= force_input "HELP"))
+      (if (fboundp 'c:TABELAS)
+        (c:TABELAS)
+        (princ "\n[AVISO] Rotina de tabelas técnicas não carregada.")
       )
+      (setq force_input (getstring (strcat "\nInforme o esforço da Linha " (itoa (1+ i)) " [Vão " (rtos vao_m 2 1) "m, '?' ajuda]: ")))
+      (setq force_input (strcase (vl-string-trim " \t\r\n" force_input)))
     )
 
     ;; Cálculo inteligente via biblioteca técnica ou fallback manual
@@ -213,5 +216,17 @@
   (princ)
 )
 
+;; Comando para recarregar a rotina na sessão atual do AutoCAD
+(defun c:RECARREGAR_RESULTANTE ()
+  (load "mecanico/CALC_RESULTANTE_v1.0.lsp")
+  (load "dados_tecnicos/tabelas_referencia.lsp")
+  (princ "\n[CALC_RESULTANTE] Rotina mecânica e tabelas recarregadas com sucesso!")
+  (princ)
+)
+
+(defun c:RECARREGAR_MECANICO () (c:RECARREGAR_RESULTANTE))
+
 (princ "\n[CALC_RESULTANTE v3.0] Carregado com verificação inteligente de sobrecarga de postes!")
+(princ "\n  - Digite CALC_RESULTANTE (ou TRACAO) para calcular")
+(princ "\n  - Digite RECARREGAR_RESULTANTE para atualizar")
 (princ)

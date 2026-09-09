@@ -127,13 +127,15 @@ aux cad/
   - **Combinações Paralelas Colineares MT + BT**:
     - Suporte nativo à expressão com `+` (ex: `1/0 + 150`, `4/0 CAA + PR95`). Os vetores colineares compartilham ângulo e direção geométrica no DWG, somando algebricamente seus módulos vetoriais: $\vec{F}_{total} = \vec{F}_{MT} + \vec{F}_{BT}$ (ex: 450 daN MT + 554 daN BT = 1.004 daN total).
   - **Interoperabilidade SQLite3 & JSON**: Banco relacional `tabelas_referencia.sqlite3` com tabelas `condutores_bt`, `estruturas_bt` e `cabos_mt_esforcos` indexadas, além do arquivo padronizado `tabelas_referencia.json` (v2.0.0).
-- `tabelas_referencia.lsp` (390 linhas): Biblioteca AutoLISP de altíssima velocidade para consulta direta de LISPs:
-  - Comandos: **`TABELAS`**, **`CONDUTORES_BT`**, **`ESTRUTURAS_BT`**, **`CABOS_MT`** e **`CONSULTAR_TABELA`**.
+- `tabelas_referencia.lsp` (515 linhas): Biblioteca AutoLISP de altíssima velocidade para consulta direta de LISPs:
+  - Comandos: **`TABELAS`**, **`CONDUTORES_BT`** (ou **`BT`**), **`ESTRUTURAS_BT`**, **`CABOS_MT`** (ou **`MT`**) e **`CONSULTAR_TABELA`**.
+  - Prompt interativo tolerante e ágil em `TABELAS`: aceita letras e números `[C]ondutores BT`, `[E]struturas BT`, `[M]T Cabos`, `1`, `2`, `3`, `BT`, `MT` ou Enter para o padrão.
   - Funções reutilizáveis: `(tb-get-condutor chave)`, `(tb-get-tracao chave)`, `(tb-get-tracao-mt chave n_fases)`, `(tb-interpolar-mt chave vao_m)`, `(tb-calcular-linha-esforco input vao_m)`, `(tb-get-estrutura cod fase)`, `(tb-list-condutores)`, `(tb-list-estruturas)`.
   - Integração no `CALC_RESULTANTE_v1.0.lsp`:
     - Medição geométrica automática do vão no CAD (`vlax-curve-getDistAtParam`).
     - Exibição da extensão medida no prompt: `[Vão medido no CAD: X.X m]`.
-    - Suporte a valor manual puro em daN (`350`, `150d`, `=400`), código de cabo MT/BT ou expressão colinear MT+BT (`1/0 + 150`), com tecla `?` para consulta das tabelas.
+    - Suporte a valor manual puro em daN (`350`, `150d`, `=400`), código de cabo MT/BT ou expressão colinear MT+BT (`1/0 + 150`), com tecla `?` com loop de consulta interativa sem travar o cálculo.
+    - Comandos de recarga rápida: **`RECARREGAR_RESULTANTE`** e **`RECARREGAR_MECANICO`**.
 
 ### 8. Módulo de Participação Financeira do Consumidor (`cpfc/`)
 - `cpfc_core.py` (102 linhas):

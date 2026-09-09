@@ -112,13 +112,15 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
     - *Vão longo (>200m)*: Extrapolação linear contínua baseada na inclinação do último intervalo (ex: 220m no 1/0 CAA = 1.473 daN).
   - **Combinação Colinear MT + BT em Paralelo**: Função `calcular_esforco_linha(expressao, vao_m)` aceita expressões combinadas com `+` (ex: `1/0 + 150`, `4/0 CAA + PR95`), somando os módulos na mesma direção e ângulo de ancoragem, além de manter entrada manual pura em daN (`350`, `150d`, `=400`).
   - **Interoperabilidade SQLite3 & JSON**: Gera automaticamente `tabelas_referencia.sqlite3` com tabelas `condutores_bt`, `estruturas_bt` e `cabos_mt_esforcos` indexadas, além do arquivo padronizado `tabelas_referencia.json` (v2.0.0).
-- `tabelas_referencia.lsp` (390 linhas): Biblioteca AutoLISP de alto desempenho com dados em memória nativa (zero latência):
+- `tabelas_referencia.lsp` (515 linhas): Biblioteca AutoLISP de alto desempenho com dados em memória nativa (zero latência):
   - Funções de API LISP: `(tb-get-condutor chave)`, `(tb-get-tracao chave)`, `(tb-get-tracao-mt chave n_fases)`, `(tb-interpolar-mt chave vao_m)`, `(tb-calcular-linha-esforco input vao_m)`, `(tb-get-estrutura cod fase)`, `(tb-list-condutores)`, `(tb-list-estruturas)`.
-  - Comandos interativos no console do AutoCAD: **`TABELAS`**, **`CONDUTORES_BT`**, **`ESTRUTURAS_BT`**, **`CABOS_MT`** e **`CONSULTAR_TABELA`**.
+  - Comandos interativos no console do AutoCAD: **`TABELAS`**, **`CONDUTORES_BT`** (ou **`BT`**), **`ESTRUTURAS_BT`**, **`CABOS_MT`** (ou **`MT`**) e **`CONSULTAR_TABELA`**.
+  - Reconhecimento flexível de keywords no `TABELAS`: aceita `C`, `E`, `M`, `1`, `2`, `3`, `BT`, `MT` ou Enter sem erro de `Invalid option keyword`.
   - Integração no `mecanico/CALC_RESULTANTE_v1.0.lsp`:
     - Mede o vão real da linha no CAD automaticamente (`vlax-curve-getDistAtParam`).
     - Exibe o comprimento no prompt `[Vão medido no CAD: X.X m]`.
     - Aceita entrada manual pura em daN (ex: `350`, `150d`), código de cabo MT/BT ou expressão colinear MT+BT (`1/0 + 150`).
+    - Menu de ajuda interativo com `?` em loop contínuo e comandos de recarga rápida `RECARREGAR_RESULTANTE` / `RECARREGAR_MECANICO`.
 
 ### 9. `cpfc/` (Projeto Participação Financeira do Consumidor - REN 1.059 ANEEL)
 - `cpfc_core.py` (102 linhas): Motor de regras de negócio e cálculo analítico da REN 1.059 ANEEL (Válido até 10/03/2027 - Versão 03):

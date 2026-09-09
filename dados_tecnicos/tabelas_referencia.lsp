@@ -498,15 +498,22 @@
 )
 
 (defun c:TABELAS (/ opc)
-  (initget "BT_Condutores BT_Estruturas MT_Cabos")
-  (setq opc (getkword "\nConsultar Tabelas [BT_Condutores/BT_Estruturas/MT_Cabos] <BT_Condutores>: "))
+  (initget "Condutores Estruturas Cabos MT_Cabos BT_Condutores BT_Estruturas C E M 1 2 3 BT MT")
+  (setq opc (getkword "\nConsultar Tabelas: [C]ondutores BT / [E]struturas BT / [M]T Cabos <C>: "))
   (cond
-    ((= opc "BT_Estruturas") (c:ESTRUTURAS_BT))
-    ((= opc "MT_Cabos")      (c:CABOS_MT))
-    (t                       (c:CONDUTORES_BT))
+    ((or (= opc "M") (= opc "MT") (= opc "MT_Cabos") (= opc "Cabos") (= opc "3"))
+     (c:CABOS_MT))
+    ((or (= opc "E") (= opc "Estruturas") (= opc "BT_Estruturas") (= opc "2"))
+     (c:ESTRUTURAS_BT))
+    (t
+     (c:CONDUTORES_BT))
   )
   (princ)
 )
 
-(princ "\n[AUX CAD] Tabelas Técnicas BT/MT carregadas. Comandos: TABELAS, CONDUTORES_BT, ESTRUTURAS_BT, CABOS_MT")
+;; Aliases diretos para consulta imediata no AutoCAD
+(defun c:BT () (c:CONDUTORES_BT))
+(defun c:MT () (c:CABOS_MT))
+
+(princ "\n[AUX CAD] Tabelas Técnicas BT/MT carregadas. Comandos: TABELAS, CONDUTORES_BT (ou BT), ESTRUTURAS_BT, CABOS_MT (ou MT)")
 (princ)
