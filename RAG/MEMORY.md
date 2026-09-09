@@ -17,6 +17,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Abrir_Orcamento.bat`: Atalho na raiz para abrir a interface de Orçamento com 2 cliques.
 - `Abrir_CPFC.bat`: Atalho na raiz para abrir a interface de CPFC (REN 1.059) com 2 cliques.
 - `clean.bat`: Utilitário de limpeza de arquivos temporários do Windows.
+- `.env.example`: Modelo padronizado de variáveis de ambiente (GOMNET, GOM, URLs de consulta).
 - `CAC.md` & `RAG/MEMORY.md`: Diretrizes arquiteturais e histórico da base de conhecimento.
 
 ### 2. `cqt/` (Projeto Queda de Tensão BT)

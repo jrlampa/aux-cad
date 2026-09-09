@@ -15,6 +15,7 @@ aux cad/
 ├── Abrir_Orcamento.bat             # Atalho de 2 cliques na raiz para Orçamento
 ├── Abrir_CPFC.bat                  # Atalho de 2 cliques na raiz para CPFC (REN 1.059)
 ├── clean.bat                       # Script utilitário de limpeza de temporários
+├── .env.example                    # Modelo seguro de variáveis de ambiente (GOMNET, GOM, URLs)
 ├── RAG/ & CAC.md                   # Base de conhecimento e arquitetura do projeto
 │
 ├── orcamento/                      # Módulo Orçamento e Levantamento de Materiais (AutoLISP + Python + GUI)
