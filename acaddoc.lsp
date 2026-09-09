@@ -37,6 +37,7 @@
 (add-support-path (strcat *aux-cad-root* "orcamento"))
 (add-support-path (strcat *aux-cad-root* "mapa_postes"))
 (add-support-path (strcat *aux-cad-root* "dados_tecnicos"))
+(add-support-path (strcat *aux-cad-root* "cpfc"))
 
 (defun load-aux-safe (subpath / fullpath res)
   (setq fullpath (strcat *aux-cad-root* subpath))
@@ -86,6 +87,9 @@
 ;; 8. Módulo Dados Técnicos e Tabelas de Referência (Tabela 7 e Tabela 9 BT)
 (load-aux-safe "dados_tecnicos\\tabelas_referencia.lsp")
 
+;; 9. Módulo Participação Financeira do Consumidor (CPFC - REN 1.059 ANEEL)
+(load-aux-safe "cpfc\\cpfc_cad_launcher.lsp")
+
 
 ;; =============================================================================
 ;;  COMANDOS DE CONSULTA E AJUDA (COMANDOS / AJUDA / AUXCAD / ROTINAS)
@@ -105,6 +109,10 @@
   (princ "\n  [ORÇAMENTO & LEVANTAMENTO DE MATERIAIS]")
   (princ "\n   - ORCAD ou ORCAMENTO : Levantamento de postes, cabos e materiais no DWG")
   (princ "\n   - ORCUI : Abre a interface de orçamento e banco de preços")
+  (princ "\n")
+  (princ "\n  [PARTICIPAÇÃO FINANCEIRA - CPFC REN 1.059]")
+  (princ "\n   - CPFC ou CPFCUI : Abre a interface de cálculo de Participação Financeira")
+  (princ "\n   - CPFCCAD : Captura dados do DWG e abre a interface para preencher o modelo")
   (princ "\n")
   (princ "\n  [QUEDA DE TENSÃO BT - CQT]")
   (princ "\n   - CQT ou CQTUI ou QUEDATENSAO : Interface de cálculo CQT (QT <= 6%)")

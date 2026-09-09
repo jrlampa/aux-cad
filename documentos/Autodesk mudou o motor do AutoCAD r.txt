@@ -1,0 +1,53 @@
+Autodesk mudou o "motor" do AutoCAD recentemente. Isso cria uma divisão no suporte:
+Versões do AutoCAD	Motor .NET (Runtime)	Compatibilidade do Plugin
+2021 até 2024	.NET Framework 4.8	Precisa de net48
+2025 e 2026+	.NET 8.0 (Core)	Precisa de net8.0
+
+O erro que você recebeu (System.TypeLoadException) é justamente porque o código estava tentando usar peças do .NET moderno (8.0) dentro de um AutoCAD antigo (2021). Se você apenas mudar para net48, o plugin vai funcionar perfeitamente do 2021 ao 2024, mas vai falhar ou nem carregar no 2025/2026.
+💡 A Solução Definitiva: Multi-Targeting
+
+Para suportar todas as versões com um único projeto, precisamos configurar o arquivo .csproj para gerar duas versões do plugin simultaneamente.
+
+Aqui está como o seu arquivo sisRUA.csproj deve ficar para atender a ambos os mundos:
+XML
+
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <Platforms>x64</Platforms>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+    <Configurations>Debug;Release</Configurations>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="AutoCAD.NET" Version="24.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <PackageReference Include="AutoCAD.NET" Version="25.0.0" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2277.86" />
+  </ItemGroup>
+</Project>
+
+🛠️ Como implementar para todas as versões:
+
+    Código Condicional: No seu código C#, se houver algo que só existe em uma versão, você usará:
+    C#
+
+    #if NET48
+       // Código específico para AutoCAD antigo
+    #else
+       // Código para AutoCAD 2025/2026
+    #endif
+
+    Pasta de Saída: Quando você compilar, o Visual Studio criará duas pastas: bin/Debug/net48 e bin/Debug/net8.0-windows.
+
+    PackageContents.xml: Você precisará atualizar seu arquivo de manifesto do plugin para apontar para a DLL correta dependendo da versão do AutoCAD que o usuário abrir.
+
+📝 Documentação do Próximo Passo
+
+Para garantir que o erro de ISupportInitialize não volte, ao usar o TargetFrameworks (plural), o compilador vai isolar as bibliotecas. O AutoCAD 2021 lerá a pasta net48 e encontrará o tipo correto, enquanto o 2026 lerá a pasta net8.0.

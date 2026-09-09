@@ -1,0 +1,480 @@
+Application does not support just-in-time (JIT)
+debugging. See the end of this message for details.
+
+************** Exception Text **************
+System.TypeLoadException: Could not load type 'System.ComponentModel.ISupportInitialize' from assembly 'System.ComponentModel.Primitives, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.
+   at sisRUA.SisRuaPalette.ShowSisRuaPalette()
+   at Autodesk.AutoCAD.Runtime.CommandClass.InvokeWorker(MethodInfo mi, Object commandObject, Boolean bLispFunction)
+   at Autodesk.AutoCAD.Runtime.CommandClass.InvokeWorkerWithExceptionFilter(MethodInfo mi, Object commandObject, Boolean bLispFunction)
+   at Autodesk.AutoCAD.Runtime.PerDocumentCommandClass.Invoke(MethodInfo mi, Boolean bLispFunction)
+   at Autodesk.AutoCAD.Runtime.CommandClass.CommandThunk.Invoke()
+
+
+************** Loaded Assemblies **************
+mscorlib
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/Windows/Microsoft.NET/Framework64/v4.0.30319/mscorlib.dll
+----------------------------------------
+Acdbmgd
+    Assembly Version: 24.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/Acdbmgd.DLL
+----------------------------------------
+System
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9321.0 built by: NET481REL1LAST_25H2_B
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System/v4.0_4.0.0.0__b77a5c561934e089/System.dll
+----------------------------------------
+System.Core
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9319.0 built by: NET481REL1LAST_25H2_B
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Core/v4.0_4.0.0.0__b77a5c561934e089/System.Core.dll
+----------------------------------------
+AdApplicationFrame
+    Assembly Version: 0.0.0.0
+    Win32 Version: 3.0.2.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/AdApplicationFrame.DLL
+----------------------------------------
+adui24
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/adui24.DLL
+----------------------------------------
+AdUiPalettes
+    Assembly Version: 24.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/AdUiPalettes.DLL
+----------------------------------------
+WindowsBase
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9319.0 built by: NET481REL1LAST_25H2_B
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/WindowsBase/v4.0_4.0.0.0__31bf3856ad364e35/WindowsBase.dll
+----------------------------------------
+PresentationCore
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9319.0 built by: NET481REL1LAST_25H2_B
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_64/PresentationCore/v4.0_4.0.0.0__31bf3856ad364e35/PresentationCore.dll
+----------------------------------------
+PresentationFramework
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9319.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/PresentationFramework/v4.0_4.0.0.0__31bf3856ad364e35/PresentationFramework.dll
+----------------------------------------
+System.Xaml
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9319.0 built by: NET481REL1LAST_25H2_B
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Xaml/v4.0_4.0.0.0__b77a5c561934e089/System.Xaml.dll
+----------------------------------------
+System.Configuration
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Configuration/v4.0_4.0.0.0__b03f5f7f11d50a3a/System.Configuration.dll
+----------------------------------------
+System.Xml
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Xml/v4.0_4.0.0.0__b77a5c561934e089/System.Xml.dll
+----------------------------------------
+AdUIMgd
+    Assembly Version: 24.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/AdUIMgd.DLL
+----------------------------------------
+AdWindows
+    Assembly Version: 3.0.2.0
+    Win32 Version: 3.0.2.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/AdWindows.DLL
+----------------------------------------
+WindowsFormsIntegration
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/WindowsFormsIntegration/v4.0_4.0.0.0__31bf3856ad364e35/WindowsFormsIntegration.dll
+----------------------------------------
+PresentationFramework.Aero2
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/PresentationFramework.Aero2/v4.0_4.0.0.0__31bf3856ad364e35/PresentationFramework.Aero2.dll
+----------------------------------------
+accoremgd
+    Assembly Version: 24.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/accoremgd.DLL
+----------------------------------------
+Acmgd
+    Assembly Version: 24.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/Acmgd.DLL
+----------------------------------------
+AcWindows
+    Assembly Version: 24.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/AcWindows.DLL
+----------------------------------------
+AcWindows.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcWindows.resources.DLL
+----------------------------------------
+AcCui
+    Assembly Version: 24.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/AcCui.DLL
+----------------------------------------
+PresentationFramework-SystemXml
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/PresentationFramework-SystemXml/v4.0_4.0.0.0__b77a5c561934e089/PresentationFramework-SystemXml.dll
+----------------------------------------
+PresentationFramework.Aero
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/PresentationFramework.Aero/v4.0_4.0.0.0__31bf3856ad364e35/PresentationFramework.Aero.dll
+----------------------------------------
+System.Drawing
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Drawing/v4.0_4.0.0.0__b03f5f7f11d50a3a/System.Drawing.dll
+----------------------------------------
+PresentationUI
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/PresentationUI/v4.0_4.0.0.0__31bf3856ad364e35/PresentationUI.dll
+----------------------------------------
+System.Xml.Linq
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Xml.Linq/v4.0_4.0.0.0__b77a5c561934e089/System.Xml.Linq.dll
+----------------------------------------
+System.Windows.Forms
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Windows.Forms/v4.0_4.0.0.0__b77a5c561934e089/System.Windows.Forms.dll
+----------------------------------------
+PresentationFramework-SystemXmlLinq
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/PresentationFramework-SystemXmlLinq/v4.0_4.0.0.0__b77a5c561934e089/PresentationFramework-SystemXmlLinq.dll
+----------------------------------------
+AcCloudAccess
+    Assembly Version: 23.1.0.0
+    Win32 Version: 23.1.0.0
+    CodeBase: file:///C:/Users/im3/AppData/Roaming/Autodesk/ApplicationPlugins/Autodesk%20Save%20to%20Web%20and%20Mobile.bundle/Contents/AutoCAD/Win64/AcCloudAccess.dll
+----------------------------------------
+AcCloudAccess.resources
+    Assembly Version: 23.1.0.0
+    Win32 Version: 23.1.0.0
+    CodeBase: file:///C:/Users/im3/AppData/Roaming/Autodesk/ApplicationPlugins/Autodesk%20Save%20to%20Web%20and%20Mobile.bundle/Contents/AutoCAD/Win64/en-US/AcCloudAccess.resources.DLL
+----------------------------------------
+Microsoft.GeneratedCode
+    Assembly Version: 1.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Xml/v4.0_4.0.0.0__b77a5c561934e089/System.Xml.dll
+----------------------------------------
+PlexEarth
+    Assembly Version: 26.1.9236.25317
+    Win32 Version: 26.1.9236.25317
+    CodeBase: file:///C:/Program%20Files/Autodesk/ApplicationPlugins/PlexEarth.Lite.26.1.9236.bundle/Contents/Windows/PlexEarth.dll
+----------------------------------------
+?
+    Assembly Version: 0.0.0.0
+    Win32 Version: 26.1.9236.25317
+    CodeBase: file:///C:/Program%20Files/Autodesk/ApplicationPlugins/PlexEarth.Lite.26.1.9236.bundle/Contents/Windows/PlexEarth.dll
+----------------------------------------
+Nito.AsyncEx
+    Assembly Version: 4.0.1.0
+    Win32 Version: 26.1.9236.25317
+    CodeBase: file:///C:/Program%20Files/Autodesk/ApplicationPlugins/PlexEarth.Lite.26.1.9236.bundle/Contents/Windows/PlexEarth.dll
+----------------------------------------
+System.Runtime
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Runtime/v4.0_4.0.0.0__b03f5f7f11d50a3a/System.Runtime.dll
+----------------------------------------
+System.Threading.Tasks
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Threading.Tasks/v4.0_4.0.0.0__b03f5f7f11d50a3a/System.Threading.Tasks.dll
+----------------------------------------
+System.Threading
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Threading/v4.0_4.0.0.0__b03f5f7f11d50a3a/System.Threading.dll
+----------------------------------------
+Nito.AsyncEx.Enlightenment
+    Assembly Version: 4.0.1.0
+    Win32 Version: 26.1.9236.25317
+    CodeBase: file:///C:/Program%20Files/Autodesk/ApplicationPlugins/PlexEarth.Lite.26.1.9236.bundle/Contents/Windows/PlexEarth.dll
+----------------------------------------
+System.Windows.Interactivity
+    Assembly Version: 4.5.0.0
+    Win32 Version: 26.1.9236.25317
+    CodeBase: file:///C:/Program%20Files/Autodesk/ApplicationPlugins/PlexEarth.Lite.26.1.9236.bundle/Contents/Windows/PlexEarth.dll
+----------------------------------------
+System.Net.Http
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Net.Http/v4.0_4.0.0.0__b03f5f7f11d50a3a/System.Net.Http.dll
+----------------------------------------
+NLog
+    Assembly Version: 4.0.0.0
+    Win32 Version: 26.1.9236.25317
+    CodeBase: file:///C:/Program%20Files/Autodesk/ApplicationPlugins/PlexEarth.Lite.26.1.9236.bundle/Contents/Windows/PlexEarth.dll
+----------------------------------------
+System.Data
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_64/System.Data/v4.0_4.0.0.0__b77a5c561934e089/System.Data.dll
+----------------------------------------
+System.ServiceModel
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.ServiceModel/v4.0_4.0.0.0__b77a5c561934e089/System.ServiceModel.dll
+----------------------------------------
+System.Runtime.Serialization
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Runtime.Serialization/v4.0_4.0.0.0__b77a5c561934e089/System.Runtime.Serialization.dll
+----------------------------------------
+System.DirectoryServices
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.DirectoryServices/v4.0_4.0.0.0__b03f5f7f11d50a3a/System.DirectoryServices.dll
+----------------------------------------
+Microsoft.CSharp
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/Microsoft.CSharp/v4.0_4.0.0.0__b03f5f7f11d50a3a/Microsoft.CSharp.dll
+----------------------------------------
+Newtonsoft.Json
+    Assembly Version: 13.0.0.0
+    Win32 Version: 26.1.9236.25317
+    CodeBase: file:///C:/Program%20Files/Autodesk/ApplicationPlugins/PlexEarth.Lite.26.1.9236.bundle/Contents/Windows/PlexEarth.dll
+----------------------------------------
+System.Numerics
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Numerics/v4.0_4.0.0.0__b77a5c561934e089/System.Numerics.dll
+----------------------------------------
+Anonymously Hosted DynamicMethods Assembly
+    Assembly Version: 0.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_64/mscorlib/v4.0_4.0.0.0__b77a5c561934e089/mscorlib.dll
+----------------------------------------
+System.Dynamic
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Dynamic/v4.0_4.0.0.0__b03f5f7f11d50a3a/System.Dynamic.dll
+----------------------------------------
+GalaSoft.MvvmLight
+    Assembly Version: 5.4.1.0
+    Win32 Version: 26.1.9236.25317
+    CodeBase: file:///C:/Program%20Files/Autodesk/ApplicationPlugins/PlexEarth.Lite.26.1.9236.bundle/Contents/Windows/PlexEarth.dll
+----------------------------------------
+System.ObjectModel
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.ObjectModel/v4.0_4.0.0.0__b03f5f7f11d50a3a/System.ObjectModel.dll
+----------------------------------------
+System.ValueTuple
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.ValueTuple/v4.0_4.0.0.0__cc7b13ffcd2ddd51/System.ValueTuple.dll
+----------------------------------------
+AcAeNet.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcAeNet.resources.DLL
+----------------------------------------
+AcCloudRender.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcCloudRender.resources.DLL
+----------------------------------------
+AcCustomize.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcCustomize.resources.DLL
+----------------------------------------
+AcDxWizard.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcDxWizard.resources.DLL
+----------------------------------------
+AcExportLayoutUI.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcExportLayoutUI.resources.DLL
+----------------------------------------
+AcInterfere.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcInterfere.resources.DLL
+----------------------------------------
+AcLayer.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcLayer.resources.DLL
+----------------------------------------
+AcLayerTools.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcLayerTools.resources.DLL
+----------------------------------------
+AcMrUi.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcMrUi.resources.DLL
+----------------------------------------
+AcMultiLineUi.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcMultiLineUi.resources.DLL
+----------------------------------------
+AcRecoverAll.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcRecoverAll.resources.DLL
+----------------------------------------
+AcScaleList.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcScaleList.resources.DLL
+----------------------------------------
+AcSeamless.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcSeamless.resources.DLL
+----------------------------------------
+AcUnderlay.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcUnderlay.resources.DLL
+----------------------------------------
+AcViewTransitionsUi.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcViewTransitionsUi.resources.DLL
+----------------------------------------
+AdskConnectionPointMgd.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AdskConnectionPointMgd.resources.DLL
+----------------------------------------
+AcCalcUi.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcCalcUi.resources.DLL
+----------------------------------------
+PresentationFramework-SystemData
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9319.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/PresentationFramework-SystemData/v4.0_4.0.0.0__b77a5c561934e089/PresentationFramework-SystemData.dll
+----------------------------------------
+PresentationFramework-SystemCore
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/PresentationFramework-SystemCore/v4.0_4.0.0.0__b77a5c561934e089/PresentationFramework-SystemCore.dll
+----------------------------------------
+UIAutomationTypes
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9319.0 built by: NET481REL1LAST_25H2_B
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/UIAutomationTypes/v4.0_4.0.0.0__31bf3856ad364e35/UIAutomationTypes.dll
+----------------------------------------
+UIAutomationProvider
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9319.0 built by: NET481REL1LAST_25H2_B
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/UIAutomationProvider/v4.0_4.0.0.0__31bf3856ad364e35/UIAutomationProvider.dll
+----------------------------------------
+ContextualTabSelectorRules
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/AcWindows.dll
+----------------------------------------
+Microsoft.Expression.Interactions
+    Assembly Version: 4.5.0.0
+    Win32 Version: 3.0.40218.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/Microsoft.Expression.Interactions.DLL
+----------------------------------------
+System.Web.Extensions
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9319.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.Web.Extensions/v4.0_4.0.0.0__31bf3856ad364e35/System.Web.Extensions.dll
+----------------------------------------
+System.Web
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9319.0 built by: NET481REL1LAST_25H2_B
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_64/System.Web/v4.0_4.0.0.0__b03f5f7f11d50a3a/System.Web.dll
+----------------------------------------
+AcCloudFsMgd
+    Assembly Version: 1.0.7312.14198
+    Win32 Version: 23.1.0.0
+    CodeBase: file:///C:/Users/im3/AppData/Roaming/Autodesk/ApplicationPlugins/Autodesk%20Save%20to%20Web%20and%20Mobile.bundle/Contents/AutoCAD/Win64/AcCloudFsMgd.DLL
+----------------------------------------
+sisRUA_NET48_ACAD2021
+    Assembly Version: 0.2.0.0
+    Win32 Version: 0.2.0
+    CodeBase: file:///C:/Users/im3/AppData/Roaming/Autodesk/ApplicationPlugins/sisRUA.bundle/Contents/sisRUA_NET48_ACAD2021.dll
+----------------------------------------
+System.resources
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9032.0 built by: NET481REL1
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.resources/v4.0_4.0.0.0_pt-BR_b77a5c561934e089/System.resources.dll
+----------------------------------------
+mscorlib.resources
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9032.0 built by: NET481REL1
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/mscorlib.resources/v4.0_4.0.0.0_pt-BR_b77a5c561934e089/mscorlib.resources.dll
+----------------------------------------
+AcLivePreviewContext
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/AcWindows.dll
+----------------------------------------
+AcLayer
+    Assembly Version: 24.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/AcLayer.DLL
+----------------------------------------
+AcCloudFilesDialog.Interfaces
+    Assembly Version: 23.1.0.0
+    Win32 Version: 23.1.0.0
+    CodeBase: file:///C:/Users/im3/AppData/Roaming/Autodesk/ApplicationPlugins/Autodesk%20Save%20to%20Web%20and%20Mobile.bundle/Contents/AutoCAD/Win64/AcCloudFilesDialog.Interfaces.DLL
+----------------------------------------
+AcTaskDialogs
+    Assembly Version: 24.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/AcTaskDialogs.DLL
+----------------------------------------
+AcTaskDialogs.resources
+    Assembly Version: 0.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/en-US/AcTaskDialogs.resources.DLL
+----------------------------------------
+PresentationFramework.Luna
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0 built by: NET481REL1LAST_25H2
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/PresentationFramework.Luna/v4.0_4.0.0.0__31bf3856ad364e35/PresentationFramework.Luna.dll
+----------------------------------------
+AcMrUi
+    Assembly Version: 24.0.0.0
+    Win32 Version: 24.0.47.0.0
+    CodeBase: file:///C:/Program%20Files/Autodesk/AutoCAD%202021/AcMrUI.DLL
+----------------------------------------
+Microsoft.Web.WebView2.WinForms
+    Assembly Version: 1.0.2277.86
+    Win32 Version: 1.0.2277.86
+    CodeBase: file:///C:/Users/im3/AppData/Roaming/Autodesk/ApplicationPlugins/sisRUA.bundle/Contents/Microsoft.Web.WebView2.WinForms.DLL
+----------------------------------------
+System.ComponentModel.Primitives
+    Assembly Version: 4.0.0.0
+    Win32 Version: 4.8.9221.0
+    CodeBase: file:///C:/WINDOWS/Microsoft.Net/assembly/GAC_MSIL/System.ComponentModel.Primitives/v4.0_4.0.0.0__b03f5f7f11d50a3a/System.ComponentModel.Primitives.dll
+----------------------------------------
+
+************** JIT Debugging **************
+Application does not support Windows Forms just-in-time (JIT)
+debugging. Contact the application author for more
+information.
+
+

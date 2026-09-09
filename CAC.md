@@ -8,16 +8,18 @@ aux cad/
 ├── acaddoc.lsp                     # Carregador universal do AutoCAD (inclusão dinâmica de SupportPath)
 ├── aux_cad_toolbar.lsp             # Barra de ferramentas global (AUXCADBAR)
 ├── aux_cad_menu.mnu / .cuix / .mnr # Menu nativo do AutoCAD (AUXCAD)
-├── modelos/                        # Templates e modelos compartilhados (checklist, etc.)
-├── tests/                          # Full suite de testes unitários (38 testes, 100% passing)
-├── pytest.ini                      # Resolução de paths para testes (cqt, ambiental, orcamento)
+├── modelos/                        # Templates e modelos compartilhados (checklist, cpfc, etc.)
+├── tests/                          # Full suite de testes unitários (74 testes, 100% passing)
+├── pytest.ini                      # Resolução de paths para testes (cqt, ambiental, orcamento, cpfc...)
 ├── Abrir_CQT.bat                   # Atalho de 2 cliques na raiz para CQT
 ├── Abrir_Orcamento.bat             # Atalho de 2 cliques na raiz para Orçamento
+├── Abrir_CPFC.bat                  # Atalho de 2 cliques na raiz para CPFC (REN 1.059)
 ├── clean.bat                       # Script utilitário de limpeza de temporários
 ├── RAG/ & CAC.md                   # Base de conhecimento e arquitetura do projeto
 │
 ├── orcamento/                      # Módulo Orçamento e Levantamento de Materiais (AutoLISP + Python + GUI)
 ├── cqt/                            # Módulo Queda de Tensão BT (AutoLISP + Python + GUI)
+├── cpfc/                           # Módulo Participação Financeira REN 1.059 (AutoLISP + Python + GUI)
 ├── ambiental/                      # Módulo Ambiental, KMZ, Ortofoto, Memorial e Checklist
 ├── mecanico/                       # Módulo Cálculo Estrutural e Resultante de Postes
 ├── topografia/                     # Módulo Topografia, Eixos Viários e Importação CSV
@@ -131,16 +133,39 @@ aux cad/
     - Exibição da extensão medida no prompt: `[Vão medido no CAD: X.X m]`.
     - Suporte a valor manual puro em daN (`350`, `150d`, `=400`), código de cabo MT/BT ou expressão colinear MT+BT (`1/0 + 150`), com tecla `?` para consulta das tabelas.
 
-### 8. Carregamento Universal (`acaddoc.lsp`)
+### 8. Módulo de Participação Financeira do Consumidor (`cpfc/`)
+- `cpfc_core.py` (102 linhas):
+  - Implementação das fórmulas oficiais da Resolução Normativa ANEEL Nº 1.059 (Válido até 10/03/2027 - Versão 03).
+  - Tabela de Fatores K da concessionária ($K_{carga}$ e $K_{geração}$) com resolução exata para os 13 subgrupos (`B1`, `B2rur`, `B2irrig`, `B3`, `B4a`, `B4b`, `A4`, `A3a`, `A3`, `A2`, `AS`, `BT1 Geração`, `BT2 Geração`).
+  - Cálculo de $\text{ERD} = \text{Demanda Carga} \times K_c + \max(0, \text{Geração} - \text{Carga}) \times K_g$.
+  - Proporcionalização de custos $\text{COP} = \text{Custo Total da Obra} \times \left(\frac{\max(\text{Carga}, \text{Geração})}{\text{Demanda Disponibilizada}}\right)$.
+  - Cálculo da Participação Financeira $\text{PF} = \max(0, \text{COP} - \text{ERD})$ e alertas de suficiência de demanda.
+- `cpfc_excel.py` (43 linhas):
+  - Camada de manipulação de planilhas via `openpyxl`.
+  - Injeção precisa nos campos cadastrais (`C11:G11`, `C13:G13`, `C15:G15`, `C17:G17`, `C19:G19`), custos (`C24`, `F30`, `F31`) e demandas elétricas (`C41`, `C43`, `G66`, `G80`).
+  - Preservação estrita de fórmulas nativas (`F32`, `G70`, `G72`, `G74`, `G76`, `G82`, `G84`, `G86`, `G88`, `G93`), estilos de formatação e imagens do cabeçalho.
+- `cpfc_gui.py` (270 linhas):
+  - Interface moderna em Tkinter 100% em pt-BR com tema corporativo `#1B365D`.
+  - Layout dividido em 4 cards: Dados Cadastrais, Custos da Obra, Demandas Elétricas e Live Preview de Indicadores.
+  - Indicadores em tempo real para ERD, Fator de Proporcionalização e COP.
+  - Banner dinâmico de status: Destaque verde para Isenção de PF ou âmbar para Valor Devido.
+  - Diálogo nativo `filedialog.asksaveasfilename` com sugestão inteligente de nome (`PE_{PROJETO}_CPFC_REN1.059.xlsx`).
+  - Atalhos de pós-geração: Abrir no Excel ou Abrir Pasta de Destino.
+- `cpfc_manager.py` (36 linhas): Orquestrador com suporte a CLI, pasta padrão do DWG e intercâmbio JSON.
+- `cpfc_cad_launcher.lsp` (85 linhas): Comandos do AutoCAD **`CPFC`** / **`CPFCUI`** (abertura direta) e **`CPFCCAD`** (com leitura do projeto e pasta do DWG aberto).
+- `modelos/cpfc_modelo.xlsx`: Planilha modelo de referência padronizada.
+- `Abrir_CPFC.bat`: Atalho executável na raiz e em `cpfc/`.
+
+### 9. Carregamento Universal (`acaddoc.lsp`)
 O arquivo `acaddoc.lsp` foi projetado para:
 1. Localizar o caminho absoluto da pasta raiz `aux cad`.
-2. Adicionar dinamicamente as pastas `orcamento`, `cqt`, `ambiental`, `mecanico`, `topografia`, `mapa_postes` e `dados_tecnicos` ao `SupportPath` de arquivos de suporte do AutoCAD.
+2. Adicionar dinamicamente as pastas `orcamento`, `cqt`, `cpfc`, `ambiental`, `mecanico`, `topografia`, `mapa_postes` e `dados_tecnicos` ao `SupportPath` de arquivos de suporte do AutoCAD.
 3. Carregar as rotinas modulares de forma resiliente com tratamento de erros (`vl-catch-all-apply`).
 
-### 9. Validação e Testes
-- Suíte com **64 testes unitários passando 100%** (`python -m pytest --cov`).
-- Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos`).
-- Cobertura total do projeto em **86%** (módulo `dados_tecnicos` com 94% de cobertura).
+### 10. Validação e Testes
+- Suíte com **74 testes unitários passando 100%** (`python -m pytest --cov`).
+- Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos cpfc`).
+- Cobertura total do projeto em **86%** (módulo `cpfc` com 87% de cobertura, `cpfc_core` com 98%).
 - Resolução dinâmica de diretórios no `acaddoc.lsp` para independência de máquina.
 - Rotinas e saídas geradas em tempo de execução organizadas com proteção no `.gitignore`.
 

@@ -10,11 +10,12 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 ### 1. Raiz Compartilhada (Comum a Todos os Projetos)
 - `acaddoc.lsp`: Carregador automático nativo do AutoCAD que registra as subpastas no SupportPath e carrega as rotinas modulares a cada desenho aberto.
 - `aux_cad_toolbar.lsp` & `aux_cad_menu.mnu` (`.cuix`, `.mnr`): Barra de ferramentas visual (`AUXCADBAR`) e menu do AutoCAD com atalhos de 1 clique para todos os módulos.
-- `modelos/`: Templates e modelos de planilhas e documentos (`checklist_modelo.xlsx`, etc.).
-- `tests/`: Suíte completa de 38 testes unitários cobrindo todos os módulos.
-- `pytest.ini`: Configuração com `pythonpath = . cqt ambiental orcamento` para execução imediata da suíte de testes.
+- `modelos/`: Templates e modelos de planilhas e documentos (`checklist_modelo.xlsx`, `cpfc_modelo.xlsx`, etc.).
+- `tests/`: Suíte completa de 74 testes unitários cobrindo todos os módulos (100% passing).
+- `pytest.ini`: Configuração com `pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos cpfc`.
 - `Abrir_CQT.bat`: Atalho na raiz para abrir a interface CQT com 2 cliques.
 - `Abrir_Orcamento.bat`: Atalho na raiz para abrir a interface de Orçamento com 2 cliques.
+- `Abrir_CPFC.bat`: Atalho na raiz para abrir a interface de CPFC (REN 1.059) com 2 cliques.
 - `clean.bat`: Utilitário de limpeza de arquivos temporários do Windows.
 - `CAC.md` & `RAG/MEMORY.md`: Diretrizes arquiteturais e histórico da base de conhecimento.
 
@@ -118,12 +119,32 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
     - Exibe o comprimento no prompt `[Vão medido no CAD: X.X m]`.
     - Aceita entrada manual pura em daN (ex: `350`, `150d`), código de cabo MT/BT ou expressão colinear MT+BT (`1/0 + 150`).
 
-### 9. `softwares/` (Instaladores e Aplicações Externas)
+### 9. `cpfc/` (Projeto Participação Financeira do Consumidor - REN 1.059 ANEEL)
+- `cpfc_core.py` (102 linhas): Motor de regras de negócio e cálculo analítico da REN 1.059 ANEEL (Válido até 10/03/2027 - Versão 03):
+  - Mapeamento oficial dos 13 subgrupos tarifários (`B1`, `B2rur`, `B2irrig`, `B3`, `B4a`, `B4b`, `A4`, `A3a`, `A3`, `A2`, `AS`, `BT1 Geração`, `BT2 Geração`).
+  - Fatores $K_{carga}$ e $K_{geração}$ oficiais tabelados.
+  - Cálculo do Encargo de Responsabilidade da Distribuidora ($\text{ERD}$).
+  - Proporcionalização do Custo da Obra ($\text{COP} = \text{Custo Total} \times \text{Fator Proporcionalização}$).
+  - Cálculo da Participação Financeira ($\text{PF} = \max(0, \text{COP} - \text{ERD})$) e detecção de isenção.
+- `cpfc_excel.py` (43 linhas): Camada de persistência em planilha oficial via `openpyxl`:
+  - Preenchimento atômico dos dados cadastrais (`C11` a `C19`), orçamento (`C24`, `F30`, `F31`), demandas (`C41`, `C43`, `G66`, `G80`).
+  - Preservação integral de fórmulas nativas (`F32`, `G70`, `G72`, `G74`, `G76`, `G82`, `G84`, `G86`, `G88`, `G93`), formatações e imagens de cabeçalho.
+- `cpfc_gui.py` (270 linhas): Interface gráfica moderna em Tkinter 100% em pt-BR (#1B365D):
+  - Cards visuais organizados para Dados Cadastrais, Orçamento da Obra e Demandas Elétricas.
+  - Painel de **Live Preview** em tempo real com KPIs (ERD, Fator Proporc., COP e Banner com destaque de PF ou Isenção).
+  - Diálogo de salvamento nativo do Windows (`Salvar Como`) sugerindo `PE_{PROJETO}_CPFC_REN1.059.xlsx`.
+  - Diálogo de conclusão com ações de 1 clique para "Abrir no Excel" ou "Abrir Pasta".
+- `cpfc_manager.py` (36 linhas): Orquestrador CLI/GUI com suporte a argumentos de pasta/projeto e JSON de intercâmbio.
+- `cpfc_cad_launcher.lsp` (85 linhas): Comandos do AutoCAD **`CPFC`** / **`CPFCUI`** (abertura imediata) e **`CPFCCAD`** (com extração de projeto e pasta do DWG).
+- `modelos/cpfc_modelo.xlsx`: Template base oficial mantido na pasta de modelos.
+- `Abrir_CPFC.bat`: Atalho executável de 2 cliques na raiz e em `cpfc/`.
+
+### 10. `softwares/` (Instaladores e Aplicações Externas)
 - `sisRUA-Installer-1.1.0-Optimized.exe` & `sisRUA-Installer-1.1.0.zip`
 - `ArkanceSystems_CADStudio_Job-Time.msi`
 - `sisrua2/` & `Lampa/`
 
-### 10. `documentos/` (Pranchas, Referências e Notas)
+### 11. `documentos/` (Pranchas, Referências e Notas)
 - `PRANCHA LIGHT.dwg` e `PRANCHA LIGHT.bak`: Templates de prancha oficial.
 - `PLAN_MEDIÇÃO_ELETTRICA_PROJETOS_BASE(1).xlsx` & `Árvore de Dispositivos.xlsx`: Planilhas de medição e dispositivos.
 - `anotações-2.one`: Caderno técnico de anotações.
@@ -131,8 +152,9 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
 
 ## Validação e Qualidade
-- Suíte completa com **64 testes unitários passando 100%** (`python -m pytest --cov`):
+- Suíte completa com **74 testes unitários passando 100%** (`python -m pytest --cov`):
   - `orcamento\orcamento_excel.py`: 99%
+  - `cpfc\cpfc_core.py`: 98%
   - `ambiental\postes_detalhador.py`: 98%
   - `dados_tecnicos\tabelas_referencia.py`: 94%
   - `topografia\kmz_pontos_importer.py`: 93%
@@ -141,12 +163,15 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `cqt\cqt_quadros_generator.py`: 90%
   - `orcamento\orcamento_core.py`: 89%
   - `ambiental\croqui_ambiental_generator.py`: 88%
+  - `cpfc\cpfc_excel.py`: 88%
   - `ambiental\cad_to_kmz_exporter.py`: 86%
   - `cqt\cqt_excel_io.py`: 85%
+  - `cpfc\cpfc_gui.py`: 83%
+  - `cpfc\cpfc_manager.py`: 83%
   - `mapa_postes\mapa_servidor.py`: 83%
   - `orcamento\orcamento_manager.py`: 81%
-- Cobertura global do projeto: **86%** (todos os módulos de lógica de negócio acima de 80%).
-- Sintaxe AutoLISP (.lsp): 24 arquivos verificados com 100% de parênteses balanceados.
+- Cobertura global do projeto: **86%** (todos os módulos de lógica de negócio e o novo módulo CPFC acima de 80%).
+- Sintaxe AutoLISP (.lsp): 25 arquivos verificados com 100% de parênteses balanceados.
 - Scripts Batch (.bat): Limpeza modernizada e atalhos testados.
 - Detecção dinâmica de caminho raiz em `acaddoc.lsp` com fallback resiliente.
 

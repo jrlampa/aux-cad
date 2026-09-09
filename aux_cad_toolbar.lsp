@@ -35,6 +35,9 @@
           ;; 2. Botão ORCUI (Interface Orçamento)
           (vla-AddToolbarItem tb (vla-get-Count tb) "📋 Tabela de Materiais (ORCUI)" "Abre a interface de orçamento e preços" "^C^CORCUI ")
 
+          ;; 2.1 Botão CPFC (Participação Financeira REN 1.059)
+          (vla-AddToolbarItem tb (vla-get-Count tb) "💰 CPFC (Part. Financeira)" "Abre o cálculo de Participação Financeira do Consumidor" "^C^CCPFCCAD ")
+
           ;; 3. Botão CQT
           (vla-AddToolbarItem tb (vla-get-Count tb) "⚡ CQT (Queda de Tensão)" "Abre a Interface CQT multi-cenários" "^C^CCQT ")
           
