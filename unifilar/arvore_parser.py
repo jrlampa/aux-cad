@@ -44,7 +44,7 @@ class ResultadoProtecao:
             f"SE.: {self.subestacao}",
             f"ALIM.: {self.alimentador}",
             "FONTE DE ALIMENTAÇÃO",
-            f"DISPOSITIVO DE PROTEÇÃO:{self.protecao_rotulo}",
+            f"DISPOSITIVO DE PROTEÇÃO: {self.protecao_rotulo}",
             f"Clientes Grupo A: {self.clientes_a} Clientes Grupo B: {self.clientes_b} - KVA: {kva_str}",
         ]
 
@@ -53,19 +53,47 @@ class ResultadoProtecao:
 TIPOS_PROTECAO_VALIDOS = (
     "chave fusivel",
     "chave fusível",
+    "fusivel",
+    "fusível",
     "religador",
     "saida do alimentador",
     "saída do alimentador",
+    "disjuntor",
+)
+
+# Dispositivos que expressamente NÃO são de proteção (seccionamento/manobra ou cargas)
+TIPOS_NAO_PROTECAO = (
+    "chave faca",
+    "chave na",
+    "ctl",
+    "centro de distribuic",
+    "centro de distribui",
+    "transformador",
 )
 
 
 def normalizar_texto(texto: str) -> str:
-    """Normaliza texto removendo acentos e caracteres de interrogação de encoding."""
+    """Normaliza texto removendo acentos e caracteres de interrogação/substituição de encoding."""
     if not texto:
         return ""
     t = texto.strip()
+    t = t.replace("\ufffd", "")
     t = t.replace("Distribuic?o", "Distribuicao").replace("distribuic?o", "distribuicao")
+    t = t.replace("Distribui?o", "Distribuicao").replace("distribui?o", "distribuicao")
+    t = t.replace("Sa?da", "Saida").replace("sa?da", "saida")
+    t = t.replace("Fus?vel", "Fusivel").replace("fus?vel", "fusivel")
+    t = t.replace("Operac?o", "Operacao").replace("operac?o", "operacao")
     return t
+
+
+def eh_dispositivo_protecao(tipo: str) -> bool:
+    """Verifica se o tipo corresponde a Chave Fusível, Religador, Disjuntor ou Saída do Alimentador."""
+    if not tipo:
+        return False
+    t = normalizar_texto(tipo).lower()
+    if any(np in t for np in TIPOS_NAO_PROTECAO):
+        return False
+    return any(p in t for p in TIPOS_PROTECAO_VALIDOS)
 
 
 def extrair_se_e_alimentador(cod_alim: str) -> Tuple[str, str]:
@@ -73,27 +101,29 @@ def extrair_se_e_alimentador(cod_alim: str) -> Tuple[str, str]:
     Separa o código do alimentador em Subestação (letras) e Alimentador (dígitos).
     Exemplos:
         'RBN02' -> ('RBN', '02')
+        'ZSL10' -> ('ZSL', '10')
         'ABD01' -> ('ABD', '01')
         'VR04'  -> ('VR', '04')
         'SJR12' -> ('SJR', '12')
     """
     alim_limpo = cod_alim.strip().upper()
-    # Casamento de letras iniciais seguidas de dígitos/sufixo
+    # Se contiver ' - ', pega a parte final (ex: 'Saida do Alimentador - ZSL10' -> 'ZSL10')
+    if " - " in alim_limpo:
+        alim_limpo = alim_limpo.split(" - ")[-1].strip()
     m = re.match(r"^([A-Z]+)(\d+.*)$", alim_limpo)
     if m:
         return m.group(1), m.group(2)
-    # Se não separar de forma padrão por regex, divide ao meio ou retorna o próprio
     return alim_limpo, alim_limpo
 
 
 def parse_no_string(no_str: str) -> DispositivoNo:
     """
-    Faz o parse de uma string de nó individual da árvore.
-    Exemplos:
-        'Chave Fusivel - SG59356 Clientes Grupo A: 0 Clientes Grupo B: 76 - KVA: 150'
-        'Saida do Alimentador - RBN02'
-        'Chave Faca - SG59034'
-        '- SG37240'
+    Faz o parse inteligente de uma string de nó individual da árvore.
+    Suporta formatos:
+        - 3 partes: 'ZSL10 - Saida do Alimentador - ZSL10 Clientes Grupo A: 13 Clientes Grupo B: 2752 - KVA: 12434'
+        - 2 partes: 'Saida do Alimentador - ZSL10'
+        - 2 partes: 'Chave Fusivel - SG59356 Clientes Grupo A: 0 Clientes Grupo B: 76 - KVA: 150'
+        - Simples: 'Chave Faca - SG59034' ou '- SG37240'
     """
     texto = normalizar_texto(no_str)
 
@@ -117,22 +147,49 @@ def parse_no_string(no_str: str) -> DispositivoNo:
         except ValueError:
             kva = 0.0
 
-    # Limpa dados estatísticos para obter apenas Tipo - Código
+    # Limpa dados estatísticos para obter apenas as partes estruturais (Tipo / Código)
     trecho_principal = re.split(r"Clientes\s+Grupo", texto, flags=re.IGNORECASE)[0].strip()
+    partes = [p.strip() for p in re.split(r"\s+-\s+|\s*-\s*", trecho_principal) if p.strip()]
 
     tipo = ""
     codigo = ""
-    if " - " in trecho_principal:
-        partes = trecho_principal.split(" - ", 1)
-        tipo = partes[0].strip()
-        codigo = partes[1].strip()
-    elif "-" in trecho_principal:
-        partes = trecho_principal.split("-", 1)
-        tipo = partes[0].strip()
-        codigo = partes[1].strip()
-    else:
-        tipo = trecho_principal
-        codigo = trecho_principal
+
+    tipos_conhecidos = (
+        "saida do alimentador",
+        "chave fusivel",
+        "chave fusível",
+        "fusivel",
+        "fusível",
+        "religador",
+        "chave faca",
+        "chave na",
+        "ctl",
+        "centro de distribuic",
+        "disjuntor",
+        "chave de operac",
+    )
+
+    if len(partes) >= 3:
+        # Formato Concessionária: ['ZSL10', 'Saida do Alimentador', 'ZSL10']
+        if any(tk in normalizar_texto(partes[1]).lower() for tk in tipos_conhecidos):
+            tipo = partes[1]
+            codigo = partes[2]
+        else:
+            tipo = partes[0]
+            codigo = partes[-1]
+    elif len(partes) == 2:
+        if any(tk in normalizar_texto(partes[0]).lower() for tk in tipos_conhecidos):
+            tipo = partes[0]
+            codigo = partes[1]
+        elif any(tk in normalizar_texto(partes[1]).lower() for tk in tipos_conhecidos):
+            tipo = partes[1]
+            codigo = partes[0]
+        else:
+            tipo = partes[0]
+            codigo = partes[1]
+    elif len(partes) == 1:
+        tipo = partes[0]
+        codigo = partes[0]
 
     return DispositivoNo(
         tipo=tipo,
@@ -161,58 +218,46 @@ def separar_caminho_em_nos(caminho_str: str) -> List[DispositivoNo]:
     else:
         tokens = [caminho_str.strip()]
 
-    return [parse_no_string(tok) for tok in tokens if tok]
-
-
-def eh_dispositivo_protecao(tipo: str) -> bool:
-    """Verifica se o tipo corresponde a Chave Fusível, Religador ou Saída do Alimentador."""
-    t = tipo.strip().lower()
-    return any(p in t for p in TIPOS_PROTECAO_VALIDOS)
+    return [parse_no_string(t) for t in tokens]
 
 
 def localizar_protecao_a_montante(
     caminho_str: str,
     ponto_alvo: str,
+    cod_alimentador_fallback: str = "",
     clientes_a_override: Optional[int] = None,
     clientes_b_override: Optional[int] = None,
     kva_override: Optional[float] = None,
 ) -> ResultadoProtecao:
     """
-    Localiza a primeira proteção a montante do ponto alvo no caminho elétrico.
-
-    Varre da direita para a esquerda (a montante do alvo).
-    O primeiro nó que corresponder a Chave Fusível, Religador ou Saída do Alimentador
-    é eleito como dispositivo de proteção.
+    Analisa a árvore/caminho elétrico do alimentador até o ponto alvo e identifica
+    o primeiro dispositivo de proteção imediatamente a montante (Chave Fusível, Religador,
+    Disjuntor ou a própria Saída do Alimentador).
     """
-    ponto_alvo_limpo = ponto_alvo.strip().upper()
     nos = separar_caminho_em_nos(caminho_str)
+    ponto_alvo_limpo = ponto_alvo.strip().upper()
+
+    # Identifica o nó raiz (Saída do Alimentador) para extrair SE e Alimentador
+    no_raiz = nos[0] if nos else None
+    cod_alim_detectado = cod_alimentador_fallback
+    if no_raiz and ("saida" in no_raiz.tipo.lower() or "saída" in no_raiz.tipo.lower()):
+        cod_alim_detectado = no_raiz.codigo or cod_alim_detectado
+    elif no_raiz and no_raiz.codigo and not cod_alim_detectado:
+        cod_alim_detectado = no_raiz.codigo
+
+    subestacao, alimentador = extrair_se_e_alimentador(cod_alim_detectado)
 
     if not nos:
         return ResultadoProtecao(
             sucesso=False,
             ponto_alvo=ponto_alvo,
-            subestacao="",
-            alimentador="",
+            subestacao=subestacao,
+            alimentador=alimentador,
             protecao_tipo="",
             protecao_codigo="",
             protecao_rotulo="",
             mensagem="Caminho elétrico vazio ou inválido.",
         )
-
-    # Identifica a Saída do Alimentador (geralmente o nó 0 ou que contém 'Saida do Alimentador')
-    subestacao = ""
-    alimentador = ""
-    for no in nos:
-        if "saida do alimentador" in no.tipo.lower() or "saída do alimentador" in no.tipo.lower():
-            se, alim = extrair_se_e_alimentador(no.codigo)
-            subestacao = se
-            alimentador = alim
-            break
-
-    # Se não achou nó explícito de saída, tenta extrair do primeiro nó
-    if not subestacao and nos:
-        if any(char.isdigit() for char in nos[0].codigo):
-            subestacao, alimentador = extrair_se_e_alimentador(nos[0].codigo)
 
     # Localiza o índice do nó alvo
     idx_alvo = -1
@@ -225,15 +270,21 @@ def localizar_protecao_a_montante(
     if idx_alvo == -1:
         idx_alvo = len(nos) - 1
 
-    # Varre a montante (da posição anterior ao alvo até o início)
     no_protecao: Optional[DispositivoNo] = None
-    for i in range(idx_alvo - 1, -1, -1):
-        candidato = nos[i]
-        if eh_dispositivo_protecao(candidato.tipo):
-            no_protecao = candidato
-            break
 
-    # Se não encontrou nenhuma proteção intermediária, a proteção é a própria Saída do Alimentador
+    # Se o próprio nó alvo já for um dispositivo de proteção (ex: Chave Fusível ou Religador)
+    if idx_alvo >= 0 and eh_dispositivo_protecao(nos[idx_alvo].tipo) and not ("saida do alimentador" in nos[idx_alvo].tipo.lower()):
+        no_protecao = nos[idx_alvo]
+    else:
+        # Varre a montante (da posição anterior ao alvo até o início)
+        for i in range(idx_alvo - 1, -1, -1):
+            candidato = nos[i]
+            if eh_dispositivo_protecao(candidato.tipo):
+                no_protecao = candidato
+                break
+
+    # Se não encontrou nenhuma proteção intermediária (ex: apenas chaves facas),
+    # a proteção é a própria Saída do Alimentador
     if not no_protecao and nos:
         for candidato in nos:
             if "saida do alimentador" in candidato.tipo.lower() or "saída do alimentador" in candidato.tipo.lower():
@@ -257,7 +308,13 @@ def localizar_protecao_a_montante(
     cli_b = clientes_b_override if clientes_b_override is not None else no_protecao.clientes_b
     kva_val = kva_override if kva_override is not None else no_protecao.kva
 
-    rotulo = f"{no_protecao.tipo} - {no_protecao.codigo}" if no_protecao.tipo and no_protecao.codigo else no_protecao.texto_original
+    # Formatação do rótulo oficial para Diagrama Unifilar da Concessionária
+    if "saida do alimentador" in no_protecao.tipo.lower() or "saída do alimentador" in no_protecao.tipo.lower():
+        rotulo = f"{no_protecao.codigo} - Saida do Alimentador - {no_protecao.codigo}"
+    elif no_protecao.tipo and no_protecao.codigo:
+        rotulo = f"{no_protecao.tipo} - {no_protecao.codigo}"
+    else:
+        rotulo = no_protecao.texto_original
 
     return ResultadoProtecao(
         sucesso=True,

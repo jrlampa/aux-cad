@@ -160,14 +160,25 @@
     )
   )
 
-  ;; Solicita Ponto Elétrico
-  (initget "Selecionar S")
-  (setq ponto (getstring "\nInforme o Ponto Elétrico ou [S]elecionar no DWG <SG40995>: "))
-  (if (or (= ponto "") (= ponto nil))
-    (setq ponto "SG40995")
+  ;; Solicita Ponto Elétrico ou linha de Resumo da Árvore
+  (princ "\nInforme o Ponto Elétrico (ex: N760355), [S]elecionar no DWG")
+  (setq ponto-in (getstring T "\nou cole o Resumo da Árvore SGT <N760355>: "))
+  (if (or (= ponto-in "") (= ponto-in nil))
+    (setq ponto-in "N760355")
+  )
+  (setq ponto-in (vl-string-trim " \t\r\n" ponto-in))
+
+  ;; Verifica se foi colada uma linha de resumo do SGT/GOMNET
+  (setq is-resumo nil)
+  (if (or (vl-string-search "Clientes Grupo" ponto-in)
+          (vl-string-search "clientes grupo" (strcase ponto-in))
+          (vl-string-search "Saida do Alimentador" ponto-in)
+          (vl-string-search ">" ponto-in))
+    (setq is-resumo T)
   )
 
-  (if (or (= (strcase ponto) "S") (= (strcase ponto) "SELECIONAR"))
+  (setq ponto ponto-in)
+  (if (and (not is-resumo) (or (= (strcase ponto-in) "S") (= (strcase ponto-in) "SELECIONAR")))
     (progn
       (setq sel (entsel "\nSelecione o texto ou bloco do Ponto Elétrico no desenho: "))
       (if sel
@@ -179,12 +190,12 @@
               (princ (strcat "\n[UNIFILAR] Texto selecionado: " ponto))
             )
             (progn
-              (princ "\n[UNIFILAR] Nenhum texto extraído. Usando SG40995.")
-              (setq ponto "SG40995")
+              (princ "\n[UNIFILAR] Nenhum texto extraído. Usando N760355.")
+              (setq ponto "N760355")
             )
           )
         )
-        (setq ponto "SG40995")
+        (setq ponto "N760355")
       )
     )
   )
@@ -192,9 +203,19 @@
   ;; Prepara arquivo temporário de intercâmbio JSON e log de diagnóstico
   (setq tmp-json (vl-filename-mktemp "unifilar_" nil ".json"))
   (setq tmp-log (vl-filename-mktemp "unifilar_log_" nil ".txt"))
-  (setq cmd (strcat "python \"" py-script "\" --ponto \"" ponto "\" --out \"" tmp-json "\" > \"" tmp-log "\" 2>&1"))
 
-  (princ (strcat "\n[UNIFILAR] Consultando proteção a montante para '" ponto "'..."))
+  (if is-resumo
+    (progn
+      ;; Escapa aspas duplas caso existam
+      (setq ponto-clean (vl-string-subst "" "\"" ponto-in))
+      (setq cmd (strcat "python \"" py-script "\" --resumo \"" ponto-clean "\" --ponto \"N760355\" --out \"" tmp-json "\" > \"" tmp-log "\" 2>&1"))
+      (princ "\n[UNIFILAR] Processando resumo colado da Árvore SGT...")
+    )
+    (progn
+      (setq cmd (strcat "python \"" py-script "\" --ponto \"" ponto "\" --out \"" tmp-json "\" > \"" tmp-log "\" 2>&1"))
+      (princ (strcat "\n[UNIFILAR] Consultando proteção a montante para '" ponto "'..."))
+    )
+  )
 
   ;; Execução síncrona protegida via WScript.Shell (sem piscar tela preta e sem vl-sleep)
   (setq wsh (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
@@ -272,6 +293,20 @@
   (princ (strcat "\n • Cargas/Potência: Clientes Grupo A: " cli-a " Clientes Grupo B: " cli-b " - KVA: " kva))
   (princ "\n--------------------------------------------------------------")
 
+  ;; Pergunta se deseja ajustar Clientes / KVA antes de desenhar
+  (initget "Sim Nao S N")
+  (setq aj (getkword "\nDeseja alterar Clientes Grupo A / B ou KVA? [S/N] <N>: "))
+  (if (or (= aj "S") (= aj "Sim"))
+    (progn
+      (setq novo-cli-a (getstring (strcat "\nClientes Grupo A <" cli-a ">: ")))
+      (if (and novo-cli-a (/= novo-cli-a "")) (setq cli-a novo-cli-a))
+      (setq novo-cli-b (getstring (strcat "\nClientes Grupo B <" cli-b ">: ")))
+      (if (and novo-cli-b (/= novo-cli-b "")) (setq cli-b novo-cli-b))
+      (setq novo-kva (getstring (strcat "\nPotência KVA <" kva ">: ")))
+      (if (and novo-kva (/= novo-kva "")) (setq kva novo-kva))
+    )
+  )
+
   ;; Pergunta se deseja Inserir Novo ou Atualizar Existente
   (initget "Inserir Atualizar I A")
   (setq opc (getkword "\nDeseja [I]nserir novo diagrama ou [A]tualizar textos no DWG? <I>: "))
@@ -308,7 +343,7 @@
           (unifilar-draw-text (list x-al y-cur 0.0) "FONTE DE ALIMENTAÇÃO" h-txt "UNIFILAR" 7 "RIGHT")
           (setq y-cur (- y-cur sp))
 
-          (unifilar-draw-text (list x-al y-cur 0.0) (strcat "DISPOSITIVO DE PROTEÇÃO:" prot-rot) h-txt "UNIFILAR" 7 "RIGHT")
+          (unifilar-draw-text (list x-al y-cur 0.0) (strcat "DISPOSITIVO DE PROTEÇÃO: " prot-rot) h-txt "UNIFILAR" 7 "RIGHT")
           (setq y-cur (- y-cur sp))
 
           (unifilar-draw-text (list x-al y-cur 0.0) (strcat "Clientes Grupo A: " cli-a " Clientes Grupo B: " cli-b " - KVA: " kva) h-txt "UNIFILAR" 7 "RIGHT")
@@ -345,7 +380,7 @@
               )
               ;; Substituição de DISPOSITIVO DE PROTEÇÃO...
               ((vl-string-search "DISPOSITIVO DE PROTE" (strcase txt-i))
-               (unifilar-update-ent-text ent-i (strcat "DISPOSITIVO DE PROTEÇÃO:" prot-rot))
+               (unifilar-update-ent-text ent-i (strcat "DISPOSITIVO DE PROTEÇÃO: " prot-rot))
                (setq cnt-upd (1+ cnt-upd))
               )
               ;; Substituição de Clientes Grupo A...

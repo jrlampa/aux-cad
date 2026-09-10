@@ -201,25 +201,27 @@ aux cad/
 - `Abrir_CPFC.bat`: Atalho executável na raiz e em `cpfc/`.
 
 ### 9. Módulo Diagrama Unifilar & Árvore de Dispositivos (`unifilar/`)
-- `arvore_parser.py` (274 linhas):
-  - Parser analítico de caminhos elétricos (` > ` ou `|`) com responsabilidade única de localizar a **primeira proteção a montante** a partir de um Ponto Elétrico alvo (ex: `SG40995` $\rightarrow$ `Chave Fusivel - SG59356`).
-  - Reconhece os 3 tipos elegíveis de proteção: `Chave Fusivel`, `Religador` ou `Saida do Alimentador`.
-  - Extração de Subestação e Alimentador a partir da saída (`RBN02` $\rightarrow$ `SE.: RBN`, `ALIM.: 02`).
-  - Extração e enriquecimento de `Clientes Grupo A`, `Clientes Grupo B` e potência `KVA`.
-  - Formatação padronizada das linhas do Diagrama Unifilar para o AutoCAD.
+- `arvore_parser.py` (331 linhas):
+  - Parser analítico de caminhos elétricos (` > ` ou `|`) com responsabilidade única de localizar a **primeira proteção a montante** a partir de um Ponto Elétrico alvo (ex: `SG40995` $\rightarrow$ `Chave Fusivel - SG59356`, `N760355` $\rightarrow$ `ZSL10 - Saida do Alimentador - ZSL10`).
+  - Suporte completo a strings de nós de 3 partes no padrão oficial da concessionária (`[COD_ALIM] - Saida do Alimentador - [COD_ALIM] Clientes Grupo A: X Clientes Grupo B: Y - KVA: Z`).
+  - Reconhece os tipos elegíveis de proteção: `Chave Fusivel`, `Religador`, `Disjuntor` ou a própria `Saida do Alimentador` quando não há proteção intermediária (excluindo expressamente chaves faca, chaves NA, CTLs e transformadores/CDs).
+  - Extração de Subestação e Alimentador a partir da saída (`ZSL10` $\rightarrow$ `SE.: ZSL`, `ALIM.: 10`).
+  - Extração e enriquecimento em tempo real de `Clientes Grupo A`, `Clientes Grupo B` e potência `KVA`.
+  - Formatação padronizada das linhas do Diagrama Unifilar para o AutoCAD com espaçamento estrito `DISPOSITIVO DE PROTEÇÃO: <rotulo>`.
 - `arvore_database.py` (227 linhas):
   - Camada de indexação e persistência local em SQLite (`unifilar/arvore_cache.sqlite3`).
   - Povoa a base a partir da planilha oficial `documentos/Árvore de Dispositivos.xlsx` com busca indexada em menos de 10ms.
 - `arvore_client.py` (162 linhas):
-  - Cliente com suporte a requisições web à intranet (`URL_ARVORE_DISPOSITIVOS`), autenticação NTLM com credenciais do `.env` e fallback automático e transparente para a base local.
+  - Cliente com suporte a requisições web à intranet (`URL_ARVORE_DISPOSITIVOS`), autenticação NTLM com credenciais do `.env` e fallback automático e transparente para a base local ou modo resumo manual (`consultar_resumo_manual`).
 - `unifilar_manager.py` (108 linhas):
   - Orquestrador CLI e ponte de intercâmbio JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`).
-- `unifilar_cad.lsp` (376 linhas):
+- `unifilar_cad.lsp` (411 linhas):
   - Comandos do AutoCAD **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**).
-  - Suporta digitação do ponto elétrico ou seleção direta de textos/blocos no DWG (`entsel`).
+  - Suporta digitação do ponto elétrico, seleção direta no DWG (`entsel`) ou **colagem direta da linha de resumo copiada do SGT/GOMNET** no prompt (`(getstring T ...)` com detecção automática de `--resumo`).
+  - Prompt opcional de confirmação/ajuste rápido para Clientes A, Clientes B e KVA antes da inserção gráfica.
   - Dois modos de desenho:
     - **Inserir Novo**: Desenha o título verde `DIAGRAMA  UNIFILAR` sublinhado com linha e textos técnicos alinhados à direita.
-    - **Atualizar Existente**: Seleciona textos existentes no DWG e substitui placeholders (`SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO...`, `Clientes Grupo...`) preservando a diagramação original.
+    - **Atualizar Existente**: Seleciona textos existentes no DWG e substitui placeholders (`SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO: ...`, `Clientes Grupo...`) preservando a diagramação original.
 
 ### 10. Carregamento Universal & Auditoria de Integridade (`acaddoc.lsp`)
 O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestração do AUX CAD:
@@ -232,8 +234,8 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
 ### 11. Validação, Debug Completo e Testes
 - **Auditoria de Sintaxe AutoLISP**: 100% dos 28 arquivos `.lsp` do projeto validados e com balanceamento de parênteses e strings verificado (0 erros).
 - **Auditoria de Módulos Python**: 100% dos 52 arquivos `.py` compilados e validados contra regras de Clean Code e limites de linhas (<750 linhas).
-- **Suíte de Testes**: **108 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
-- **Cobertura de Código**: Cobertura crítica preservada acima de 80% a 99% em todos os módulos principais.
+- **Suíte de Testes**: **109 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Cobertura de Código**: Cobertura crítica de 89% no módulo `unifilar` e acima de 80% a 99% em todos os módulos principais.
 
 ### 12. `mapa_cad_paleta/` (Paleta Cartográfica OSM C# .NET para AutoCAD 2018+)
 - **Objetivo**: Alternativa direta integrada ao AutoCAD ("menos 1 tela"), permitindo visualizar mapas Leaflet (OSM, Satélite ESRI e Google Híbrido), buscar posições e inserir postes com blocos e textos MText diretamente no ModelSpace do desenho ativo sem necessidade de navegador externo ou KMZ intermediário.

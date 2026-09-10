@@ -172,14 +172,15 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Abrir_CPFC.bat`: Atalho executável de 2 cliques na raiz e em `cpfc/`.
 
 ### 10. `unifilar/` (Projeto Diagrama Unifilar & Árvore de Dispositivos)
-- `arvore_parser.py` (274 linhas): Motor de interpretação de caminhos elétricos (` > ` e `|`), localização da **primeira proteção a montante** (Chave Fusível, Religador ou Saída do Alimentador), separação de Subestação e Alimentador (`RBN02` $\rightarrow$ `SE.: RBN`, `ALIM.: 02`), quantificação de Clientes A/B e potência kVA, e geração das linhas formatadas para o CAD.
+- `arvore_parser.py` (331 linhas): Motor de interpretação de caminhos elétricos (` > ` e `|`), localização da **primeira proteção a montante** (Chave Fusível, Religador, Disjuntor ou a própria Saída do Alimentador no padrão `{cod} - Saida do Alimentador - {cod}`), suporte oficial a strings de nós de 3 partes, separação de Subestação e Alimentador (`ZSL10` $\rightarrow$ `SE.: ZSL`, `ALIM.: 10`), quantificação de Clientes A/B e potência kVA, e geração das linhas formatadas para o CAD com espaçamento rigoroso `DISPOSITIVO DE PROTEÇÃO: <rotulo>`.
 - `arvore_database.py` (227 linhas): Motor de persistência e indexação local em SQLite (`unifilar/arvore_cache.sqlite3`) a partir da planilha `documentos/Árvore de Dispositivos.xlsx`, com busca indexada ultrarrápida (<10ms).
-- `arvore_client.py` (162 linhas): Cliente com suporte a consultas online à intranet (`URL_ARVORE_DISPOSITIVOS`), autenticação corporativa NTLM com credenciais do `.env` e fallback automático e resiliente para o banco local.
+- `arvore_client.py` (162 linhas): Cliente com suporte a consultas online à intranet (`URL_ARVORE_DISPOSITIVOS`), autenticação corporativa NTLM com credenciais do `.env` e fallback automático e resiliente para o banco local ou modo resumo manual (`consultar_resumo_manual`).
 - `unifilar_manager.py` (108 linhas): Orquestrador de linha de comando e ponte de dados JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`).
-- `unifilar_cad.lsp` (376 linhas): Rotina AutoLISP com comandos **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**):
-  - Permite digitar o Ponto Elétrico ou selecionar no DWG (`entsel`).
+- `unifilar_cad.lsp` (411 linhas): Rotina AutoLISP com comandos **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**):
+  - Permite digitar o Ponto Elétrico, selecionar no DWG (`entsel`) ou **colar diretamente o resumo copiado do SGT/GOMNET** no prompt (`(getstring T ...)` com reconhecimento automático de `--resumo`).
+  - Suporte a confirmação e ajuste rápido interativo de Clientes A/B e KVA antes da inserção gráfica.
   - **Modo Inserir**: Desenha o título verde `DIAGRAMA  UNIFILAR` sublinhado com linha e textos técnicos alinhados à direita.
-  - **Modo Atualizar**: Seleciona textos existentes no DWG (onde há `SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO`, `Clientes Grupo...`) e substitui os dados reais mantendo a prancha intacta.
+  - **Modo Atualizar**: Seleciona textos existentes no DWG (onde há `SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO: ...`, `Clientes Grupo...`) e substitui os dados reais mantendo a prancha intacta.
 
 ### 11. `softwares/` (Instaladores e Aplicações Externas)
 - `sisRUA-Installer-1.1.0-Optimized.exe` & `sisRUA-Installer-1.1.0.zip`
@@ -187,7 +188,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `sisrua2/` & `Lampa/`
 
 ### 12. Validação, Debug Completo e Testes
-- **Suíte de Testes**: **108 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Suíte de Testes**: **109 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
 - **Cobertura de Código Crítica**:
   - `cpfc\cpfc_core.py`: 98%
   - `cpfc\cpfc_notas.py`: 95%

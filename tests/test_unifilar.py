@@ -122,8 +122,31 @@ def test_localizar_protecao_caso_real_chave_fusivel():
     assert linhas[1] == "SE.: RBN"
     assert linhas[2] == "ALIM.: 02"
     assert linhas[3] == "FONTE DE ALIMENTAÇÃO"
-    assert linhas[4] == "DISPOSITIVO DE PROTEÇÃO:Chave Fusivel - SG59356"
+    assert linhas[4] == "DISPOSITIVO DE PROTEÇÃO: Chave Fusivel - SG59356"
     assert linhas[5] == "Clientes Grupo A: 0 Clientes Grupo B: 76 - KVA: 150"
+
+
+def test_localizar_protecao_caso_real_n760355_resumo():
+    """Valida o caso exato informado pelo usuário para N760355 e o alimentador ZSL10."""
+    resumo_str = "ZSL10 - Saida do Alimentador - ZSL10 Clientes Grupo A: 13 Clientes Grupo B: 2752 - KVA: 12434"
+    client = ArvoreClient()
+    res = client.consultar_resumo_manual(resumo_str, "N760355")
+
+    assert res.sucesso is True
+    assert res.ponto_alvo == "N760355"
+    assert res.subestacao == "ZSL"
+    assert res.alimentador == "10"
+    assert res.protecao_codigo == "ZSL10"
+    assert res.protecao_rotulo == "ZSL10 - Saida do Alimentador - ZSL10"
+    assert res.clientes_a == 13
+    assert res.clientes_b == 2752
+    assert res.kva == 12434.0
+
+    linhas = res.gerar_linhas_diagrama()
+    assert "SE.: ZSL" in linhas
+    assert "ALIM.: 10" in linhas
+    assert "DISPOSITIVO DE PROTEÇÃO: ZSL10 - Saida do Alimentador - ZSL10" in linhas
+    assert "Clientes Grupo A: 13 Clientes Grupo B: 2752 - KVA: 12434" in linhas
 
 
 def test_localizar_protecao_caso_religador():
