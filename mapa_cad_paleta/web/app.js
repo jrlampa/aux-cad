@@ -267,6 +267,25 @@ function setupForms() {
 
     // Ação: Sincronizar DWG
     document.getElementById('btnSincDwg').addEventListener('click', sincronizarDwg);
+
+    // Ação: Toggle Sidebar (Painel Lateral)
+    const btnToggle = document.getElementById('btnToggleSidebar');
+    const sidebar = document.getElementById('sidebar');
+    if (btnToggle && sidebar) {
+        btnToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            btnToggle.textContent = isCollapsed ? '📑 Painel ▶' : '📑 Painel ◀';
+            setTimeout(() => {
+                if (AppState.map) AppState.map.invalidateSize();
+            }, 260);
+        });
+    }
+
+    // Redimensionamento de janela recalcula Leaflet
+    window.addEventListener('resize', () => {
+        if (AppState.map) AppState.map.invalidateSize();
+    });
 }
 
 // Monta o payload e envia para o C# (.NET)

@@ -1,16 +1,17 @@
-/* CSS da Paleta Cartográfica OSM do AutoCAD */
+/* CSS da Paleta Cartográfica OSM do AutoCAD - Layout Sidebar */
 :root {
     --primary: #1B365D;
     --primary-dark: #0F1E36;
     --accent: #0284C7;
     --accent-hover: #0369A1;
     --success: #10B981;
+    --success-hover: #059669;
     --bg-main: #F8FAFC;
     --card-bg: #FFFFFF;
     --border: #E2E8F0;
     --text-main: #1E293B;
     --text-muted: #64748B;
-    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 * {
@@ -19,32 +20,60 @@
     padding: 0;
 }
 
-body {
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
     font-family: var(--font-family);
     background-color: var(--bg-main);
     color: var(--text-main);
     font-size: 12px;
     line-height: 1.4;
-    overflow-x: hidden;
 }
 
-.palette-container {
+/* Layout Principal: Mapa à esquerda + Sidebar à direita */
+.layout-wrapper {
+    display: flex;
+    flex-direction: row;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Container do Mapa */
+.map-container {
+    flex: 1;
+    height: 100%;
+    position: relative;
     display: flex;
     flex-direction: column;
-    height: 100vh;
 }
 
-/* Header Compacto */
-.palette-header {
-    background: #FFFFFF;
-    border-bottom: 1px solid var(--border);
-    padding: 6px 10px;
+#map {
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+/* Barra Flutuante de Controles sobre o Mapa */
+.map-floating-bar {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 1000;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(8px);
+    padding: 6px 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    gap: 8px;
     flex-wrap: wrap;
-    gap: 6px;
-    z-index: 1000;
 }
 
 .layer-selector {
@@ -56,7 +85,7 @@ body {
     background: #F1F5F9;
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 3px 8px;
+    padding: 4px 9px;
     font-size: 11px;
     font-weight: 500;
     cursor: pointer;
@@ -73,25 +102,28 @@ body {
     background: var(--primary);
     color: #FFFFFF;
     border-color: var(--primary);
+    font-weight: 600;
 }
 
-.header-actions {
+.map-actions {
     display: flex;
     gap: 4px;
+    align-items: center;
 }
 
 .btn-action-sm {
     border-radius: 4px;
     border: none;
-    padding: 3px 8px;
+    padding: 4px 9px;
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
-    transition: opacity 0.2s;
+    transition: all 0.2s;
 }
 
 .btn-action-sm:hover {
     opacity: 0.9;
+    transform: translateY(-1px);
 }
 
 .btn-cad-read {
@@ -104,20 +136,61 @@ body {
     color: #FFFFFF;
 }
 
-/* Mapa Leaflet */
-.map-view {
-    height: 260px;
-    min-height: 220px;
-    width: 100%;
-    z-index: 10;
-    border-bottom: 1px solid var(--border);
+.btn-sidebar-toggle {
+    background: #1B365D;
+    color: #FFFFFF;
 }
 
-/* Painel de Conteúdo e Formulários */
-.panel-content {
+/* SIDEBAR LATERAL */
+.sidebar {
+    width: 350px;
+    min-width: 310px;
+    max-width: 400px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #FFFFFF;
+    border-left: 1px solid var(--border);
+    box-shadow: -3px 0 12px rgba(0, 0, 0, 0.06);
+    z-index: 1001;
+    transition: transform 0.25s ease, margin-right 0.25s ease;
+}
+
+.sidebar.collapsed {
+    transform: translateX(100%);
+    margin-right: -350px;
+}
+
+/* Header da Sidebar */
+.sidebar-header {
+    background: var(--primary);
+    color: #FFFFFF;
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sidebar-header h3 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+}
+
+.badge-fuso {
+    background: rgba(255, 255, 255, 0.2);
+    color: #FFFFFF;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+/* Conteúdo Rolável da Sidebar */
+.sidebar-scrollable {
     flex: 1;
     overflow-y: auto;
-    padding: 8px 10px;
+    padding: 10px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -128,14 +201,14 @@ body {
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 10px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .section-title {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 700;
     color: var(--primary);
     margin-bottom: 6px;
@@ -143,16 +216,7 @@ body {
     letter-spacing: 0.3px;
 }
 
-.badge-fuso {
-    background: #E0F2FE;
-    color: #0369A1;
-    padding: 1px 6px;
-    border-radius: 10px;
-    font-size: 10px;
-    font-weight: 600;
-}
-
-/* Formulários em Grid */
+/* Grids e Inputs */
 .grid-2-col {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -203,7 +267,7 @@ body {
     display: block;
 }
 
-/* Chips de Seleção */
+/* Chips */
 .chips-container {
     display: flex;
     flex-wrap: wrap;
@@ -256,13 +320,12 @@ body {
     border-color: #0284C7;
 }
 
-/* Botões de Ação */
 .btn-secondary {
     background: #F1F5F9;
     border: 1px solid var(--border);
     border-radius: 4px;
     padding: 5px 8px;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 600;
     cursor: pointer;
     color: var(--text-main);
@@ -274,38 +337,37 @@ body {
     background: #E2E8F0;
 }
 
-.actions-panel {
+/* Rodapé Fixo da Sidebar */
+.sidebar-footer {
+    padding: 8px 10px;
+    background: #F8FAFC;
+    border-top: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin-top: 4px;
 }
 
 .btn-primary-cad {
-    background: #10B981;
+    background: var(--success);
     color: #FFFFFF;
     border: none;
     border-radius: 6px;
-    padding: 10px 14px;
-    font-size: 13px;
+    padding: 9px 12px;
+    font-size: 12.5px;
     font-weight: 700;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.25);
+    gap: 6px;
+    box-shadow: 0 2px 5px rgba(16, 185, 129, 0.25);
     transition: all 0.2s;
 }
 
 .btn-primary-cad:hover {
-    background: #059669;
+    background: var(--success-hover);
     transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
-}
-
-.btn-primary-cad:active {
-    transform: translateY(0);
+    box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
 }
 
 .checkbox-auto-inc {
@@ -321,15 +383,17 @@ body {
     cursor: pointer;
 }
 
-/* Toast de Notificação */
 .status-toast {
-    background: #F1F5F9;
+    background: #FFFFFF;
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 5px 8px;
-    font-size: 10.5px;
+    padding: 4px 8px;
+    font-size: 10px;
     color: var(--text-muted);
     text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .status-toast.success {
@@ -344,4 +408,19 @@ body {
     border-color: #FECACA;
     color: #991B1B;
     font-weight: 600;
+}
+
+/* Responsividade se a janela for muito estreita */
+@media (max-width: 600px) {
+    .layout-wrapper {
+        flex-direction: column;
+    }
+    .map-container {
+        height: 50vh;
+    }
+    .sidebar {
+        width: 100%;
+        max-width: 100%;
+        height: 50vh;
+    }
 }

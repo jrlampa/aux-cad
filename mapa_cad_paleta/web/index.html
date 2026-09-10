@@ -9,148 +9,157 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="palette-container">
+    <div class="layout-wrapper">
         
-        <!-- Controles Rápidos de Camada e Ações -->
-        <header class="palette-header">
-            <div class="layer-selector">
-                <button id="btnLayerOsm" class="btn-layer active" title="OpenStreetMap Padrão">🗺️ OSM</button>
-                <button id="btnLayerEsri" class="btn-layer" title="Satélite ESRI World Imagery">🛰️ Satélite</button>
-                <button id="btnLayerGoogle" class="btn-layer" title="Google Satélite Híbrido">🌍 Híbrido</button>
+        <!-- ÁREA PRINCIPAL DO MAPA (Esquerda) -->
+        <main class="map-container">
+            <!-- Barra Flutuante de Ferramentas sobre o Mapa -->
+            <div class="map-floating-bar">
+                <div class="layer-selector">
+                    <button id="btnLayerOsm" class="btn-layer active" title="OpenStreetMap Padrão">🗺️ OSM</button>
+                    <button id="btnLayerEsri" class="btn-layer" title="Satélite ESRI World Imagery">🛰️ Satélite</button>
+                    <button id="btnLayerGoogle" class="btn-layer" title="Google Satélite Híbrido">🌍 Híbrido</button>
+                </div>
+                <div class="map-actions">
+                    <button id="btnLerCadTop" class="btn-action-sm btn-cad-read" title="Clique no desenho do CAD para posicionar o mapa">🎯 Ler DWG</button>
+                    <button id="btnSincDwg" class="btn-action-sm btn-cad-sync" title="Carregar postes existentes no DWG">🔄 Sincronizar</button>
+                    <button id="btnToggleSidebar" class="btn-action-sm btn-sidebar-toggle" title="Ocultar/Exibir Sidebar">📑 Painel ◀</button>
+                </div>
             </div>
-            <div class="header-actions">
-                <button id="btnLerCadTop" class="btn-action-sm btn-cad-read" title="Clique no desenho do CAD para posicionar o mapa">🎯 Ler DWG</button>
-                <button id="btnSincDwg" class="btn-action-sm btn-cad-sync" title="Carregar postes existentes no DWG">🔄 Sincronizar</button>
+
+            <!-- Mapa Leaflet -->
+            <div id="map"></div>
+        </main>
+
+        <!-- SIDEBAR LATERAL DE DADOS E COORDENADAS (Direita) -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>⚡ LANÇAMENTO DE POSTES</h3>
+                <span id="coordBadge" class="badge-fuso">Fuso 23S</span>
             </div>
-        </header>
 
-        <!-- Container do Mapa Leaflet -->
-        <div id="map" class="map-view"></div>
-
-        <!-- Painel Sanfonado de Coordenadas e Atributos Técnicos -->
-        <div class="panel-content">
-            
-            <!-- Card de Coordenadas -->
-            <section class="card-section">
-                <div class="section-title">
-                    <span>📍 Coordenadas de Campo (UTM)</span>
-                    <span id="coordBadge" class="badge-fuso">Fuso 23S</span>
-                </div>
-                <div class="grid-2-col">
-                    <div class="form-group">
-                        <label for="inputX">Este / X (m):</label>
-                        <input type="number" id="inputX" step="0.01" placeholder="Ex: 745120.50">
+            <div class="sidebar-scrollable">
+                <!-- Card de Coordenadas -->
+                <section class="card-section">
+                    <div class="section-title">
+                        <span>📍 Coordenadas (UTM)</span>
                     </div>
-                    <div class="form-group">
-                        <label for="inputY">Norte / Y (m):</label>
-                        <input type="number" id="inputY" step="0.01" placeholder="Ex: 7482310.80">
-                    </div>
-                </div>
-                <div class="grid-2-col" style="margin-top: 6px;">
-                    <div class="form-group">
-                        <label for="selectFuso">Fuso UTM:</label>
-                        <select id="selectFuso">
-                            <option value="23" selected>Fuso 23S (RJ/SP/MG)</option>
-                            <option value="24">Fuso 24S (ES/BA)</option>
-                            <option value="22">Fuso 22S (PR/SC/RS)</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="align-self: flex-end;">
-                        <button id="btnAplicarCoord" class="btn-secondary">Atualizar Marcador</button>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Card de Dados do Poste -->
-            <section class="card-section">
-                <div class="section-title">
-                    <span>⚡ Dados do Poste &amp; Estrutura</span>
-                </div>
-                <div class="grid-3-col">
-                    <div class="form-group">
-                        <label for="inputNumero">Nº Poste:</label>
-                        <input type="text" id="inputNumero" value="01" style="font-weight: bold; text-align: center;">
-                    </div>
-                    <div class="form-group" style="grid-column: span 2;">
-                        <label for="selectTipoPoste">Tipo / Esforço:</label>
-                        <select id="selectTipoPoste">
-                            <option value="11/600" selected>11m / 600 daN</option>
-                            <option value="11/400">11m / 400 daN</option>
-                            <option value="11/1000">11m / 1000 daN</option>
-                            <option value="12/300">12m / 300 daN</option>
-                            <option value="12/600">12m / 600 daN</option>
-                            <option value="12/1000">12m / 1000 daN</option>
-                            <option value="10/300">10m / 300 daN</option>
-                            <option value="11/M">11/M (Madeira)</option>
-                            <option value="POSTE EXISTENTE">Existente</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="grid-2-col" style="margin-top: 6px;">
-                    <div class="form-group">
-                        <label for="selectEstruturaMt">Estrutura MT:</label>
-                        <select id="selectEstruturaMt">
-                            <option value="" selected>(Nenhuma)</option>
-                            <option value="N1">N1 (Passagem)</option>
-                            <option value="N2">N2 (Ângulo)</option>
-                            <option value="N3b">N3b (Ancoragem)</option>
-                            <option value="N4">N4 (Fim de Linha)</option>
-                            <option value="CE1">CE1 (Compacta)</option>
-                            <option value="CE2">CE2 (Compacta Ângulo)</option>
-                            <option value="B1">B1 (Beco)</option>
-                            <option value="B2">B2 (Beco Ângulo)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="selectEstruturaBt">Estrutura BT:</label>
-                        <select id="selectEstruturaBt">
-                            <option value="S1" selected>S1 (Passagem)</option>
-                            <option value="S2">S2 (Ângulo)</option>
-                            <option value="F1">F1 (Ancoragem)</option>
-                            <option value="F2-D2">F2-D2 (Fim)</option>
-                            <option value="SI1">SI1 (Isolador)</option>
-                            <option value="SI3">SI3 (Ancoragem Tri)</option>
-                            <option value="">(Nenhuma)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Equipamentos Rápidos -->
-                <div class="equip-group">
-                    <label class="label-sub">Equipamentos:</label>
-                    <div class="chips-container" id="equipChips">
-                        <button type="button" class="chip" data-val="IP">💡 IP</button>
-                        <button type="button" class="chip" data-val="ATERR">⚡ ATERR</button>
-                        <button type="button" class="chip" data-val="DAE">🛡️ DAE</button>
-                        <button type="button" class="chip" data-val="TRAFO 45kVA">🔋 Trafo 45kVA</button>
-                        <button type="button" class="chip" data-val="CHAVE FUSIVEL">🔌 Chave Fus.</button>
-                        <button type="button" class="chip" data-val="PARA-RAIOS">⚡ P-Raios</button>
-                    </div>
-                </div>
-
-                <!-- Carga Especial Trifásica -->
-                <div class="carga-group">
-                    <label class="label-sub">Carga Especial Trifásica (FP = 0.92):</label>
                     <div class="grid-2-col">
                         <div class="form-group">
-                            <input type="number" id="inputKva" step="0.1" placeholder="Potência kVA">
+                            <label for="inputX">Este / X (m):</label>
+                            <input type="number" id="inputX" step="0.01" placeholder="Ex: 745120.50">
                         </div>
                         <div class="form-group">
-                            <input type="number" id="inputKw" step="0.1" placeholder="Potência kW">
+                            <label for="inputY">Norte / Y (m):</label>
+                            <input type="number" id="inputY" step="0.01" placeholder="Ex: 7482310.80">
                         </div>
                     </div>
-                    <div class="chips-container-sm" id="cargaChips">
-                        <button type="button" class="chip-sm" data-nome="BOMBA" data-kw="15">Bomba 15kW</button>
-                        <button type="button" class="chip-sm" data-nome="MOTOR" data-kw="7.5">Motor 7.5kW</button>
-                        <button type="button" class="chip-sm" data-nome="COMERCIO" data-kw="20">Comércio 20kW</button>
-                        <button type="button" class="chip-sm" data-nome="SERRALHERIA" data-kw="10">Serralheria 10kW</button>
+                    <div class="grid-2-col" style="margin-top: 6px;">
+                        <div class="form-group">
+                            <label for="selectFuso">Fuso UTM:</label>
+                            <select id="selectFuso">
+                                <option value="23" selected>Fuso 23S (RJ/SP/MG)</option>
+                                <option value="24">Fuso 24S (ES/BA)</option>
+                                <option value="22">Fuso 22S (PR/SC/RS)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="align-self: flex-end;">
+                            <button id="btnAplicarCoord" class="btn-secondary">Atualizar Marcador</button>
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            <!-- Botão Master de Inserção -->
-            <div class="actions-panel">
+                <!-- Card de Dados do Poste -->
+                <section class="card-section">
+                    <div class="section-title">
+                        <span>⚡ Dados do Poste &amp; Estrutura</span>
+                    </div>
+                    <div class="grid-3-col">
+                        <div class="form-group">
+                            <label for="inputNumero">Nº Poste:</label>
+                            <input type="text" id="inputNumero" value="01" style="font-weight: bold; text-align: center;">
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label for="selectTipoPoste">Tipo / Esforço:</label>
+                            <select id="selectTipoPoste">
+                                <option value="11/600" selected>11m / 600 daN</option>
+                                <option value="11/400">11m / 400 daN</option>
+                                <option value="11/1000">11m / 1000 daN</option>
+                                <option value="12/300">12m / 300 daN</option>
+                                <option value="12/600">12m / 600 daN</option>
+                                <option value="12/1000">12m / 1000 daN</option>
+                                <option value="10/300">10m / 300 daN</option>
+                                <option value="11/M">11/M (Madeira)</option>
+                                <option value="POSTE EXISTENTE">Existente</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid-2-col" style="margin-top: 6px;">
+                        <div class="form-group">
+                            <label for="selectEstruturaMt">Estrutura MT:</label>
+                            <select id="selectEstruturaMt">
+                                <option value="" selected>(Nenhuma)</option>
+                                <option value="N1">N1 (Passagem)</option>
+                                <option value="N2">N2 (Ângulo)</option>
+                                <option value="N3b">N3b (Ancoragem)</option>
+                                <option value="N4">N4 (Fim de Linha)</option>
+                                <option value="CE1">CE1 (Compacta)</option>
+                                <option value="CE2">CE2 (Compacta Ângulo)</option>
+                                <option value="B1">B1 (Beco)</option>
+                                <option value="B2">B2 (Beco Ângulo)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="selectEstruturaBt">Estrutura BT:</label>
+                            <select id="selectEstruturaBt">
+                                <option value="S1" selected>S1 (Passagem)</option>
+                                <option value="S2">S2 (Ângulo)</option>
+                                <option value="F1">F1 (Ancoragem)</option>
+                                <option value="F2-D2">F2-D2 (Fim)</option>
+                                <option value="SI1">SI1 (Isolador)</option>
+                                <option value="SI3">SI3 (Ancoragem Tri)</option>
+                                <option value="">(Nenhuma)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Equipamentos Rápidos -->
+                    <div class="equip-group">
+                        <label class="label-sub">Equipamentos:</label>
+                        <div class="chips-container" id="equipChips">
+                            <button type="button" class="chip" data-val="IP">💡 IP</button>
+                            <button type="button" class="chip" data-val="ATERR">⚡ ATERR</button>
+                            <button type="button" class="chip" data-val="DAE">🛡️ DAE</button>
+                            <button type="button" class="chip" data-val="TRAFO 45kVA">🔋 Trafo 45kVA</button>
+                            <button type="button" class="chip" data-val="CHAVE FUSIVEL">🔌 Chave Fus.</button>
+                            <button type="button" class="chip" data-val="PARA-RAIOS">⚡ P-Raios</button>
+                        </div>
+                    </div>
+
+                    <!-- Carga Especial Trifásica -->
+                    <div class="carga-group">
+                        <label class="label-sub">Carga Especial Trifásica (FP = 0.92):</label>
+                        <div class="grid-2-col">
+                            <div class="form-group">
+                                <input type="number" id="inputKva" step="0.1" placeholder="Potência kVA">
+                            </div>
+                            <div class="form-group">
+                                <input type="number" id="inputKw" step="0.1" placeholder="Potência kW">
+                            </div>
+                        </div>
+                        <div class="chips-container-sm" id="cargaChips">
+                            <button type="button" class="chip-sm" data-nome="BOMBA" data-kw="15">Bomba 15kW</button>
+                            <button type="button" class="chip-sm" data-nome="MOTOR" data-kw="7.5">Motor 7.5kW</button>
+                            <button type="button" class="chip-sm" data-nome="COMERCIO" data-kw="20">Comércio 20kW</button>
+                            <button type="button" class="chip-sm" data-nome="SERRALHERIA" data-kw="10">Serralheria 10kW</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Rodapé Fixo da Sidebar com Botão Master -->
+            <footer class="sidebar-footer">
                 <button id="btnInserirCad" class="btn-primary-cad">
                     📍 INSERIR POSTE NO CAD
                 </button>
@@ -160,14 +169,11 @@
                         Incrementar Nº (+1) após inserir
                     </label>
                 </div>
-            </div>
-
-            <!-- Log de Notificação -->
-            <div id="statusToast" class="status-toast">
-                Pronto. Posicione o marcador e clique em "Inserir Poste no CAD".
-            </div>
-
-        </div>
+                <div id="statusToast" class="status-toast">
+                    Pronto para lançar.
+                </div>
+            </footer>
+        </aside>
     </div>
 
     <!-- Leaflet JS Local -->
