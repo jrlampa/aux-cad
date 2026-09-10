@@ -19,6 +19,9 @@ namespace MapaCadPaleta
             Loaded += MapaControl_Loaded;
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto, SetLastError = true)]
+        private static extern bool SetDllDirectory(string lpPathName);
+
         private async void MapaControl_Loaded(object sender, RoutedEventArgs e)
         {
             if (_isInitialized) return;
@@ -29,12 +32,26 @@ namespace MapaCadPaleta
         {
             try
             {
+                string assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "";
+                string winX64Native = Path.Combine(assemblyDir, "runtimes", "win-x64", "native");
+
+                // Configura resolução nativa da DLL do WebView2Loader
+                if (File.Exists(Path.Combine(winX64Native, "WebView2Loader.dll")))
+                {
+                    SetDllDirectory(winX64Native);
+                    try { CoreWebView2Environment.SetLoaderDllFolderPath(winX64Native); } catch { }
+                }
+                else if (File.Exists(Path.Combine(assemblyDir, "WebView2Loader.dll")))
+                {
+                    SetDllDirectory(assemblyDir);
+                    try { CoreWebView2Environment.SetLoaderDllFolderPath(assemblyDir); } catch { }
+                }
+
                 string userDataFolder = Path.Combine(Path.GetTempPath(), "AuxCadWebView2Data");
                 var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
 
                 await WebView.EnsureCoreWebView2Async(env);
 
-                string assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "";
                 string webDir = Path.Combine(assemblyDir, "web");
 
                 // Fallback para pasta de desenvolvimento se executando direto

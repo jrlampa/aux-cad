@@ -50,4 +50,11 @@
     </Content>
   </ItemGroup>
 
+  <!-- Copiar WebView2Loader.dll para a raiz do TargetDir para resolução nativa no acad.exe -->
+  <Target Name="CopyWebView2Loader" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetDir)runtimes\win-x64\native\WebView2Loader.dll" 
+          DestinationFolder="$(TargetDir)" 
+          Condition="Exists('$(TargetDir)runtimes\win-x64\native\WebView2Loader.dll')" />
+  </Target>
+
 </Project>

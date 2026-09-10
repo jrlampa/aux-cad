@@ -37,11 +37,17 @@
       (if (findfile full-path) full-path nil)))
 )
 
-(defun c:mapa-paleta-load-dll ( / dll-path )
+(defun c:mapa-paleta-load-dll ( / dll-path dll-dir native-dir curr-path )
   "Carrega a DLL da paleta em memória via NETLOAD nativo."
   (setq dll-path (c:mapa-paleta-get-dll-path))
   (if (and dll-path (findfile dll-path))
     (progn
+      ;; Adiciona a pasta da DLL e runtimes ao PATH do processo do AutoCAD para resolver WebView2Loader.dll
+      (setq dll-dir (vl-filename-directory dll-path))
+      (setq native-dir (strcat dll-dir "\\runtimes\\win-x64\\native"))
+      (setq curr-path (getenv "PATH"))
+      (if (and curr-path (not (vl-string-search dll-dir curr-path)))
+        (setenv "PATH" (strcat dll-dir ";" native-dir ";" curr-path)))
       (princ (strcat "\n[AUX CAD] Carregando Paleta OSM: " (vl-filename-nxname dll-path) "..."))
       (setvar "FILEDIA" 0)
       (vl-catch-all-apply '(lambda () (command "_.NETLOAD" dll-path)))
