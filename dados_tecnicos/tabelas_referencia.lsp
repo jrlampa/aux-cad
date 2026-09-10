@@ -497,15 +497,16 @@
   (princ)
 )
 
-(defun c:TABELAS (/ opc)
-  (initget "Condutores Estruturas Cabos MT_Cabos BT_Condutores BT_Estruturas C E M 1 2 3 BT MT")
-  (setq opc (getkword "\nConsultar Tabelas: [C]ondutores BT / [E]struturas BT / [M]T Cabos <C>: "))
+(defun c:TABELAS (/ opc s)
+  (setq opc (getstring "\nConsultar Tabelas: [C]ondutores BT / [E]struturas BT / [M]T Cabos <C>: "))
+  (setq s (strcase (vl-string-trim " \t\r\n" opc)))
   (cond
-    ((or (= opc "M") (= opc "MT") (= opc "MT_Cabos") (= opc "Cabos") (= opc "3"))
+    ((or (= s "M") (= s "MT") (= s "CABOS") (= s "CABO") (= s "CABOS_MT") (= s "MT_CABOS") (= s "3"))
      (c:CABOS_MT))
-    ((or (= opc "E") (= opc "Estruturas") (= opc "BT_Estruturas") (= opc "2"))
+    ((or (= s "E") (= s "ESTRUTURAS") (= s "ESTRUTURA") (= s "BT_ESTRUTURAS") (= s "2"))
      (c:ESTRUTURAS_BT))
     (t
+     ;; Padrão: Enter (vazio), "C", "BT", "CONDUTORES", "1", etc.
      (c:CONDUTORES_BT))
   )
   (princ)
