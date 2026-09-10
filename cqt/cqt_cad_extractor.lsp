@@ -343,7 +343,8 @@
              (setq xls_path (findfile (strcat cur_dir xls_path))))
           )
 
-          (setq pt_trafo (getstring "\nPonto Elétrico do Trafo [ou Enter para detectar automaticamente]: "))
+          (setq pt_trafo (getstring T "\nPonto Elétrico do Trafo [ou Enter para detectar automaticamente]: "))
+          (setq pt_trafo (vl-string-trim " \t\r\n" pt_trafo))
           (if (or (null pt_trafo) (= pt_trafo "")) (setq pt_trafo "auto"))
 
           (princ (strcat "\n[CQTQUADROS] Extraindo dados da planilha: " (vl-filename-base xls_path) (vl-filename-extension xls_path) " ..."))

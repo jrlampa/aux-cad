@@ -26,19 +26,41 @@ def test_extract_quadros_data_real():
 
     anc = resumo["ATUAL+NC"]
     assert anc["ponto_trafo"] == "77245"
-    assert anc["residencial"]["qtde"] == "50"
+    assert anc["residencial"]["qtde"] == "57"
     assert anc["residencial"]["dmdi"] == "1,30"
-    assert anc["residencial"]["total"] == "65,00"
-    assert anc["req_resid"]["qtde"] == "01"
-    assert anc["total_clientes"] == "50"
-    assert anc["max_prev"] == "66,25kVA"
-    assert anc["carregamento"] == "44,17%"
+    assert anc["residencial"]["total"] == "74,10"
+    assert anc["req_n_resid"]["qtde"] == "1"
+    assert anc["req_n_resid"]["total"] == "49,00"
+    assert anc["ilum_publica"]["qtde"] == "10"
+    assert anc["ilum_publica"]["total"] == "1,25"
+    assert anc["total_clientes"] == "58"
+    assert anc["max_prev"] == "124,35kVA"
+    assert anc["carregamento"] == "82,90%"
 
     at = resumo["ATUAL"]
-    assert at["residencial"]["qtde"] == "49"
-    assert at["residencial"]["total"] == "63,70"
-    assert at["total_clientes"] == "49"
-    assert at["carregamento"] == "43,30%"
+    assert at["residencial"]["qtde"] == "57"
+    assert at["residencial"]["dmdi"] == "1,30"
+    assert at["residencial"]["total"] == "74,10"
+    assert at["n_residencial"]["qtde"] == "1"
+    assert at["n_residencial"]["total"] == "1,30"
+    assert at["ilum_publica"]["qtde"] == "10"
+    assert at["ilum_publica"]["total"] == "1,25"
+    assert at["total_clientes"] == "58"
+    assert at["max_prev"] == "76,65kVA"
+    assert at["carregamento"] == "51,10%"
+
+    # Valida Queda de Tensão Acumulada por Trecho extraída diretamente do Excel
+    trechos = data["trechos_cqt"]
+    assert len(trechos) == 3
+    assert trechos[0]["trecho"] == "A"
+    assert trechos[0]["qt_atual"] == "3,85%"
+    assert trechos[0]["qt_atual_nc"] == "3,99%"
+    assert trechos[1]["trecho"] == "B"
+    assert trechos[1]["qt_atual"] == "3,85%"
+    assert trechos[1]["qt_atual_nc"] == "4,02%"
+    assert trechos[2]["trecho"] == "C"
+    assert trechos[2]["qt_atual"] == "4,64%"
+    assert trechos[2]["qt_atual_nc"] == "4,77%"
 
 def test_generate_cad_lisp_and_json(tmp_path):
     if not os.path.exists(REAL_EXCEL):

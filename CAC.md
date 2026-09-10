@@ -73,7 +73,11 @@ aux cad/
 - `cqt_excel_io.py` (276 linhas): Persistência atômica e leitura de planilhas Excel (`load_cables_from_database`, `load_scenario_from_excel`, `load_all_scenarios_from_excel`, `update_cqt_excel`).
 - `cqt_scenario_tab.py` (365 linhas): Componente visual de edição de trechos por cenário (`ScenarioTab`) e painel de Live Preview.
 - `cqt_excel_manager.py` (390 linhas): Interface principal orquestradora (`CQTManagerGUI`) e CLI com botão integrado **"📥 Importar Planilha Existente"** para carregamento integral dos cenários ATUAL, ATUAL+NC e PROJETADO a partir de arquivos `.xlsx` ou `.xlsm`, rigorosamente dentro do limite de 500 linhas.
-- `cqt_quadros_generator.py` (485 linhas): Ponte analítica entre a planilha e o CAD via extração de dados brutos e recálculo topológico instantâneo (`calcular_cqt_topologia`), garantindo preenchimento total e exato de demandas, carregamento e quedas de tensão por trecho mesmo sem cache de fórmulas do Excel, CLI flexível (`--excel`, `--trafo`, `--out`) e rotina LISP de desenho vetorial (`cqt-draw-trafo-box`, `cqt-draw-cqt-box`, `cqt-exec-draw-quadros`).
+- `cqt_quadros_generator.py` (635 linhas):
+  - Ponte de alta fidelidade entre a planilha e o CAD para desenho dos Quadros Verdes de Resumo do Trafo (47.03 x 47.10) e Quadros Vermelhos de Queda de Tensão por Trecho (33.21 x 13.64).
+  - **Extração Direta de Alta Fidelidade**: Lê diretamente da aba oficial `CAPA-RESUMO` todos os dados consolidados do trafo (`RESIDENCIAL`, `N. RESIDENCIAL`, `REQ RESID.`, `REQ N. RESID.`, `ILUM. PUBLICA`, `TOTAL CLIENTES`, `MÁX. PREV.`, `CARREGAMENTO`) e das abas `CQT ATUAL` / `CQT ATUAL+NC` / `CQT PROJETADO` as quedas de tensão acumuladas por trecho (Coluna L), garantindo 100% de coincidência entre a prancha DWG e a planilha oficial da concessionária.
+  - **Fallback Analítico Inteligente**: Caso a planilha seja gerada sem cache de fórmulas ou sem a aba `CAPA-RESUMO`, aciona automaticamente o motor `calcular_cqt_topologia` de `cqt_live_calc.py`.
+  - CLI flexível (`--excel`, `--trafo`, `--out`) e rotina LISP de desenho vetorial (`cqt-draw-trafo-box`, `cqt-draw-cqt-box`, `cqt-exec-draw-quadros`).
 - `Abrir_CQT.bat`: Atalho executável direto com 2 cliques.
 
 ### 3. Módulo Mecânico (`mecanico/`)

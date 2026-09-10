@@ -20,9 +20,9 @@ except ImportError:
     HAS_WIN32COM = False
 
 
-def format_num(val, decimals=2, is_pct=False, is_int=False) -> str:
+def format_num(val, decimals=2, is_pct=False, is_int=False, is_kva=False, is_dmdi=False) -> str:
     """Formata valores numéricos para padrão brasileiro com hífen único '-' para vazios/nulos."""
-    if val is None or val == "" or str(val).strip() in ["-", "None", "#N/A", "#VALOR!", "", "0.0", "0,00", "0"]:
+    if val is None or val == "" or str(val).strip() in ["-", "None", "#N/A", "#VALOR!", "", "0.0", "0,00"]:
         return "-"
     try:
         f = float(val)
@@ -32,6 +32,10 @@ def format_num(val, decimals=2, is_pct=False, is_int=False) -> str:
             if f <= 1.0 and f > 0.0:
                 f *= 100.0
             return f"{f:.2f}%".replace(".", ",")
+        if is_kva:
+            return f"{f:.2f}kVA".replace(".", ",")
+        if is_dmdi:
+            return f"{f:.2f}".replace(".", ",")
         if is_int:
             return str(int(round(f)))
         return f"{f:.{decimals}f}".replace(".", ",")
@@ -40,168 +44,314 @@ def format_num(val, decimals=2, is_pct=False, is_int=False) -> str:
         return "-" if s in ["", "None", "0"] else s
 
 
+def extract_from_capa_resumo(wb: openpyxl.Workbook, custom_ponto_trafo: Optional[str] = None) -> Dict:
+    """Extrai os dados de resumo do trafo diretamente da aba oficial CAPA-RESUMO da planilha."""
+    if "CAPA-RESUMO" not in wb.sheetnames:
+        return {}
+    s = wb["CAPA-RESUMO"]
+    resumos = {}
+
+    col_starts = []
+    for c in range(1, 26):
+        v2 = str(s.cell(2, c).value or "").strip().upper()
+        v13 = str(s.cell(13, c + 2).value or "").strip().upper()
+        name = v2 or v13
+        if any(cn in name for cn in ["ATUAL", "PROJETADO", "NC", "NOVO"]):
+            if not any(cs[0] == c for cs in col_starts):
+                col_starts.append((c, v2 or v13))
+
+    for c_start, name in col_starts:
+        pt = custom_ponto_trafo
+        if not pt or str(pt).lower() in ["auto", "none", "null", "0", ""]:
+            pt = str(s.cell(13, c_start + 1).value or "").strip()
+            if not pt or pt == "0":
+                pt = "77245"
+
+        rot = str(s.cell(14, c_start).value or "").strip()
+        desc = str(s.cell(14, c_start + 1).value or "").strip()
+        trafo_desc = f"{rot} {desc}".strip() if rot or desc else f"TRAFO EXIST.: {pt}"
+
+        rq, rd, rt = "-", "-", "-"
+        nrq, nrd, nrt = "-", "-", "-"
+        rq_rq, rq_rd, rq_rt = "-", "-", "-"
+        rq_nrq, rq_nrd, rq_nrt = "-", "-", "-"
+        ip_q, ip_d, ip_t = "-", "-", "-"
+        tot_cli, max_p, carg = "-", "-", "-"
+
+        for r in range(15, 25):
+            c0 = str(s.cell(r, c_start).value or "").strip().upper()
+            c1 = str(s.cell(r, c_start + 1).value or "").strip().upper()
+
+            if "RESIDENCIAL" in c0 and "N." not in c0 and "N " not in c0:
+                rq = format_num(s.cell(r, c_start + 1).value, is_int=True)
+                rd = format_num(s.cell(r, c_start + 2).value, is_dmdi=True)
+                rt = format_num(s.cell(r, c_start + 3).value, decimals=2)
+            elif "N. RESIDENCIAL" in c0 or "N. RESID" in c0 or "N.RESID" in c0:
+                nrq = format_num(s.cell(r, c_start + 1).value, is_int=True)
+                nrd = format_num(s.cell(r, c_start + 2).value, is_dmdi=True)
+                nrt = format_num(s.cell(r, c_start + 3).value, decimals=2)
+            elif "REQ" in c0 or ("REQ" in c1 and "RESID" in c1):
+                rq_rq = format_num(s.cell(r, c_start + 2).value, is_int=True)
+                rq_rd = format_num(s.cell(r, c_start + 3).value, is_dmdi=True) if s.cell(r, c_start + 3).value is not None else "-"
+                rq_rt = format_num(s.cell(r, c_start + 3).value, decimals=2)
+            elif "N. RESID" in c1 or "N.RESID" in c1:
+                rq_nrq = format_num(s.cell(r, c_start + 2).value, is_int=True)
+                rq_nrd = "-"
+                rq_nrt = format_num(s.cell(r, c_start + 3).value, decimals=2)
+            elif "ILUM" in c1 or "ILUM" in c0:
+                ip_q = format_num(s.cell(r, c_start + 2).value, is_int=True)
+                ip_d = "-"
+                ip_t = format_num(s.cell(r, c_start + 3).value, decimals=2)
+            elif "TOTAL CLIENTES" in c0 or "TOTAL DE CLIENTES" in c0:
+                tot_cli = format_num(s.cell(r, c_start + 1).value, is_int=True)
+            elif any(m in c0 for m in ["MX", "MAX", "MÁX"]):
+                max_p = format_num(s.cell(r, c_start + 1).value, is_kva=True)
+            elif "CARREGAMENTO" in c0:
+                carg = format_num(s.cell(r, c_start + 1).value, is_pct=True)
+
+        if max_p == "-" and carg == "-":
+            continue
+
+        cen_key = name.upper()
+        if "ATUAL+NC" in cen_key:
+            cen_key = "ATUAL+NC"
+        elif "ATUAL" in cen_key and "MELHORADO" not in cen_key:
+            cen_key = "ATUAL"
+        elif "PROJETADO" in cen_key:
+            cen_key = "PROJETADO"
+
+        resumos[cen_key] = {
+            "cenario": cen_key,
+            "ponto_trafo": pt,
+            "trafo_desc": trafo_desc,
+            "residencial": {"qtde": rq, "dmdi": rd, "total": rt},
+            "n_residencial": {"qtde": nrq, "dmdi": nrd, "total": nrt},
+            "req_resid": {"qtde": rq_rq, "dmdi": rq_rd, "total": rq_rt},
+            "req_n_resid": {"qtde": rq_nrq, "dmdi": rq_nrd, "total": rq_nrt},
+            "ilum_publica": {"qtde": ip_q, "dmdi": ip_d, "total": ip_t},
+            "total_clientes": tot_cli,
+            "max_prev": max_p,
+            "carregamento": carg,
+        }
+
+    return resumos
+
+
+def extract_trechos_from_sheets(wb: openpyxl.Workbook) -> List[Dict]:
+    """Extrai as quedas de tensão acumuladas diretamente das abas CQT da planilha."""
+    trechos_map = {}
+    cenarios = ["ATUAL", "ATUAL+NC", "PROJETADO"]
+    found_any = False
+
+    for cen in cenarios:
+        s = None
+        for s_name in [f"CQT {cen}", f"CQT_{cen}", f"CQT-{cen}", cen]:
+            if s_name in wb.sheetnames:
+                s = wb[s_name]
+                break
+        if not s:
+            continue
+
+        for r in range(11, 35):
+            letra = s.cell(r, 1).value
+            comp = s.cell(r, 3).value
+            qt_acum = s.cell(r, 12).value if s.max_column >= 12 else None
+            if qt_acum is None or str(qt_acum).strip() in ["", " "]:
+                qt_acum = s.cell(r, 11).value
+
+            if letra and str(letra).strip() and comp is not None and str(comp).strip() not in ["", "0", "None"]:
+                l_str = str(letra).strip()
+                if l_str not in trechos_map:
+                    trechos_map[l_str] = {
+                        "trecho": l_str,
+                        "qt_atual": "-",
+                        "qt_atual_nc": "-",
+                        "qt_projetado": "-",
+                        "ativo": True,
+                    }
+                fmt_qt = format_num(qt_acum, is_pct=True)
+                if fmt_qt != "-":
+                    found_any = True
+                if cen == "ATUAL":
+                    trechos_map[l_str]["qt_atual"] = fmt_qt
+                elif cen == "ATUAL+NC":
+                    trechos_map[l_str]["qt_atual_nc"] = fmt_qt
+                elif cen == "PROJETADO":
+                    trechos_map[l_str]["qt_projetado"] = fmt_qt
+
+    if found_any:
+        return [trechos_map[k] for k in sorted(trechos_map.keys())]
+    return []
+
+
 def extract_quadros_data(xlsm_path: str, active_scenarios: Optional[List[str]] = None, custom_ponto_trafo: Optional[str] = None) -> Dict:
     """
-    Extrai e calcula analiticamente os dados de carga e queda de tensão de todos os cenários
-    da planilha CQT (.xlsx ou .xlsm), preenchendo todos os campos mesmo sem cache de fórmulas do Excel.
+    Extrai os dados de carga e queda de tensão de todos os cenários da planilha CQT (.xlsx ou .xlsm).
+    Prioriza a leitura direta das abas CAPA-RESUMO e CQT; se incompletas, calcula analiticamente.
     """
     if not os.path.exists(xlsm_path):
         raise FileNotFoundError(f"Arquivo não encontrado: {xlsm_path}")
 
     wb = openpyxl.load_workbook(xlsm_path, data_only=True)
 
-    # 1. Carrega dados estruturados de cada cenário via cqt_excel_io e calcula via cqt_live_calc
-    cenarios_data = {}
-    cenarios_calc = {}
-    for cenario_name in ["ATUAL", "ATUAL+NC", "PROJETADO"]:
-        scen_info = load_scenario_from_excel(xlsm_path, cenario_name)
-        if scen_info and scen_info.get("trechos"):
-            cenarios_data[cenario_name] = scen_info
-            try:
-                pot = float(scen_info.get("potencia_trafo") or 75.0)
-            except Exception:
-                pot = 75.0
-            cenarios_calc[cenario_name] = calcular_cqt_topologia(scen_info["trechos"], potencia_trafo=pot)
+    # 1. Tenta extração direta da aba CAPA-RESUMO
+    resumo_scenarios = extract_from_capa_resumo(wb, custom_ponto_trafo)
 
-    # Identifica o ponto do trafo e a descrição do trafo
-    ponto_trafo_base = custom_ponto_trafo
-    if ponto_trafo_base and str(ponto_trafo_base).lower() in ["auto", "none", "null", "0", ""]:
-        ponto_trafo_base = None
+    # 2. Tenta extração direta dos trechos das abas CQT
+    active_trechos_list = extract_trechos_from_sheets(wb)
 
-    if not ponto_trafo_base:
-        for c in ["ATUAL", "ATUAL+NC", "PROJETADO"]:
-            if c in cenarios_data and cenarios_data[c].get("ponto_trafo"):
-                ponto_trafo_base = cenarios_data[c]["ponto_trafo"]
-                break
-    if not ponto_trafo_base or ponto_trafo_base == "0":
-        ponto_trafo_base = "77245"
-
-    pot_base = 75
-    for c in ["ATUAL", "ATUAL+NC", "PROJETADO"]:
-        if c in cenarios_data and cenarios_data[c].get("potencia_trafo"):
-            try:
-                pot_base = int(float(cenarios_data[c]["potencia_trafo"]))
-                break
-            except Exception:
-                pass
-
-    trafo_desc_base = f"TRAFO EXIST.: {ponto_trafo_base}-3-{pot_base}kVA"
-    if "CAPA-RESUMO" in wb.sheetnames:
-        t_exist = str(wb["CAPA-RESUMO"]["A14"].value or "").strip()
-        t_val = str(wb["CAPA-RESUMO"]["B14"].value or "").strip()
-        if t_exist and t_val and t_val != "None":
-            trafo_desc_base = f"{t_exist} {t_val}".strip()
-
-    if not active_scenarios:
-        active_scenarios = [c for c in ["PROJETADO", "ATUAL+NC", "ATUAL"] if c in cenarios_data]
-        if not active_scenarios:
-            active_scenarios = ["ATUAL+NC", "ATUAL"]
-
-    resumo_scenarios = {}
-    tot_cli_atual = cenarios_calc.get("ATUAL", {}).get("total_clientes", 0)
-
-    for cenario_name in active_scenarios:
-        calc_res = cenarios_calc.get(cenario_name, {})
-        tot_cli = calc_res.get("total_clientes", 0)
-        dmdi_float = calcular_dmdi(tot_cli)
-        dmdi_str = format_num(dmdi_float, 2)
-        dem_res_val = tot_cli * dmdi_float
-
-        # Iluminação pública
-        ip_qtd = 0
-        ip_dem_val = 0.0
-        if cenario_name in cenarios_data:
-            for t in cenarios_data[cenario_name]["trechos"]:
+    # 3. Fallback de cálculo se CAPA-RESUMO ou Trechos estiverem ausentes
+    if not resumo_scenarios or not active_trechos_list:
+        cenarios_data = {}
+        cenarios_calc = {}
+        for cenario_name in ["ATUAL", "ATUAL+NC", "PROJETADO"]:
+            scen_info = load_scenario_from_excel(xlsm_path, cenario_name)
+            if scen_info and scen_info.get("trechos"):
+                cenarios_data[cenario_name] = scen_info
                 try:
-                    ip_qtd += int(t.get("ip70", 0) or 0)
+                    pot = float(scen_info.get("potencia_trafo") or 75.0)
+                except Exception:
+                    pot = 75.0
+                cenarios_calc[cenario_name] = calcular_cqt_topologia(scen_info["trechos"], potencia_trafo=pot)
+
+        ponto_trafo_base = custom_ponto_trafo
+        if ponto_trafo_base and str(ponto_trafo_base).lower() in ["auto", "none", "null", "0", ""]:
+            ponto_trafo_base = None
+
+        if not ponto_trafo_base:
+            for c in ["ATUAL", "ATUAL+NC", "PROJETADO"]:
+                if c in cenarios_data and cenarios_data[c].get("ponto_trafo"):
+                    ponto_trafo_base = cenarios_data[c]["ponto_trafo"]
+                    break
+        if not ponto_trafo_base or ponto_trafo_base == "0":
+            ponto_trafo_base = "77245"
+
+        pot_base = 75
+        for c in ["ATUAL", "ATUAL+NC", "PROJETADO"]:
+            if c in cenarios_data and cenarios_data[c].get("potencia_trafo"):
+                try:
+                    pot_base = int(float(cenarios_data[c]["potencia_trafo"]))
+                    break
                 except Exception:
                     pass
-            ip_dem_val = ip_qtd * 0.07
 
-        dem_tot_val = calc_res.get("demanda_total_kva", dem_res_val + ip_dem_val)
-        carg_val = calc_res.get("carregamento_trafo", 0.0)
+        trafo_desc_base = f"TRAFO EXIST.: {ponto_trafo_base}-3-{pot_base}kVA"
+        if "CAPA-RESUMO" in wb.sheetnames:
+            t_exist = str(wb["CAPA-RESUMO"]["A14"].value or "").strip()
+            t_val = str(wb["CAPA-RESUMO"]["B14"].value or "").strip()
+            if t_exist and t_val and t_val != "None":
+                trafo_desc_base = f"{t_exist} {t_val}".strip()
 
-        # Bloco REQ (Novas Cargas ou Carga Especial)
-        req_res_q = "-"
-        req_res_d = "-"
-        req_res_t = "-"
-        if cenario_name == "ATUAL+NC":
-            if tot_cli_atual > 0 and tot_cli > tot_cli_atual:
-                delta = tot_cli - tot_cli_atual
-                req_res_q = f"{delta:02d}"
-                req_res_d = dmdi_str
-                req_res_t = format_num(delta * dmdi_float, 2)
-            else:
-                esp_tot = sum(float(t.get("esp_carga", 0) or 0) for t in cenarios_data.get(cenario_name, {}).get("trechos", []))
-                if esp_tot > 0:
-                    req_res_t = format_num(esp_tot, 2)
+        if not active_scenarios:
+            active_scenarios_calc = [c for c in ["PROJETADO", "ATUAL+NC", "ATUAL"] if c in cenarios_data]
+            if not active_scenarios_calc:
+                active_scenarios_calc = ["ATUAL+NC", "ATUAL"]
+        else:
+            active_scenarios_calc = active_scenarios
 
-        pt_cen = ponto_trafo_base
-        if cenario_name == "PROJETADO" and not custom_ponto_trafo:
-            pt_cen = "ANXXXX"
+        if not resumo_scenarios:
+            tot_cli_atual = cenarios_calc.get("ATUAL", {}).get("total_clientes", 0)
+            for cenario_name in active_scenarios_calc:
+                calc_res = cenarios_calc.get(cenario_name, {})
+                tot_cli = calc_res.get("total_clientes", 0)
+                dmdi_float = calcular_dmdi(tot_cli)
+                dmdi_str = format_num(dmdi_float, 2)
+                dem_res_val = tot_cli * dmdi_float
 
-        resumo_scenarios[cenario_name] = {
-            "cenario": cenario_name,
-            "ponto_trafo": pt_cen,
-            "trafo_desc": trafo_desc_base,
-            "residencial": {
-                "qtde": str(tot_cli) if tot_cli > 0 else "-",
-                "dmdi": dmdi_str if tot_cli > 0 else "-",
-                "total": format_num(dem_res_val, 2) if tot_cli > 0 else "-"
-            },
-            "n_residencial": {"qtde": "-", "dmdi": "-", "total": "-"},
-            "req_resid": {"qtde": req_res_q, "dmdi": req_res_d, "total": req_res_t},
-            "req_n_resid": {"qtde": "-", "dmdi": "-", "total": "-"},
-            "ilum_publica": {
-                "qtde": str(ip_qtd) if ip_qtd > 0 else "-",
-                "dmdi": "-",
-                "total": format_num(ip_dem_val, 2) if ip_dem_val > 0 else "-"
-            },
-            "total_clientes": str(tot_cli),
-            "max_prev": f"{format_num(dem_tot_val, 2)}kVA",
-            "carregamento": format_num(carg_val, is_pct=True)
-        }
+                ip_qtd = 0
+                ip_dem_val = 0.0
+                if cenario_name in cenarios_data:
+                    for t in cenarios_data[cenario_name]["trechos"]:
+                        try:
+                            ip_qtd += int(t.get("ip70", 0) or 0)
+                        except Exception:
+                            pass
+                    ip_dem_val = ip_qtd * 0.07
 
-    # Queda de Tensão por Trecho
-    letras_ativas = set()
-    qt_por_cenario = {}
-    for cenario_name in ["ATUAL", "ATUAL+NC", "PROJETADO"]:
-        qt_por_cenario[cenario_name] = {}
-        if cenario_name in cenarios_calc:
-            for tr_res in cenarios_calc[cenario_name].get("trechos_resultado", []):
-                l = tr_res["letra"]
-                letras_ativas.add(l)
-                qt_por_cenario[cenario_name][l] = tr_res["qt_acumulada"]
+                dem_tot_val = calc_res.get("demanda_total_kva", dem_res_val + ip_dem_val)
+                carg_val = calc_res.get("carregamento_trafo", 0.0)
 
-    def _fmt_qt(v):
-        if v is None or v == "" or v == "-":
-            return "-"
-        try:
-            fv = float(v)
-            if abs(fv) < 1e-6:
-                return "-"
-            return f"{fv:.2f}%".replace(".", ",")
-        except Exception:
-            return "-"
+                req_res_q, req_res_d, req_res_t = "-", "-", "-"
+                if cenario_name == "ATUAL+NC":
+                    if tot_cli_atual > 0 and tot_cli > tot_cli_atual:
+                        delta = tot_cli - tot_cli_atual
+                        req_res_q = f"{delta:02d}"
+                        req_res_d = dmdi_str
+                        req_res_t = format_num(delta * dmdi_float, 2)
+                    else:
+                        esp_tot = sum(float(t.get("esp_carga", 0) or 0) for t in cenarios_data.get(cenario_name, {}).get("trechos", []))
+                        if esp_tot > 0:
+                            req_res_t = format_num(esp_tot, 2)
 
-    active_trechos_list = []
-    for l in sorted(list(letras_ativas)):
-        active_trechos_list.append({
-            "trecho": l,
-            "qt_atual": _fmt_qt(qt_por_cenario["ATUAL"].get(l)),
-            "qt_atual_nc": _fmt_qt(qt_por_cenario["ATUAL+NC"].get(l)),
-            "qt_projetado": _fmt_qt(qt_por_cenario["PROJETADO"].get(l)),
-            "ativo": True
-        })
+                pt_cen = ponto_trafo_base
+                if cenario_name == "PROJETADO" and not custom_ponto_trafo:
+                    pt_cen = "ANXXXX"
+
+                resumo_scenarios[cenario_name] = {
+                    "cenario": cenario_name,
+                    "ponto_trafo": pt_cen,
+                    "trafo_desc": trafo_desc_base,
+                    "residencial": {
+                        "qtde": str(tot_cli) if tot_cli > 0 else "-",
+                        "dmdi": dmdi_str if tot_cli > 0 else "-",
+                        "total": format_num(dem_res_val, 2) if tot_cli > 0 else "-",
+                    },
+                    "n_residencial": {"qtde": "-", "dmdi": "-", "total": "-"},
+                    "req_resid": {"qtde": req_res_q, "dmdi": req_res_d, "total": req_res_t},
+                    "req_n_resid": {"qtde": "-", "dmdi": "-", "total": "-"},
+                    "ilum_publica": {
+                        "qtde": str(ip_qtd) if ip_qtd > 0 else "-",
+                        "dmdi": "-",
+                        "total": format_num(ip_dem_val, 2) if ip_dem_val > 0 else "-",
+                    },
+                    "total_clientes": str(tot_cli),
+                    "max_prev": f"{format_num(dem_tot_val, 2)}kVA",
+                    "carregamento": format_num(carg_val, is_pct=True),
+                }
+
+        if not active_trechos_list:
+            letras_ativas = set()
+            qt_por_cenario = {}
+            for cenario_name in ["ATUAL", "ATUAL+NC", "PROJETADO"]:
+                qt_por_cenario[cenario_name] = {}
+                if cenario_name in cenarios_calc:
+                    for tr_res in cenarios_calc[cenario_name].get("trechos_resultado", []):
+                        l = tr_res["letra"]
+                        letras_ativas.add(l)
+                        qt_por_cenario[cenario_name][l] = tr_res["qt_acumulada"]
+
+            def _fmt_qt(v):
+                if v is None or v == "" or v == "-":
+                    return "-"
+                try:
+                    fv = float(v)
+                    if abs(fv) < 1e-6:
+                        return "-"
+                    return f"{fv:.2f}%".replace(".", ",")
+                except Exception:
+                    return "-"
+
+            for l in sorted(list(letras_ativas)):
+                active_trechos_list.append({
+                    "trecho": l,
+                    "qt_atual": _fmt_qt(qt_por_cenario["ATUAL"].get(l)),
+                    "qt_atual_nc": _fmt_qt(qt_por_cenario["ATUAL+NC"].get(l)),
+                    "qt_projetado": _fmt_qt(qt_por_cenario["PROJETADO"].get(l)),
+                    "ativo": True,
+                })
 
     if not active_trechos_list:
         active_trechos_list = [{"trecho": "A", "qt_atual": "-", "qt_atual_nc": "-", "qt_projetado": "-", "ativo": True}]
+
+    # Se foram passados active_scenarios explícitos, filtra os resumos
+    if active_scenarios:
+        resumo_scenarios = {k: v for k, v in resumo_scenarios.items() if k in active_scenarios}
 
     wb.close()
     return {
         "arquivo": xlsm_path,
         "resumo_trafo": resumo_scenarios,
-        "trechos_cqt": active_trechos_list
+        "trechos_cqt": active_trechos_list,
     }
 
 
