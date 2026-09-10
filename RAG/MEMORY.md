@@ -187,9 +187,10 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `sisrua2/` & `Lampa/`
 
 ### 12. Validação, Debug Completo e Testes
-- **Suíte de Testes**: **106 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Suíte de Testes**: **108 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
 - **Cobertura de Código Crítica**:
   - `cpfc\cpfc_core.py`: 98%
+  - `cpfc\cpfc_notas.py`: 95%
   - `dados_tecnicos\tabelas_referencia.py`: 94%
   - `ambiental\checklist_ambiental_manager.py`: 92%
   - `unifilar\arvore_parser.py`: 92%
@@ -209,13 +210,13 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `mapa_postes\mapa_servidor.py`: 83%
   - `orcamento\orcamento_manager.py`: 81%
 - **Auditoria de Sintaxe AutoLISP (.lsp)**: Todos os 28 arquivos `.lsp` do projeto verificados por parser estrito com 100% de parênteses e strings balanceadas (0 erros).
-- **Auditoria de Módulos Python (.py)**: Todos os 51 arquivos compilados e em conformidade com as regras de Clean Code e limites de linhas (<750 linhas).
+- **Auditoria de Módulos Python (.py)**: Todos os 52 arquivos compilados e em conformidade com as regras de Clean Code e limites de linhas (<750 linhas).
 - **Carregador Central `acaddoc.lsp`**:
   - Funções de compatibilidade globais: `stringp`, `fboundp`, `vl-symbol-p`, `vl-sleep`, `vl-filename-nxname`.
   - Suporte dinâmico a 9 pastas no `SupportPath`.
-  - Novos módulos integrados: Topografia (`TLENTAB`, `IBCOORD`, `pt2blk`, `mlrua`), CQT (`CQTEXCEL`), Tabelas (`BT`, `MT`), Ambiental (`APP_BUFFER`), Paleta OSM (`mapa_paleta_loader.lsp`).
+  - Novos módulos integrados: Topografia (`TLENTAB`, `IBCOORD`, `pt2blk`, `mlrua`), CQT (`CQTEXCEL`), Tabelas (`BT`, `MT`), Ambiental (`APP_BUFFER`), Paleta OSM (`mapa_paleta_loader.lsp`), CPFC Notas (`CPFC_NOTAS`).
   - Comando mestre de recarga: **`RECARREGAR_TUDO`** (ou **`RELOAD_AUXCAD`**).
-- **Interface Gráfica & Menus**: `aux_cad_toolbar.lsp` e `aux_cad_menu.mnu` sincronizados com 21 botões e itens de menu organizados.
+- **Interface Gráfica & Menus**: `aux_cad_toolbar.lsp` e `aux_cad_menu.mnu` sincronizados com 22 botões e itens de menu organizados.
 
 ### 14. `mapa_cad_paleta/` (Paleta Cartográfica OSM C# .NET para AutoCAD 2018+)
 - Multi-targeting .NET SDK (`net8.0-windows` para ACAD 2025/2026 e `net48` para ACAD 2018-2024) com `Microsoft.Web.WebView2`.

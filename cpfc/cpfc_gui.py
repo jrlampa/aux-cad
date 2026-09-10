@@ -19,6 +19,7 @@ from cpfc.cpfc_core import (
 )
 from cpfc.cpfc_excel import preencher_e_salvar_cpfc
 from cpfc.cpfc_guia_ren1059 import exibir_modal_guia_ren1059
+from cpfc.cpfc_notas import exibir_modal_notas_cpfc
 
 
 class CPFCManagerGUI(tk.Tk):
@@ -91,7 +92,7 @@ class CPFCManagerGUI(tk.Tk):
 
         btn_guia = tk.Button(
             header_frame,
-            text="📘 Regras REN 1.059 (Casos de PF)",
+            text="📘 Regras REN 1.059",
             font=("Segoe UI", 9, "bold"),
             bg="#0D8269",
             fg="#FFFFFF",
@@ -102,6 +103,24 @@ class CPFCManagerGUI(tk.Tk):
             command=lambda: exibir_modal_guia_ren1059(self),
         )
         btn_guia.pack(side=tk.RIGHT, pady=4)
+
+        btn_notas = tk.Button(
+            header_frame,
+            text="📋 Notas p/ Desenho (CPFC)",
+            font=("Segoe UI", 9, "bold"),
+            bg="#0284C7",
+            fg="#FFFFFF",
+            padx=12,
+            pady=6,
+            relief="flat",
+            cursor="hand2",
+            command=self._abrir_notas_desenho,
+        )
+        btn_notas.pack(side=tk.RIGHT, padx=(0, 8), pady=4)
+
+    def _abrir_notas_desenho(self):
+        num_proj = self.ent_projeto.get().strip() if hasattr(self, "ent_projeto") else ""
+        exibir_modal_notas_cpfc(self, self.pasta_destino_sugerida, num_proj)
 
     def _criar_corpo_com_rolagem(self):
         container = tk.Frame(self, bg="#F1F5F9")

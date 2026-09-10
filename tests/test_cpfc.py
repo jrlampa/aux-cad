@@ -366,3 +366,58 @@ def test_exibir_modal_guia_ren1059():
     except Exception:
         # Ambiente sem runtime gráfico Tcl/Tk disponível
         pass
+
+
+def test_catalogo_notas_regulatorias():
+    """Valida a integridade do catálogo de notas oficiais de CPFC (Arts. 98, 99, 104, 105, 106 e 110)."""
+    from cpfc.cpfc_notas import NOTAS_REGULATORIAS, obter_nota
+
+    assert len(NOTAS_REGULATORIAS) == 4
+    for chave in ["1", "2", "3", "4"]:
+        nota = obter_nota(chave)
+        assert nota is not None
+        assert "texto_cad" in nota
+        assert "detalhe_legal" in nota
+        assert "NOTA TÉCNICA" in nota["texto_cad"]
+
+    # Validações regulatórias específicas
+    nota1 = obter_nota("1")
+    assert "98" in nota1["artigos"] and "99" in nota1["artigos"]
+    assert "CARGA INSTALADA" in nota1["texto_cad"] and "DISJUNTOR" in nota1["texto_cad"]
+
+    nota2 = obter_nota("2")
+    assert "104" in nota2["artigos"] and "106" in nota2["artigos"]
+    assert "50 kW" in nota2["texto_cad"]
+
+    nota3 = obter_nota("3")
+    assert "105" in nota3["artigos"] and "106" in nota3["artigos"]
+    assert "COMPLEMENTAÇÃO DE FASE" in nota3["texto_cad"]
+
+    nota4 = obter_nota("4")
+    assert "110" in nota4["artigos"]
+    assert "DESLOCAMENTO/REMOÇÃO DE POSTE" in nota4["texto_cad"]
+
+    # Busca por código
+    assert obter_nota("CARGA_DISJUNTOR")["id"] == "1"
+    assert obter_nota("RELOCACAO_TERCEIROS")["id"] == "4"
+    assert obter_nota("INEXISTENTE") is None
+
+
+def test_formatar_e_salvar_notas_cad():
+    """Valida a consolidação do texto MText e a gravação de arquivo de notas do CPFC."""
+    from cpfc.cpfc_notas import formatar_notas_cad, salvar_arquivo_notas
+
+    texto = formatar_notas_cad(["1", "3"], num_projeto="A057032999")
+    assert "PROJETO / ORDEM: A057032999" in texto
+    assert "ARTS. 98 E 99" in texto
+    assert "ARTS. 105 E 106" in texto
+    assert "PLANILHA PADRÃO CPFC" in texto
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        caminho = salvar_arquivo_notas(tmpdir, "A057032999", texto)
+        assert os.path.exists(caminho)
+        with open(caminho, "r", encoding="utf-8") as f:
+            conteudo = f.read()
+            assert "A057032999" in conteudo
+            assert "NOTA TÉCNICA" in conteudo
+

@@ -38,6 +38,9 @@
           ;; 2.1 Botão CPFC (Participação Financeira REN 1.059)
           (vla-AddToolbarItem tb (vla-get-Count tb) "💰 CPFC (Part. Financeira)" "Abre o cálculo de Participação Financeira do Consumidor" "^C^CCPFCCAD ")
 
+          ;; 2.1.1 Botão Notas CPFC no Desenho
+          (vla-AddToolbarItem tb (vla-get-Count tb) "📝 Notas CPFC no CAD" "Insere notas técnicas de CPFC (Arts. 98, 104, 105, 110) na prancha" "^C^CCPFC_NOTAS ")
+
           ;; 2.2 Botão Diagrama Unifilar (Proteção a Montante)
           (vla-AddToolbarItem tb (vla-get-Count tb) "⚡ Diagrama Unifilar" "Localiza a proteção a montante e insere/atualiza no DWG" "^C^CUNIFILAR ")
 

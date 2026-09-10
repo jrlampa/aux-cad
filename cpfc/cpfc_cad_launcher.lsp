@@ -138,5 +138,104 @@
 
 (defun c:CPFCREGRA () (c:CPFCALERTA))
 
-(princ "\n[CPFC] Rotina carregada! Digite CPFC, CPFCUI ou CPFCALERTA.")
+;; Função auxiliar para criar layer seguro
+(defun cpfc-garantir-layer (layer_name cor / acadObj doc layers)
+  (if (null (tblsearch "LAYER" layer_name))
+    (progn
+      (setq acadObj (vlax-get-acad-object))
+      (setq doc (vla-get-ActiveDocument acadObj))
+      (setq layers (vla-get-Layers doc))
+      (vl-catch-all-apply
+        '(lambda ()
+           (vla-add layers layer_name)
+           (setvar "CLAYER" layer_name)
+           (command-s "._layer" "_color" (itoa cor) layer_name "")
+         )
+      )
+    )
+    (setvar "CLAYER" layer_name)
+  )
+)
+
+;; Inserção direta de Nota Técnica de CPFC no AutoCAD (MText)
+(defun c:CPFC_NOTAS (/ opc pt txt acadObj doc mspace mtextObj larg alt)
+  (princ "\n==================================================================")
+  (princ "\n NOTAS TÉCNICAS REGULATÓRIAS - PARTICIPAÇÃO FINANCEIRA (CPFC)   ")
+  (princ "\n==================================================================")
+  (princ "\n Selecione o enquadramento regulatório do projeto:               ")
+  (princ "\n  [1] Carga x Disjuntor (Arts. 98 e 99 - Custeio Medição/Rede)   ")
+  (princ "\n  [2] Ligação Nova > 50 kW (Arts. 104 e 106 - Sem Gratuidade)   ")
+  (princ "\n  [3] Acréscimo Carga > 50 kW / Complementação Fase MT (105/106)")
+  (princ "\n  [4] Relocação de Poste / Afastamento de Rede (Art. 110)       ")
+  (princ "\n  [5] Consolidado Completo (Todas as Notas)                     ")
+  
+  (initget "1 2 3 4 5")
+  (setq opc (getkword "\nInforme a opção [1/2/3/4/5] <1>: "))
+  (if (or (null opc) (= opc "")) (setq opc "1"))
+
+  (cond
+    ((= opc "1")
+     (setq txt (strcat
+       "\\A1;{\\fSegoe UI|b1;NOTA TÉCNICA - PARTICIPAÇÃO FINANCEIRA (ARTS. 98 E 99 DA REN ANEEL 1.000/2021):}\n"
+       "A PRESENTE SOLICITAÇÃO ENQUADRA-SE NOS TERMOS DO ART. 98 (INCISOS I A IV E § 3º) E ART. 99 (INCISOS I E II) "
+       "DA RESOLUÇÃO NORMATIVA ANEEL Nº 1.000/2021. HAVENDO DISCREPÂNCIA ENTRE A CARGA INSTALADA DECLARADA (kW) E A "
+       "PROTEÇÃO GERAL REQUERIDA (DISJUNTOR) OU OPÇÃO POR CONEXÃO POLIFÁSICA FORA DO PADRÃO TÉCNICO NORMATIVO, CABE AO "
+       "SOLICITANTE O CUSTEIO DAS INSTALAÇÕES INTERNAS, SISTEMA DE MEDIÇÃO DIFERENCIADO, ADAPTAÇÕES DE REDE E A "
+       "PARTICIPAÇÃO FINANCEIRA CALCULADA CONFORME REGULAÇÃO VIGENTE."
+     )))
+    ((= opc "2")
+     (setq txt (strcat
+       "\\A1;{\\fSegoe UI|b1;NOTA TÉCNICA - PARTICIPAÇÃO FINANCEIRA (ARTS. 104 E 106 DA REN ANEEL 1.000/2021 / REN 1.059/2023):}\n"
+       "A UNIDADE CONSUMIDORA NÃO ATENDE INTEGRALMENTE AOS REQUISITOS CUMULATIVOS DE GRATUIDADE DO ART. 104 DA REN Nº 1.000/2021 "
+       "(CARGA INSTALADA SUPERIOR A 50 kW, EXISTÊNCIA DE OUTRA UC NA PROPRIEDADE OU ENQUADRAMENTO NO § 2º). APLICAM-SE O "
+       "ART. 106 E ART. 108, SENDO CALCULADOS O ENCARGO DE RESPONSABILIDADE DA DISTRIBUIDORA (ERD) E A PARTICIPAÇÃO "
+       "FINANCEIRA DO CONSUMIDOR (PF) PELO CUSTO PROPORCIONALIZADO DA OBRA (COP)."
+     )))
+    ((= opc "3")
+     (setq txt (strcat
+       "\\A1;{\\fSegoe UI|b1;NOTA TÉCNICA - PARTICIPAÇÃO FINANCEIRA (ARTS. 105 E 106 DA REN ANEEL 1.000/2021 / REN 1.059/2023):}\n"
+       "SOLICITAÇÃO DE AUMENTO DE CARGA NÃO ENQUADRADA NA GRATUIDADE DO ART. 105 DA REN Nº 1.000/2021 POR RESULTAR EM CARGA "
+       "INSTALADA TOTAL SUPERIOR A 50 kW E/OU EXIGIR COMPLEMENTAÇÃO DE FASE(S) EM REDE DE TENSÃO MAIOR OU IGUAL A 2,3 kV (MT). "
+       "CONFORME ART. 106, INCISO I, PROCEDEU-SE AO CÁLCULO DA PARTICIPAÇÃO FINANCEIRA DO CONSUMIDOR CONFORME PLANILHA CPFC EM ANEXO."
+     )))
+    ((= opc "4")
+     (setq txt (strcat
+       "\\A1;{\\fSegoe UI|b1;NOTA TÉCNICA - OBRAS A PEDIDO DE TERCEIROS (ART. 110 DA REN ANEEL 1.000/2021):}\n"
+       "OBRA EXECUTADA A PEDIDO DO CONSUMIDOR / INTERESSADO PARA DESLOCAMENTO/REMOÇÃO DE POSTE E REDE OU MELHORIA DE ASPECTOS "
+       "ESTÉTICOS/INTERESSE RESTRITO, NOS TERMOS DO ART. 110 (INCISOS I A VIII E § 1º) DA REN ANEEL Nº 1.000/2021. OS CUSTOS "
+       "INTEGRAIS DO SERVIÇO, INCLUINDO EVENTUAIS REFORMAS DE CAPACIDADE OU ADEQUAÇÕES NECESSÁRIAS NA REDE, SÃO DE "
+       "RESPONSABILIDADE EXCLUSIVA DO SOLICITANTE."
+     )))
+    ((= opc "5")
+     (setq txt (strcat
+       "\\A1;{\\fSegoe UI|b1;NOTAS TÉCNICAS REGULATÓRIAS - PARTICIPAÇÃO FINANCEIRA (CPFC - REN 1.000 / 1.059):}\n"
+       "1. CARGA X DISJUNTOR (ARTS. 98/99): CUSTEIO PELO SOLICITANTE CASO A PROTEÇÃO GERAL REQUERIDA SUPERE A DEMANDA NORMATIVA.\n"
+       "2. LIGAÇÃO NOVA > 50 kW (ARTS. 104/106): CONEXÃO FORA DA GRATUIDADE, COM CÁLCULO DE ERD E COP (PF > 0).\n"
+       "3. ACRÉSCIMO DE CARGA (ARTS. 105/106): CARGA TOTAL > 50 kW E/OU COMPLEMENTAÇÃO DE FASE EM MÉDIA TENSÃO (>= 2,3 kV).\n"
+       "4. OBRAS DE TERCEIROS (ART. 110): DESLOCAMENTO DE REDE/POSTE COM CUSTEIO INTEGRAL PELO SOLICITANTE."
+     )))
+  )
+
+  (setq pt (getpoint "\nClique no ponto de inserção da Nota Técnica na prancha: "))
+  (if pt
+    (progn
+      (cpfc-garantir-layer "NOTAS_CPFC" 4) ; Cor 4 (Ciano)
+      (setq larg 180.0)
+      (setq alt 2.0)
+      (setq acadObj (vlax-get-acad-object))
+      (setq doc (vla-get-ActiveDocument acadObj))
+      (setq mspace (vla-get-ModelSpace doc))
+      (setq mtextObj (vla-AddMText mspace (vlax-3d-point pt) larg txt))
+      (vla-put-Height mtextObj alt)
+      (vla-put-Layer mtextObj "NOTAS_CPFC")
+      (princ "\n[CPFC] Nota Técnica inserida com sucesso no layer NOTAS_CPFC!")
+    )
+    (princ "\n[CPFC] Inserção cancelada pelo usuário.")
+  )
+  (princ)
+)
+
+(defun c:NOTAS_CPFC () (c:CPFC_NOTAS))
+
+(princ "\n[CPFC] Rotina carregada! Comandos: CPFC, CPFCUI, CPFCALERTA e CPFC_NOTAS.")
 (princ)

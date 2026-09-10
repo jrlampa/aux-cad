@@ -231,8 +231,8 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
 
 ### 11. Validação, Debug Completo e Testes
 - **Auditoria de Sintaxe AutoLISP**: 100% dos 28 arquivos `.lsp` do projeto validados e com balanceamento de parênteses e strings verificado (0 erros).
-- **Auditoria de Módulos Python**: 100% dos 51 arquivos `.py` compilados e validados contra regras de Clean Code e limites de linhas (<750 linhas).
-- **Suíte de Testes**: **106 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Auditoria de Módulos Python**: 100% dos 52 arquivos `.py` compilados e validados contra regras de Clean Code e limites de linhas (<750 linhas).
+- **Suíte de Testes**: **108 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
 - **Cobertura de Código**: Cobertura crítica preservada acima de 80% a 99% em todos os módulos principais.
 
 ### 12. `mapa_cad_paleta/` (Paleta Cartográfica OSM C# .NET para AutoCAD 2018+)
@@ -254,6 +254,21 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - **`MAPAPALETA`** (alias: **`OSMPALETA`**): Exibe a paleta acoplável à direita com auto-hide.
   - **`FECHAR_MAPAPALETA`**: Fecha a paleta.
   - **`RECARREGAR_MAPAPALETA`**: Recarrega a interface web instantaneamente na sessão.
+
+### 13. `cpfc/` (Participação Financeira do Consumidor - REN 1.000 / REN 1.059 ANEEL)
+- **Motor de Regras Regulatórias (`cpfc_core.py`, `cpfc_gui.py`, `cpfc_excel.py`)**:
+  - Cálculo oficial da fórmula ANEEL: $PF = \max(0, COP - ERD)$, com rateio proporcional da obra e cobertura pelo Fator K ($K_c$ e $K_g$).
+  - Geração automática e preenchimento da planilha oficial de distribuição da concessionária.
+- **Gerador de Notas Regulatórias para o Desenho (`cpfc_notas.py`)**:
+  - Catálogo com as 4 Notas Técnicas Oficiais para carimbo/prancha no CAD:
+    1. *Carga x Disjuntor (Arts. 98 e 99 - Custeio de medição e adaptações de rede)*
+    2. *Ligação Nova > 50 kW (Arts. 104 e 106 - Sem gratuidade)*
+    3. *Acréscimo de Carga > 50 kW / Complementação de Fase MT (Arts. 105 e 106)*
+    4. *Relocação de Poste / Afastamento de Rede / Interesse de Terceiros (Art. 110)*
+  - Modal na interface com seleção múltipla, cópia com 1 clique e exportação para arquivo `.txt`.
+- **Inserção Direta no AutoCAD via AutoLISP (`cpfc_cad_launcher.lsp`)**:
+  - Comandos **`CPFC_NOTAS`** (ou **`NOTAS_CPFC`**): insere caixa MText formatada com fonte técnica no layer `NOTAS_CPFC` na prancha do DWG.
+  - Comandos **`CPFC`** / **`CPFCUI`** / **`CPFCCAD`** / **`CPFCALERTA`**: abertura da interface gráfica e consulta rápida de regras.
 
 
 

@@ -28,6 +28,7 @@ ID_Separator4 [_Separator]
 ID_OrcCad    [_Button("Orçamento e Levantamento CAD", "ICON_ORCAD", "ICON_ORCAD")]^C^CORCAD
 ID_OrcUi     [_Button("Tabela de Materiais e Preços", "ICON_ORCUI", "ICON_ORCUI")]^C^CORCUI
 ID_Cpfc      [_Button("Participação Financeira (CPFC)", "ICON_CPFC", "ICON_CPFC")]^C^CCPFCCAD
+ID_CpfcNotas [_Button("Notas CPFC no Desenho", "ICON_CPFC_NOTAS", "ICON_CPFC_NOTAS")]^C^CCPFC_NOTAS
 ID_Separator5 [_Separator]
 ID_TlenTab   [_Button("Tabela de Comprimentos", "ICON_TLENTAB", "ICON_TLENTAB")]^C^CTLENTAB
 ID_AddBloco  [_Button("Adicionar Blocos no UCS", "ICON_ADDBLOCO", "ICON_ADDBLOCO")]^C^CADDBLOCO
@@ -62,6 +63,7 @@ ID_MnTabelas   [&11. Consultar Tabelas Técnicas BT/MT (TABELAS)]^C^CTABELAS
 ID_MnOrcCad    [&12. Levantamento de Materiais DWG (ORCAD)]^C^CORCAD
 ID_MnOrcUi     [&13. Tabela de Materiais e Preços (ORCUI)]^C^CORCUI
 ID_MnCpfc      [&14. Participação Financeira REN 1.059 (CPFC)]^C^CCPFCCAD
+ID_MnCpfcNotas [&14.1 Notas CPFC no Desenho (CPFC_NOTAS)]^C^CCPFC_NOTAS
 [--]
 ID_MnTlenTab   [&15. Tabela de Comprimentos (TLENTAB)]^C^CTLENTAB
 ID_MnAddBloco  [&16. Inserir Bloco no UCS (ADDBLOCO)]^C^CADDBLOCO
