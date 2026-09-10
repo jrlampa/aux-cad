@@ -50,26 +50,38 @@
           ;; 5. Botão CQTQUADROS
           (vla-AddToolbarItem tb (vla-get-Count tb) "📊 Desenhar Quadros CQT" "Desenha os quadros de CQT no AutoCAD" "^C^CCQTQUADROS ")
 
-          ;; 4. Botão KMZCHECK
+          ;; 5.1 Botão CQTEXCEL
+          (vla-AddToolbarItem tb (vla-get-Count tb) "📥 Quadros CQT via Excel" "Seleciona planilha CQT e desenha quadros no CAD" "^C^CCQTEXCEL ")
+
+          ;; 6. Botão KMZCHECK
           (vla-AddToolbarItem tb (vla-get-Count tb) "🌳 KMZ Ambiental" "Verifica áreas ambientais e gera Memorial/Checklist" "^C^CKMZCHECK ")
 
-          ;; 5. Botão INSCROQUI
+          ;; 7. Botão INSCROQUI
           (vla-AddToolbarItem tb (vla-get-Count tb) "🖼️ Inserir Ortofoto" "Insere a Ortofoto/Croqui de satélite no CAD" "^C^CINSCROQUI ")
 
-          ;; 6. Botão CALC_RESULTANTE
+          ;; 8. Botão CALC_RESULTANTE
           (vla-AddToolbarItem tb (vla-get-Count tb) "⚙️ Resultante em Postes" "Calcula tração resultante e checa sobrecarga" "^C^CCALC_RESULTANTE ")
 
-          ;; 7. Botão ADDBLOCO
+          ;; 8.1 Botão TABELAS (Tabelas Técnicas BT/MT)
+          (vla-AddToolbarItem tb (vla-get-Count tb) "📚 Tabelas Técnicas" "Consulta rápida de cabos MT, condutores e estruturas BT" "^C^CTABELAS ")
+
+          ;; 9. Botão TLENTAB (Comprimentos em Tabela)
+          (vla-AddToolbarItem tb (vla-get-Count tb) "📏 Tabela Comprimentos" "Soma comprimentos de linhas e gera tabela no CAD" "^C^CTLENTAB ")
+
+          ;; 10. Botão ADDBLOCO
           (vla-AddToolbarItem tb (vla-get-Count tb) "📍 Add Bloco no UCS" "Insere blocos sobre referências orientado à tela" "^C^CADDBLOCO ")
 
-          ;; 9. Botão Estúdio Mapa Web
+          ;; 11. Botão Estúdio Mapa Web
           (vla-AddToolbarItem tb (vla-get-Count tb) "🌍 Estúdio Mapa Satélite (MAPAPOSTES)" "Abre o mapa com satélite para lançar coordenadas, postes e clientes" "^C^CMAPAPOSTES ")
 
-          ;; 10. Botão KMZ Postes
+          ;; 12. Botão KMZ Postes
           (vla-AddToolbarItem tb (vla-get-Count tb) "📍 KMZ ➔ Postes & Textos" "Importa pontos do KMZ com bloco POSTE_, PONTO e descricao" "^C^CIMPORTAR_KMZ_POSTES ")
 
-          ;; 11. Botão CSV UTM
+          ;; 13. Botão CSV UTM
           (vla-AddToolbarItem tb (vla-get-Count tb) "📥 Importar CSV UTM" "Importa pontos topográficos de arquivo CSV" "^C^CIMPORTAR_PONTOS_UTM ")
+
+          ;; 14. Botão Recarregar Tudo
+          (vla-AddToolbarItem tb (vla-get-Count tb) "🔄 Recarregar Tudo" "Recarrega todas as rotinas do AUX CAD na memória" "^C^CRECARREGAR_TUDO ")
         )
       )
 

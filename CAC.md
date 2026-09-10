@@ -187,17 +187,19 @@ aux cad/
     - **Inserir Novo**: Desenha o título verde `DIAGRAMA  UNIFILAR` sublinhado com linha e textos técnicos alinhados à direita.
     - **Atualizar Existente**: Seleciona textos existentes no DWG e substitui placeholders (`SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO...`, `Clientes Grupo...`) preservando a diagramação original.
 
-### 10. Carregamento Universal (`acaddoc.lsp`)
-O arquivo `acaddoc.lsp` foi projetado para:
-1. Localizar o caminho absoluto da pasta raiz `aux cad`.
-2. Adicionar dinamicamente as pastas `orcamento`, `cqt`, `cpfc`, `unifilar`, `ambiental`, `mecanico`, `topografia`, `mapa_postes` e `dados_tecnicos` ao `SupportPath` de arquivos de suporte do AutoCAD.
-3. Carregar as rotinas modulares de forma resiliente com tratamento de erros (`vl-catch-all-apply`).
+### 10. Carregamento Universal & Auditoria de Integridade (`acaddoc.lsp`)
+O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestração do AUX CAD:
+1. **Compatibilidade Global**: Funções de segurança e reflexão pré-carregadas (`stringp`, `fboundp`, `vl-symbol-p`, `vl-sleep`, `vl-filename-nxname`), prevenindo erros de ambiente em qualquer versão de AutoCAD.
+2. **Resolução Dinâmica**: Localiza o caminho absoluto da pasta raiz e adiciona dinamicamente as 9 pastas dos módulos ao `SupportPath` de suporte do AutoCAD (`cqt`, `ambiental`, `mecanico`, `topografia`, `orcamento`, `mapa_postes`, `dados_tecnicos`, `cpfc`, `unifilar`).
+3. **Carregamento Seguro**: Utiliza `load-aux-safe` com `vl-catch-all-apply` e fallbacks automáticos.
+4. **Comando Mestre de Recarga**: Comando **`RECARREGAR_TUDO`** (ou **`RELOAD_AUXCAD`**) para recarregar todos os 10 módulos e menus de uma só vez na memória do AutoCAD.
+5. **Barra de Ferramentas e Menus Nativos**: `aux_cad_toolbar.lsp` e `aux_cad_menu.mnu` atualizados com 20 ferramentas integradas em 1 clique.
 
-### 11. Validação e Testes
-- Suíte com **93 testes unitários passando 100%** (`python -m pytest --cov`).
-- Configuração centralizada em `pytest.ini` (`pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos cpfc unifilar`).
-- Cobertura total do novo módulo `unifilar`: **88%** (`arvore_parser.py`: 92%, `arvore_database.py`: 92%, `arvore_client.py`: 82%, `unifilar_manager.py`: 80%).
-- Resolução dinâmica de diretórios no `acaddoc.lsp` para independência de máquina.
-- Rotinas e saídas geradas em tempo de execução organizadas com proteção no `.gitignore` (incluindo `unifilar/arvore_cache.sqlite3`).
+### 11. Validação, Debug Completo e Testes
+- **Auditoria de Sintaxe AutoLISP**: 100% dos 26 arquivos `.lsp` do projeto validados e com balanceamento de parênteses e strings verificado (0 erros).
+- **Auditoria de Módulos Python**: 100% dos 50 arquivos `.py` compilados e validados contra regras de Clean Code e limites de linhas (<750 linhas).
+- **Suíte de Testes**: **95 testes unitários passando com 100% de sucesso** (`python -m pytest --cov`).
+- **Cobertura de Código**: Cobertura crítica preservada acima de 80% a 99% em todos os módulos principais (`cpfc_core`: 98%, `checklist_ambiental_manager`: 92%, `tabelas_referencia`: 94%, `cqt_live_calc`: 91%, `cqt_excel_io`: 88%, `cqt_quadros_generator`: 88%, `arvore_parser`: 92%, `arvore_database`: 92%).
+
 
 

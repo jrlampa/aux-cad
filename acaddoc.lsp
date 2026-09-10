@@ -5,15 +5,35 @@
 
 (vl-load-com)
 
-;; Compatibilidade para checagem de tipo string e função em rotinas LISP legadas/portadas
+;; =============================================================================
+;;  FUNÇÕES DE COMPATIBILIDADE GLOBAL PARA TODAS AS ROTINAS AUTOLISP
+;; =============================================================================
 (defun stringp (x) (= (type x) 'STR))
+
 (defun fboundp (sym)
   (and sym
        (or (= (type sym) 'SUBR)
            (= (type sym) 'USUBR)
            (and (= (type sym) 'SYM)
+                (boundp sym)
                 (or (= (type (eval sym)) 'SUBR)
                     (= (type (eval sym)) 'USUBR))))))
+
+(if (not (fboundp 'vl-symbol-p))
+  (defun vl-symbol-p (x) (= (type x) 'SYM))
+)
+
+(if (not (fboundp 'vl-sleep))
+  (defun vl-sleep (ms)
+    (vl-cmdf "_.delay" ms)
+  )
+)
+
+(if (not (fboundp 'vl-filename-nxname))
+  (defun vl-filename-nxname (filename)
+    (strcat (vl-filename-base filename) (vl-filename-extension filename))
+  )
+)
 
 ;; Adiciona pastas dos projetos ao SupportPath do AutoCAD dinamicamente
 (defun add-support-path (dir / files acadApp pref filesObj curPaths newPath)
@@ -66,6 +86,10 @@
   )
 )
 
+;; =============================================================================
+;;  CARREGAMENTO DOS MÓDULOS DE ENGENHARIA DE DISTRIBUIÇÃO
+;; =============================================================================
+
 ;; 1. Comum / Barra de Ferramentas nativa no AutoCAD
 (load-aux-safe "aux_cad_toolbar.lsp")
 
@@ -80,11 +104,15 @@
 ;; 4. Módulo Cálculo Estrutural e Mecânico de Postes
 (load-aux-safe "mecanico\\CALC_RESULTANTE_v1.0.lsp")
 
-;; 5. Módulo Topografia, Pontos e Importadores de CSV e KMZ
+;; 5. Módulo Topografia, Pontos, Vias e Importadores de CSV e KMZ
 (load-aux-safe "topografia\\addbloco.lsp")
 (load-aux-safe "topografia\\kmz_pontos_importer.lsp")
 (load-aux-safe "topografia\\IMPORTADOR_CSV_CONTORNOS_v2.2.lsp")
 (load-aux-safe "topografia\\IMPORTADOR_CSV_PRO_v2.1.lsp")
+(load-aux-safe "topografia\\TLENTAB.lsp")
+(load-aux-safe "topografia\\IBCOORD.lsp")
+(load-aux-safe "topografia\\pt2blk.lsp")
+(load-aux-safe "topografia\\mlrua.lsp")
 
 ;; 6. Módulo Orçamento e Levantamento Automático de Materiais
 (load-aux-safe "orcamento\\orcamento_cad_extractor.lsp")
@@ -92,7 +120,7 @@
 ;; 7. Módulo Estúdio Web de Satélite de Postes & Cargas
 (load-aux-safe "mapa_postes\\mapa_cad_launcher.lsp")
 
-;; 8. Módulo Dados Técnicos e Tabelas de Referência (Tabela 7 e Tabela 9 BT)
+;; 8. Módulo Dados Técnicos e Tabelas de Referência (Tabela 7 e Tabela 9 BT/MT)
 (load-aux-safe "dados_tecnicos\\tabelas_referencia.lsp")
 
 ;; 9. Módulo Participação Financeira do Consumidor (CPFC - REN 1.059 ANEEL)
@@ -100,6 +128,24 @@
 
 ;; 10. Módulo Diagrama Unifilar e Consulta da Árvore de Dispositivos
 (load-aux-safe "unifilar\\unifilar_cad.lsp")
+
+
+;; =============================================================================
+;;  COMANDO GERAL DE RECARREGAMENTO (RECARREGAR_TUDO / RELOAD_AUXCAD)
+;; =============================================================================
+(defun c:RECARREGAR_TUDO (/ res)
+  (princ "\n==============================================================")
+  (princ "\n       RECARREGANDO TODOS OS MÓDULOS DO AUX CAD...            ")
+  (princ "\n==============================================================")
+  (setq res (vl-catch-all-apply 'load (list (strcat *aux-cad-root* "acaddoc.lsp"))))
+  (if (vl-catch-all-error-p res)
+    (princ (strcat "\n[ERRO AO RECARREGAR] -> " (vl-catch-all-error-message res)))
+    (princ "\n[SUCESSO] Todos os módulos do AUX CAD foram recarregados com sucesso na memória!")
+  )
+  (princ)
+)
+
+(defun c:RELOAD_AUXCAD () (c:RECARREGAR_TUDO))
 
 
 ;; =============================================================================
@@ -112,13 +158,31 @@
   (princ "\n               GUIA RÁPIDO DE COMANDOS - AUX CAD              ")
   (princ "\n==============================================================")
   (princ "\n")
-  (princ "\n  [DIAGRAMA UNIFILAR & ÁRVORE DE DISPOSITIVOS]")
-  (princ "\n   - UNIFILAR ou PROTECAO : Localiza proteção a montante e insere/atualiza no DWG")
+  (princ "\n  [DIAGRAMA UNIFILAR & PROTEÇÃO]")
+  (princ "\n   - UNIFILAR ou PROTECAO : Localiza proteção a montante (SG) e insere/atualiza no DWG")
   (princ "\n")
-  (princ "\n  [AMBIENTAL & ORTOFOTO]")
-  (princ "\n   - INSCROQUI ou ORTOFOTO ou CROQUI : Insere Ortofoto/Croqui no CAD")
-  (princ "\n   - KMZCHECK ou MEMORIAL ou CHECKLIST : Checa KMZ e gera Memorial/Checklist")
+  (princ "\n  [QUEDA DE TENSÃO BT - CQT]")
+  (princ "\n   - CQT ou CQTUI ou QUEDATENSAO : Interface de cálculo CQT multi-cenários")
+  (princ "\n   - CQTCAD : Extrai vãos e trechos do CAD para CQT")
+  (princ "\n   - CQTQUADROS : Desenha os Quadros de CQT no AutoCAD")
+  (princ "\n   - CQTEXCEL : Atalho para selecionar planilha Excel e desenhar quadros")
+  (princ "\n   - RECARREGAR_CQT : Recarrega as rotinas de CQT na sessão atual")
+  (princ "\n")
+  (princ "\n  [AMBIENTAL, ORTOFOTO & CHECKLIST]")
+  (princ "\n   - KMZCHECK ou MEMORIAL ou CHECKLIST : Checa KMZ e gera Checklist (.xlsx) / Memorial (.docx)")
+  (princ "\n   - INSCROQUI ou ORTOFOTO ou CROQUI : Insere Ortofoto/Croqui georreferenciado no CAD")
   (princ "\n   - CAD2KMZ : Exporta postes e redes para o Google Earth (KMZ)")
+  (princ "\n   - RECARREGAR_KMZ ou RECARREGAR_CHECKLIST : Recarrega rotinas ambientais")
+  (princ "\n")
+  (princ "\n  [CÁLCULO ESTRUTURAL & MECÂNICO]")
+  (princ "\n   - CALC_RESULTANTE ou TRACAO ou ESFORCO : Tração resultante e sobrecarga em postes")
+  (princ "\n   - RECARREGAR_RESULTANTE ou RECARREGAR_MECANICO : Recarrega módulo mecânico")
+  (princ "\n")
+  (princ "\n  [TABELAS TÉCNICAS & CONSULTA RÁPIDA (BT/MT)]")
+  (princ "\n   - TABELAS ou CONSULTAR_TABELA ou TABELAS_BT : Menu de consulta de Condutores e Estruturas")
+  (princ "\n   - CONDUTORES_BT ou BT : Consulta rápida de condutores BT (Tração, In, Ø, Massa, R, X)")
+  (princ "\n   - CABOS_MT ou MT : Consulta rápida de cabos MT (vão padrão 40m e curvas por fase)")
+  (princ "\n   - ESTRUTURAS_BT : Consulta de estruturas BT (Resistência mínima, Ângulo, Fixação)")
   (princ "\n")
   (princ "\n  [ORÇAMENTO & LEVANTAMENTO DE MATERIAIS]")
   (princ "\n   - ORCAD ou ORCAMENTO : Levantamento de postes, cabos e materiais no DWG")
@@ -129,27 +193,19 @@
   (princ "\n   - CPFCCAD : Captura dados do DWG e abre a interface para preencher o modelo")
   (princ "\n   - CPFCALERTA ou CPFCREGRA : Exibe resumo dos casos que geram PF (COP > ERD, MMGD, etc.)")
   (princ "\n")
-  (princ "\n  [QUEDA DE TENSÃO BT - CQT]")
-  (princ "\n   - CQT ou CQTUI ou QUEDATENSAO : Interface de cálculo CQT (QT <= 6%)")
-  (princ "\n   - CQTCAD : Extrai vãos e trechos do CAD para CQT")
-  (princ "\n   - CQTQUADROS : Desenha os Quadros de CQT no AutoCAD")
-  (princ "\n")
-  (princ "\n  [CÁLCULO ESTRUTURAL & MECÂNICO]")
-  (princ "\n   - CALC_RESULTANTE ou TRACAO ou ESFORCO : Tração resultante em postes")
-  (princ "\n")
-  (princ "\n  [TABELAS TÉCNICAS & CONSULTA RÁPIDA (BT)]")
-  (princ "\n   - TABELAS ou CONSULTAR_TABELA : Menu de consulta de Condutores e Estruturas BT")
-  (princ "\n   - CONDUTORES_BT : Consulta rápida da Tabela 9 (Tração, Corrente, Diâmetro, Massa, R, X)")
-  (princ "\n   - ESTRUTURAS_BT : Consulta rápida da Tabela 7 (Resistência mínima, Ângulo, Fixação)")
-  (princ "\n")
-  (princ "\n  [TOPOGRAFIA, KMZ & MAPA WEB]")
+  (princ "\n  [TOPOGRAFIA, EIXOS VIÁRIOS & IMPORTADORES]")
   (princ "\n   - MAPAPOSTES ou MAPA : Estúdio Web de Satélite (lançar coordenadas, postes e clientes)")
   (princ "\n   - IMPORTAR_KMZ_POSTES ou KMZPOSTES : Importa KMZ/KML com POSTE_, PONTO e descrição")
   (princ "\n   - ADDBLOCO : Insere blocos alinhados ao UCS da tela")
   (princ "\n   - IMPORTAR_PONTOS_UTM : Importa CSV UTM clássico")
   (princ "\n   - IMPORTAR_PONTOS_UTM_CONTORNOS : Importa CSV com contornos")
+  (princ "\n   - TLENTAB : Tabela automática de comprimentos de linhas/polilinhas")
+  (princ "\n   - IBCOORD : Insere bloco de coordenadas no centróide")
+  (princ "\n   - PONTOSPARABLOCOS : Converte pontos do CAD em blocos")
+  (princ "\n   - MLRUA : Tratamento automático de eixos viários MLINE")
   (princ "\n")
-  (princ "\n  [BARRA DE FERRAMENTAS]")
+  (princ "\n  [SISTEMA & RECARREGAMENTO]")
+  (princ "\n   - RECARREGAR_TUDO ou RELOAD_AUXCAD : Recarrega todos os módulos de uma vez")
   (princ "\n   - AUXCADBAR ou BARRAAUXCAD : Exibe barra de botões com 1 clique")
   (princ "\n==============================================================\n")
 
@@ -157,15 +213,18 @@
   (setq msg (strcat
     "=== GUIA DE COMANDOS AUX CAD ===\n\n"
     "• DIAGRAMA UNIFILAR: Digite UNIFILAR (ou PROTECAO)\n"
-    "• ESTÚDIO MAPA WEB: Digite MAPAPOSTES (ou MAPA)\n"
-    "• KMZ PARA POSTES: Digite IMPORTAR_KMZ_POSTES (ou KMZPOSTES)\n"
+    "• QUEDA DE TENSÃO BT: Digite CQT (ou CQTQUADROS / CQTEXCEL)\n"
+    "• MEMORIAL / CHECKLIST: Digite KMZCHECK (ou CHECKLIST)\n"
     "• ORTOFOTO / CROQUI: Digite INSCROQUI (ou ORTOFOTO)\n"
-    "• MEMORIAL / CHECKLIST: Digite KMZCHECK (ou MEMORIAL)\n"
+    "• TRAÇÃO EM POSTES: Digite CALC_RESULTANTE (ou TRACAO)\n"
+    "• TABELAS TÉCNICAS: Digite TABELAS (ou BT / MT)\n"
     "• ORÇAMENTO DE MATERIAIS: Digite ORCAD (ou ORCAMENTO)\n"
     "• PARTICIPAÇÃO FINANCEIRA: Digite CPFC (ou CPFCUI)\n"
-    "• QUEDA DE TENSÃO BT: Digite CQT (ou CQTCAD)\n"
-    "• TRAÇÃO EM POSTES: Digite CALC_RESULTANTE (ou TRACAO)\n"
+    "• ESTÚDIO MAPA WEB: Digite MAPAPOSTES (ou MAPA)\n"
+    "• KMZ PARA POSTES: Digite IMPORTAR_KMZ_POSTES (ou KMZPOSTES)\n"
     "• EXPORTAR GOOGLE EARTH: Digite CAD2KMZ\n"
+    "• TABELA DE COMPRIMENTOS: Digite TLENTAB\n"
+    "• RECARREGAR TUDO: Digite RECARREGAR_TUDO\n"
     "• BARRA DE BOTÕES: Digite AUXCADBAR\n\n"
     "(Consulte a janela de texto F2 para detalhes completos)"
   ))
@@ -190,8 +249,10 @@
 (defun c:ESFORCO () (c:CALC_RESULTANTE))
 (defun c:CONSULTAR_TABELA () (c:TABELAS))
 (defun c:TABELAS_BT () (c:TABELAS))
+(defun c:BT () (c:CONDUTORES_BT))
+(defun c:MT () (c:CABOS_MT))
 
 ;; Mensagem informativa na linha de comando ao abrir qualquer desenho
-(princ "\n[AUX CAD] Ferramentas carregadas! Digite COMANDOS ou AJUDA para listar todas.")
+(princ "\n[AUX CAD] Ferramentas carregadas com sucesso! Digite COMANDOS ou AUXCADBAR para começar.")
 (princ)
 

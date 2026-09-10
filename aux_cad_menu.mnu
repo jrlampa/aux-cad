@@ -11,44 +11,61 @@
 ID_TbAuxCad [_Toolbar("AUX CAD - Engenharia", _Top, _Show, 100, 100, 1)]
 ID_Ajuda     [_Button("Guia de Comandos (COMANDOS)", "ICON_HELP", "ICON_HELP")]^C^CCOMANDOS
 ID_Separator0 [_Separator]
-ID_OrcCad    [_Button("Orçamento e Levantamento CAD", "ICON_ORCAD", "ICON_ORCAD")]^C^CORCAD
-ID_OrcUi     [_Button("Tabela de Materiais e Preços", "ICON_ORCUI", "ICON_ORCUI")]^C^CORCUI
+ID_Unifilar  [_Button("Diagrama Unifilar e Proteção", "ICON_UNIFILAR", "ICON_UNIFILAR")]^C^CUNIFILAR
 ID_Separator1 [_Separator]
 ID_Cqt       [_Button("CQT - Queda de Tensão", "ICON_CQT", "ICON_CQT")]^C^CCQT
 ID_CqtCad    [_Button("Extrair Vãos do CAD para CQT", "ICON_CQTCAD", "ICON_CQTCAD")]^C^CCQTCAD
 ID_Quadros   [_Button("Desenhar Quadros CQT", "ICON_QUADROS", "ICON_QUADROS")]^C^CCQTQUADROS
+ID_CqtExcel  [_Button("Desenhar Quadros via Excel", "ICON_CQTEXCEL", "ICON_CQTEXCEL")]^C^CCQTEXCEL
 ID_Separator2 [_Separator]
-ID_KmzCheck  [_Button("Verificação Ambiental KMZ", "ICON_KMZ", "ICON_KMZ")]^C^CKMZCHECK
+ID_KmzCheck  [_Button("Verificação Ambiental KMZ e Checklist", "ICON_KMZ", "ICON_KMZ")]^C^CKMZCHECK
 ID_InsCroqui [_Button("Inserir Ortofoto no CAD", "ICON_CROQUI", "ICON_CROQUI")]^C^CINSCROQUI
 ID_Separator3 [_Separator]
 ID_Result    [_Button("Cálculo de Esforço Resultante", "ICON_RESULT", "ICON_RESULT")]^C^CCALC_RESULTANTE
-ID_AddBloco  [_Button("Adicionar Blocos no UCS", "ICON_ADDBLOCO", "ICON_ADDBLOCO")]^C^CADDBLOCO
+ID_Tabelas   [_Button("Tabelas Técnicas BT/MT", "ICON_TABELAS", "ICON_TABELAS")]^C^CTABELAS
 ID_Separator4 [_Separator]
+ID_OrcCad    [_Button("Orçamento e Levantamento CAD", "ICON_ORCAD", "ICON_ORCAD")]^C^CORCAD
+ID_OrcUi     [_Button("Tabela de Materiais e Preços", "ICON_ORCUI", "ICON_ORCUI")]^C^CORCUI
+ID_Cpfc      [_Button("Participação Financeira (CPFC)", "ICON_CPFC", "ICON_CPFC")]^C^CCPFCCAD
+ID_Separator5 [_Separator]
+ID_TlenTab   [_Button("Tabela de Comprimentos", "ICON_TLENTAB", "ICON_TLENTAB")]^C^CTLENTAB
+ID_AddBloco  [_Button("Adicionar Blocos no UCS", "ICON_ADDBLOCO", "ICON_ADDBLOCO")]^C^CADDBLOCO
 ID_MapaPostes [_Button("Estúdio Mapa Web de Postes", "ICON_MAPA", "ICON_MAPA")]^C^CMAPAPOSTES
-ID_KmzPoste [_Button("Importar Postes do KMZ", "ICON_KMZPOSTES", "ICON_KMZPOSTES")]^C^CIMPORTAR_KMZ_POSTES
+ID_KmzPoste  [_Button("Importar Postes do KMZ", "ICON_KMZPOSTES", "ICON_KMZPOSTES")]^C^CIMPORTAR_KMZ_POSTES
 ID_Cad2Kmz   [_Button("Exportar para Google Earth (KMZ)", "ICON_CAD2KMZ", "ICON_CAD2KMZ")]^C^CCAD2KMZ
 ID_ImportUtm [_Button("Importar Pontos UTM (CSV)", "ICON_IMPORTCSV", "ICON_IMPORTCSV")]^C^CIMPORTAR_PONTOS_UTM
+ID_Separator6 [_Separator]
+ID_Reload    [_Button("Recarregar Todas as Rotinas", "ICON_RELOAD", "ICON_RELOAD")]^C^CRECARREGAR_TUDO
 
 ***POP1
 **AUXCAD_PULLDOWN
 ID_MnAuxCad  [&AUX CAD]
-ID_MnAjuda     [&0. Guia de Comandos (COMANDOS / AJUDA)]^C^CCOMANDOS
+ID_MnAjuda     [&0. Guia Rápido de Comandos (COMANDOS)]^C^CCOMANDOS
 [--]
-ID_MnOrcCad    [&1. Orçamento e Levantamento CAD (ORCAD)]^C^CORCAD
-ID_MnOrcUi     [&2. Tabela de Materiais e Preços (ORCUI)]^C^CORCUI
+ID_MnUnifilar  [&1. Diagrama Unifilar e Proteção (UNIFILAR)]^C^CUNIFILAR
 [--]
-ID_MnCqt       [&3. Queda de Tensão (CQT)]^C^CCQT
-ID_MnCqtCad    [&4. Extrair Vãos CAD (CQTCAD)]^C^CCQTCAD
-ID_MnQuadros   [&5. Desenhar Quadros no CAD (CQTQUADROS)]^C^CCQTQUADROS
+ID_MnCqt       [&2. Queda de Tensão CQT (CQT)]^C^CCQT
+ID_MnCqtCad    [&3. Extrair Vãos para CQT (CQTCAD)]^C^CCQTCAD
+ID_MnQuadros   [&4. Desenhar Quadros de CQT (CQTQUADROS)]^C^CCQTQUADROS
+ID_MnCqtExcel  [&5. Quadros CQT a partir de Excel (CQTEXCEL)]^C^CCQTEXCEL
 [--]
-ID_MnKmz       [&4. Checagem Ambiental e Memorial (KMZCHECK)]^C^CKMZCHECK
-ID_MnCroqui    [&5. Inserir Ortofoto / Croqui (INSCROQUI)]^C^CINSCROQUI
+ID_MnKmz       [&6. Checagem Ambiental e Checklist (KMZCHECK)]^C^CKMZCHECK
+ID_MnCroqui    [&7. Inserir Ortofoto / Croqui (INSCROQUI)]^C^CINSCROQUI
+ID_MnCad2Kmz   [&8. Exportar para Google Earth (CAD2KMZ)]^C^CCAD2KMZ
 [--]
-ID_MnResult    [&6. Esforço Resultante em Postes (CALC_RESULTANTE)]^C^CCALC_RESULTANTE
-ID_MnAddBloco  [&7. Inserir Bloco no UCS (ADDBLOCO)]^C^CADDBLOCO
+ID_MnResult    [&9. Esforço Resultante em Postes (CALC_RESULTANTE)]^C^CCALC_RESULTANTE
+ID_MnTabelas   [&10. Consultar Tabelas Técnicas BT/MT (TABELAS)]^C^CTABELAS
 [--]
-ID_MnMapaPoste [&8. Estúdio Mapa Web de Postes (MAPAPOSTES)]^C^CMAPAPOSTES
-ID_MnKmzPoste  [&9. Importar KMZ com Postes e Textos (KMZPOSTES)]^C^CIMPORTAR_KMZ_POSTES
-ID_MnCad2Kmz   [&10. Exportar para Google Earth (CAD2KMZ)]^C^CCAD2KMZ
-ID_MnCsv       [&11. Importar CSV UTM]^C^CIMPORTAR_PONTOS_UTM
+ID_MnOrcCad    [&11. Levantamento de Materiais DWG (ORCAD)]^C^CORCAD
+ID_MnOrcUi     [&12. Tabela de Materiais e Preços (ORCUI)]^C^CORCUI
+ID_MnCpfc      [&13. Participação Financeira REN 1.059 (CPFC)]^C^CCPFCCAD
+[--]
+ID_MnTlenTab   [&14. Tabela de Comprimentos (TLENTAB)]^C^CTLENTAB
+ID_MnAddBloco  [&15. Inserir Bloco no UCS (ADDBLOCO)]^C^CADDBLOCO
+ID_MnMapaPoste [&16. Estúdio Mapa Web de Postes (MAPAPOSTES)]^C^CMAPAPOSTES
+ID_MnKmzPoste  [&17. Importar KMZ com Postes e Textos (KMZPOSTES)]^C^CIMPORTAR_KMZ_POSTES
+ID_MnCsv       [&18. Importar Pontos UTM (CSV)]^C^CIMPORTAR_PONTOS_UTM
+[--]
+ID_MnReload    [&19. Recarregar Todos os Módulos (RECARREGAR_TUDO)]^C^CRECARREGAR_TUDO
+
 

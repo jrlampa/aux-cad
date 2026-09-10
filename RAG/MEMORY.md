@@ -169,8 +169,8 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `Captura de tela 2026-01-29 174711.png`
 - `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
 
-## Validação e Qualidade
-- Suíte completa com **93 testes unitários passando 100%** (`python -m pytest --cov`):
+## Validação, Debug Completo e Qualidade
+- Suíte completa com **95 testes unitários passando 100%** (`python -m pytest --cov`):
   - `orcamento\orcamento_excel.py`: 99%
   - `cpfc\cpfc_core.py`: 98%
   - `cpfc\cpfc_guia_ren1059.py`: 100%
@@ -181,21 +181,25 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `unifilar\arvore_parser.py`: 92%
   - `unifilar\arvore_database.py`: 92%
   - `cqt\cqt_live_calc.py`: 91%
-  - `cqt\cqt_quadros_generator.py`: 90%
+  - `cqt\cqt_quadros_generator.py`: 88%
   - `orcamento\orcamento_core.py`: 89%
   - `ambiental\croqui_ambiental_generator.py`: 88%
   - `cpfc\cpfc_excel.py`: 88%
   - `ambiental\cad_to_kmz_exporter.py`: 86%
-  - `cqt\cqt_excel_io.py`: 85%
+  - `cqt\cqt_excel_io.py`: 88%
   - `cpfc\cpfc_gui.py`: 85%
   - `cpfc\cpfc_manager.py`: 83%
   - `unifilar\arvore_client.py`: 82%
   - `unifilar\unifilar_manager.py`: 80%
   - `mapa_postes\mapa_servidor.py`: 83%
   - `orcamento\orcamento_manager.py`: 81%
-- Cobertura global do módulo `unifilar`: **88%**.
-- Sintaxe AutoLISP (.lsp): 26 arquivos verificados com 100% de parênteses balanceados.
-- Integração no `acaddoc.lsp` com carregamento modular seguro e inclusão no `SupportPath`.
-- Botão "⚡ Diagrama Unifilar" integrado à barra `AUXCADBAR`.
+- **Auditoria de Sintaxe AutoLISP (.lsp)**: Todos os 26 arquivos `.lsp` do projeto verificados por parser estrito com 100% de parênteses e strings balanceadas (0 erros).
+- **Auditoria de Módulos Python (.py)**: Todos os 50 arquivos compilados e em conformidade com as regras de Clean Code e limites de linhas (<750 linhas).
+- **Carregador Central `acaddoc.lsp`**:
+  - Funções de compatibilidade globais: `stringp`, `fboundp`, `vl-symbol-p`, `vl-sleep`, `vl-filename-nxname`.
+  - Suporte dinâmico a 9 pastas no `SupportPath`.
+  - Novos módulos integrados: Topografia (`TLENTAB`, `IBCOORD`, `pt2blk`, `mlrua`), CQT (`CQTEXCEL`), Tabelas (`BT`, `MT`).
+  - Comando mestre de recarga: **`RECARREGAR_TUDO`** (ou **`RELOAD_AUXCAD`**).
+- **Interface Gráfica & Menus**: `aux_cad_toolbar.lsp` e `aux_cad_menu.mnu` sincronizados com 20 botões e itens de menu organizados.
 
 
