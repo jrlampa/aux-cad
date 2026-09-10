@@ -32,6 +32,7 @@ ID_Separator5 [_Separator]
 ID_TlenTab   [_Button("Tabela de Comprimentos", "ICON_TLENTAB", "ICON_TLENTAB")]^C^CTLENTAB
 ID_AddBloco  [_Button("Adicionar Blocos no UCS", "ICON_ADDBLOCO", "ICON_ADDBLOCO")]^C^CADDBLOCO
 ID_MapaPostes [_Button("Estúdio Mapa Web de Postes", "ICON_MAPA", "ICON_MAPA")]^C^CMAPAPOSTES
+ID_MapaPaleta [_Button("Paleta OSM Integrada no CAD", "ICON_PALETA", "ICON_PALETA")]^C^CMAPAPALETA
 ID_KmzPoste  [_Button("Importar Postes do KMZ", "ICON_KMZPOSTES", "ICON_KMZPOSTES")]^C^CIMPORTAR_KMZ_POSTES
 ID_Cad2Kmz   [_Button("Exportar para Google Earth (KMZ)", "ICON_CAD2KMZ", "ICON_CAD2KMZ")]^C^CCAD2KMZ
 ID_ImportUtm [_Button("Importar Pontos UTM (CSV)", "ICON_IMPORTCSV", "ICON_IMPORTCSV")]^C^CIMPORTAR_PONTOS_UTM
@@ -64,10 +65,11 @@ ID_MnCpfc      [&14. Participação Financeira REN 1.059 (CPFC)]^C^CCPFCCAD
 [--]
 ID_MnTlenTab   [&15. Tabela de Comprimentos (TLENTAB)]^C^CTLENTAB
 ID_MnAddBloco  [&16. Inserir Bloco no UCS (ADDBLOCO)]^C^CADDBLOCO
-ID_MnMapaPoste [&17. Estúdio Mapa Web de Postes (MAPAPOSTES)]^C^CMAPAPOSTES
-ID_MnKmzPoste  [&18. Importar KMZ com Postes e Textos (KMZPOSTES)]^C^CIMPORTAR_KMZ_POSTES
-ID_MnCsv       [&19. Importar Pontos UTM (CSV)]^C^CIMPORTAR_PONTOS_UTM
+ID_MnPaleta    [&17. Paleta OSM Integrada no CAD (MAPAPALETA)]^C^CMAPAPALETA
+ID_MnMapaPoste [&18. Estúdio Mapa Web de Postes (MAPAPOSTES)]^C^CMAPAPOSTES
+ID_MnKmzPoste  [&19. Importar KMZ com Postes e Textos (KMZPOSTES)]^C^CIMPORTAR_KMZ_POSTES
+ID_MnCsv       [&20. Importar Pontos UTM (CSV)]^C^CIMPORTAR_PONTOS_UTM
 [--]
-ID_MnReload    [&20. Recarregar Todos os Módulos (RECARREGAR_TUDO)]^C^CRECARREGAR_TUDO
+ID_MnReload    [&21. Recarregar Todos os Módulos (RECARREGAR_TUDO)]^C^CRECARREGAR_TUDO
 
 

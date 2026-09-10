@@ -109,7 +109,23 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `mapa_cad_launcher.lsp` (85 linhas): Comandos do AutoCAD **`MAPAPOSTES`** (ou **`MAPA`**) e **`ATUALIZAR_MAPAPOSTES`**.
 - `Abrir_Mapa_Postes.bat`: Atalho executável de 2 cliques na raiz para inicialização instantânea.
 
-### 8. `dados_tecnicos/` (Tabelas de Referência Técnicas BT & MT: SQLite3, JSON e AutoLISP)
+### 8. `mapa_cad_paleta/` (Paleta Cartográfica OSM C# .NET no AutoCAD - Menos 1 Tela)
+- `MapaCadPaleta.csproj`: Multi-Targeting SDK para AutoCAD 2025/2026 (`net8.0-windows`) e AutoCAD 2018-2024 (`net48`), empacotando WebView2 e referências nativas `accoremgd`, `acdbmgd` e `acmgd`.
+- `Plugin.cs`: Implementação `IExtensionApplication` com comandos AutoCAD **`MAPAPALETA`**, **`OSMPALETA`**, **`FECHAR_MAPAPALETA`** e **`RECARREGAR_MAPAPALETA`**.
+- `PaletteHost.cs`: Contêiner nativo `PaletteSet` com acoplamento lateral (docked à direita), auto-hide e hospedagem direta de controle visual WPF.
+- `MapaControl.xaml` / `.cs`: Controle WPF com `Microsoft.Web.WebView2` utilizando **Mapeamento de Host Virtual Local (`https://auxcad.local/index.html`)**, eliminando qualquer dependência de servidores web ou portas abertas no sistema.
+- `CadBridge.cs`: Ponte de automação do AutoCAD (`DocumentLock`, `TransactionManager`):
+  - Criação automática de layers `POSTES`, `POSTES_NUMERO` e `POSTES_DESCRICAO`.
+  - Inserção de bloco `POSTE_` (ou fallback vetorial círculo/cruz) na coordenada UTM milimétrica.
+  - Inserção de bloco `PONTO` com número sequencial no atributo.
+  - Inserção de anotações técnicas empilhadas MText (Tipo, MT, BT, Equipamentos, Carga Especial).
+  - Captura interativa de coordenadas no desenho via `Editor.GetPoint` com sincronização no mapa.
+  - Varredura e plotagem de postes do DWG direto no Leaflet.
+- `SnyderConverter.cs`: Algoritmo geodésico Snyder analítico C# de altíssima precisão para conversão bidirecional entre Lat/Lon WGS84 e UTM SIRGAS 2000 (Fusos 22S, 23S e 24S).
+- `web/index.html`, `web/style.css` e `web/app.js`: Interface moderna em tema executivo `#1B365D` otimizada para paleta estreita com OSM, Satélite ESRI, Google Híbrido, marcador arrastável, conversão kVA $\leftrightarrow$ kW com FP = 0.92, chips rápidos e botões de 1 clique ("📍 Inserir no CAD", "🎯 Ler DWG", "🔄 Sincronizar").
+- `mapa_paleta_loader.lsp`: Carregador AutoLISP dinâmico baseado na variável de versão do AutoCAD (`ACADVER`) disparando `NETLOAD`.
+
+### 9. `dados_tecnicos/` (Tabelas de Referência Técnicas BT & MT: SQLite3, JSON e AutoLISP)
 - `tabelas_referencia.py` (520 linhas): Criação, exportação e consultas rápidas das tabelas normativas oficiais de Baixa Tensão (BT) e Média Tensão (MT) da concessionária (Fonte: OneNote `BASE.one` e diretório `CALC_ESF`):
   - **Tabela 9 - Condutores de Baixa Tensão**: Dados elétricos e mecânicos reais (`3x150+1x80`, `3x95+1x54,6`, `3x50+1x54,6`, `3x35+1x54,6`), incluindo corrente admissível ($I_n$), tração nominal em daN, diâmetro total (mm), massa linear (kg/km), resistência ($R$ em $\Omega/km$) e reatância ($X$ em $\Omega/km$).
   - **Tabela 7 - Estruturas de Baixa Tensão**: Matriz completa de estruturas (`SI1`, `SI1.AF`, `SI1.2AF`, `SI1B.SI3`, `SI1A.SI3`, `SI1.SI4`, `SI3.S3`, `SI4.SI3`, `SI4`, `SI3`, `SI3.SI3`, `DERIV_VAO`, `FLYTAP`), com seções de neutro/fase, esforço mínimo do poste (300/600 daN), ângulo de aplicação e tipo de fixação mecânica.

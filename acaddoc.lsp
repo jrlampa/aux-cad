@@ -48,11 +48,13 @@
   )
 )
 
-;; Registra raiz e subpastas de projetos dinamicamente
+;; Registra raiz e subpastas de projetos dinamicamente (Protegido contra colisão multi-projeto)
 (setq *aux-cad-root*
   (cond
-    ((findfile "acaddoc.lsp")
-     (strcat (vl-filename-directory (findfile "acaddoc.lsp")) "\\"))
+    ((vl-file-directory-p "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\")
+     "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\")
+    ((findfile "aux_cad_menu.cuix")
+     (strcat (vl-filename-directory (findfile "aux_cad_menu.cuix")) "\\"))
     (t "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\")
   )
 )
@@ -66,6 +68,7 @@
 (add-support-path (strcat *aux-cad-root* "dados_tecnicos"))
 (add-support-path (strcat *aux-cad-root* "cpfc"))
 (add-support-path (strcat *aux-cad-root* "unifilar"))
+(add-support-path (strcat *aux-cad-root* "mapa_cad_paleta"))
 
 (defun load-aux-safe (subpath / fullpath res)
   (setq fullpath (strcat *aux-cad-root* subpath))
@@ -129,6 +132,9 @@
 
 ;; 10. Módulo Diagrama Unifilar e Consulta da Árvore de Dispositivos
 (load-aux-safe "unifilar\\unifilar_cad.lsp")
+
+;; 11. Módulo Paleta Cartográfica OSM C# (.NET) - Menos 1 tela
+(load-aux-safe "mapa_cad_paleta\\mapa_paleta_loader.lsp")
 
 
 ;; =============================================================================
@@ -196,6 +202,7 @@
   (princ "\n   - CPFCALERTA ou CPFCREGRA : Exibe resumo dos casos que geram PF (COP > ERD, MMGD, etc.)")
   (princ "\n")
   (princ "\n  [TOPOGRAFIA, EIXOS VIÁRIOS & IMPORTADORES]")
+  (princ "\n   - MAPAPALETA ou OSMPALETA : Paleta C# (.NET) com Mapa OSM e inserção direta no CAD (Menos 1 tela)")
   (princ "\n   - MAPAPOSTES ou MAPA : Estúdio Web de Satélite (lançar coordenadas, postes e clientes)")
   (princ "\n   - IMPORTAR_KMZ_POSTES ou KMZPOSTES : Importa KMZ/KML com POSTE_, PONTO e descrição")
   (princ "\n   - ADDBLOCO : Insere blocos alinhados ao UCS da tela")
@@ -256,5 +263,17 @@
 
 ;; Mensagem informativa na linha de comando ao abrir qualquer desenho
 (princ "\n[AUX CAD] Ferramentas carregadas com sucesso! Digite COMANDOS ou AUXCADBAR para começar.")
+
+;; =============================================================================
+;;  INTEGRAÇÃO MULTI-CONCESSIONÁRIA: AUX CAD LIGHT (Light / IM3 Brasil)
+;; =============================================================================
+(setq _aux_light_init "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\AUX CAD LIGHT\\acaddoc.lsp")
+(if (and (findfile _aux_light_init) (not *AUX_CAD_LIGHT_LOADED*))
+  (progn
+    (setq *AUX_CAD_LIGHT_LOADED* t)
+    (vl-catch-all-apply 'load (list _aux_light_init))
+  )
+)
+
 (princ)
 

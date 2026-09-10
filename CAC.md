@@ -24,7 +24,9 @@ aux cad/
 ├── unifilar/                       # Módulo Diagrama Unifilar & Árvore de Dispositivos (AutoLISP + Python + SQLite)
 ├── ambiental/                      # Módulo Ambiental, KMZ, Ortofoto, Memorial e Checklist
 ├── mecanico/                       # Módulo Cálculo Estrutural e Resultante de Postes
-├── topografia/                     # Módulo Topografia, Eixos Viários e Importação CSV
+├── mapa_postes/                    # Módulo Estúdio Web de Satélite, Coordenadas e Clientes
+├── mapa_cad_paleta/                # Módulo Paleta C# (.NET) para AutoCAD 2018+ com Mapa OSM (Menos 1 tela)
+├── dados_tecnicos/                 # Módulo Dados Técnicos e Tabelas de Referência
 ├── softwares/                      # Instaladores e ferramentas de terceiros
 └── documentos/                     # Pranchas DWG, planilhas de referência e notas técnicas
 ```
@@ -125,7 +127,29 @@ aux cad/
   - **`ATUALIZAR_MAPAPOSTES`**: Lê os postes enviados pelo mapa web e gera os blocos `POSTE_`, `PONTO` e os textos técnicos empilhados no AutoCAD.
 - `Abrir_Mapa_Postes.bat`: Atalho executável de 2 cliques para abertura direta do estúdio.
 
-### 7. Módulo de Dados Técnicos e Tabelas de Referência (`dados_tecnicos/`)
+### 7. Módulo Paleta Cartográfica OSM C# (.NET) - Menos 1 Tela (`mapa_cad_paleta/`)
+- `MapaCadPaleta.csproj`: Projeto C# com arquitetura **Multi-Targeting** moderna compilando simultaneamente para:
+  - **`net8.0-windows`**: Para AutoCAD 2025 e AutoCAD 2026.
+  - **`net48`**: Para AutoCAD 2018 a 2024 (executando sobre o runtime clássico .NET Framework 4.7/4.8).
+  - Integração com `Microsoft.Web.WebView2` e referências nativas à API do AutoCAD (`accoremgd`, `acdbmgd`, `acmgd`).
+- `Plugin.cs` (65 linhas): Ponto de entrada (`IExtensionApplication`) com comandos do AutoCAD:
+  - **`MAPAPALETA`** (ou **`OSMPALETA`**, **`MAPACAD`**): Abre a paleta cartográfica acoplável.
+  - **`FECHAR_MAPAPALETA`**: Oculta a paleta.
+  - **`RECARREGAR_MAPAPALETA`**: Recarrega os componentes da paleta.
+- `PaletteHost.cs` (62 linhas): Gerenciador da paleta nativa `PaletteSet` (GUID único), com ancoragem à direita, auto-hide e hospedagem visual direta de controle WPF.
+- `MapaControl.xaml` & `MapaControl.xaml.cs` (220 linhas): Controle WPF hospedeiro do controle Chromium `WebView2` com **Mapeamento de Host Virtual Local (`https://auxcad.local/index.html`)**, rodando 100% offline dentro do AutoCAD sem portas HTTP ou servidores em segundo plano.
+- `CadBridge.cs` (230 linhas): Ponte de automação do AutoCAD (`DocumentLock`, `Transaction`):
+  - Garante criação das camadas `POSTES`, `POSTES_NUMERO` e `POSTES_DESCRICAO`.
+  - Inserção do bloco `POSTE_` (com fallback para círculo/cruz vetorial) na coordenada UTM exata.
+  - Inserção do bloco `PONTO` com número do poste no atributo.
+  - Inserção de texto técnico empilhado MText com tipo de poste, estruturas MT/BT, equipamentos e cargas trifásicas.
+  - Captura interativa de coordenadas no DWG via `Editor.GetPoint` e envio ao mapa via WebSocket/WebMessage.
+  - Varredura e sincronização de postes existentes no DWG para plotagem no Leaflet.
+- `SnyderConverter.cs` (112 linhas): Conversor analítico Snyder geodésico C# bidirecional entre Lat/Lon WGS84 e UTM SIRGAS 2000 (Fuso 22S, 23S e 24S) com precisão milimétrica.
+- `web/index.html`, `web/style.css` e `web/app.js`: Interface moderna em tema corporativo `#1B365D`, alternância entre OSM, Satélite ESRI e Google Híbrido, marcador arrastável, conversão instantânea kVA $\leftrightarrow$ kW com FP = 0.92, chips rápidos de equipamentos/cargas e botões de 1 clique ("📍 Inserir no CAD", "🎯 Ler DWG", "🔄 Sincronizar").
+- `mapa_paleta_loader.lsp` (75 linhas): Carregador AutoLISP com detecção dinâmica da versão do AutoCAD (`ACADVER`) e disparo via `NETLOAD`.
+
+### 8. Módulo de Dados Técnicos e Tabelas de Referência (`dados_tecnicos/`)
 - `tabelas_referencia.py` (520 linhas): Motor analítico e gerador dos bancos de dados técnicos oficiais das redes BT e MT (Fontes: OneNote `BASE.one` e diretório `CALC_ESF` da IM3 Brasil):
   - **Tabela 9 - Condutores de Baixa Tensão**: Relação de cabos (`3x150+1x80`, `3x95+1x54,6`, `3x50+1x54,6`, `3x35+1x54,6`) com correntes nominais, trações em daN (554, 393, 260, 235 daN), diâmetros, massas e impedâncias nominais ($R$ e $X$).
   - **Tabela 7 - Estruturas de Baixa Tensão**: Matriz completa de estruturas BT (`SI1`, `SI1.AF`, `SI1.2AF`, `SI1B.SI3`, `SI1A.SI3`, `SI1.SI4`, `SI3.S3`, `SI4.SI3`, `SI4`, `SI3`, `SI3.SI3`, `DERIV_VAO`, `FLYTAP`), limites angulares e resistências mecânicas de poste (300/600 daN).

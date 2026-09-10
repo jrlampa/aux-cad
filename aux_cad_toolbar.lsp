@@ -77,6 +77,9 @@
           ;; 11. Botão Estúdio Mapa Web
           (vla-AddToolbarItem tb (vla-get-Count tb) "🌍 Estúdio Mapa Satélite (MAPAPOSTES)" "Abre o mapa com satélite para lançar coordenadas, postes e clientes" "^C^CMAPAPOSTES ")
 
+          ;; 11.1 Botão Paleta OSM C# (Menos 1 tela)
+          (vla-AddToolbarItem tb (vla-get-Count tb) "🗺️ Paleta OSM Integrada (MAPAPALETA)" "Abre a paleta nativa do CAD com mapa OSM e inserção direta" "^C^CMAPAPALETA ")
+
           ;; 12. Botão KMZ Postes
           (vla-AddToolbarItem tb (vla-get-Count tb) "📍 KMZ ➔ Postes & Textos" "Importa pontos do KMZ com bloco POSTE_, PONTO e descricao" "^C^CIMPORTAR_KMZ_POSTES ")
 

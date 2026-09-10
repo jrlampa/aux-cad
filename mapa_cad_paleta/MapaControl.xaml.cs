@@ -1,0 +1,178 @@
+using System;
+using System.IO;
+using System.Reflection;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using Microsoft.Web.WebView2.Core;
+
+namespace MapaCadPaleta
+{
+    public partial class MapaControl : UserControl
+    {
+        private bool _isInitialized = false;
+
+        public MapaControl()
+        {
+            InitializeComponent();
+            Loaded += MapaControl_Loaded;
+        }
+
+        private async void MapaControl_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (_isInitialized) return;
+            await InicializarWebViewAsync();
+        }
+
+        private async Task InicializarWebViewAsync()
+        {
+            try
+            {
+                string userDataFolder = Path.Combine(Path.GetTempPath(), "AuxCadWebView2Data");
+                var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+
+                await WebView.EnsureCoreWebView2Async(env);
+
+                string assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "";
+                string webDir = Path.Combine(assemblyDir, "web");
+
+                // Fallback para pasta de desenvolvimento se executando direto
+                if (!Directory.Exists(webDir))
+                {
+                    string altDir = Path.Combine(Directory.GetCurrentDirectory(), "mapa_cad_paleta", "web");
+                    if (Directory.Exists(altDir))
+                    {
+                        webDir = altDir;
+                    }
+                }
+
+                if (Directory.Exists(webDir))
+                {
+                    WebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                        "auxcad.local",
+                        webDir,
+                        CoreWebView2HostResourceAccessKind.Allow
+                    );
+                    WebView.CoreWebView2.Navigate("https://auxcad.local/index.html");
+                }
+                else
+                {
+                    // Fallback se pasta web não for encontrada
+                    WebView.NavigateToString("<html><body style='font-family:sans-serif;padding:20px;'>" +
+                        "<h3>Pasta 'web' não localizada</h3>" +
+                        $"<p>Caminho esperado: {webDir}</p></body></html>");
+                }
+
+                WebView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+                WebView.NavigationCompleted += (s, args) =>
+                {
+                    LoadingPanel.Visibility = Visibility.Collapsed;
+                    AtualizarStatus("Mapa OSM carregado com sucesso.");
+                };
+
+                _isInitialized = true;
+            }
+            catch (Exception ex)
+            {
+                LoadingPanel.Visibility = Visibility.Collapsed;
+                AtualizarStatus($"Erro ao carregar WebView2: {ex.Message}");
+            }
+        }
+
+        private void CoreWebView2_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                string rawJson = e.WebMessageAsJson;
+                using var doc = JsonDocument.Parse(rawJson);
+                var root = doc.RootElement;
+
+                string action = root.TryGetProperty("action", out var actProp) ? actProp.GetString() ?? "" : "";
+
+                switch (action)
+                {
+                    case "inserir_poste":
+                        var res = CadBridge.InserirPoste(rawJson);
+                        AtualizarStatus(res.Message);
+                        EnviarMensagemWeb(new { action = "resultado_insercao", success = res.Success, message = res.Message });
+                        break;
+
+                    case "capturar_ponto":
+                        ExecutarCapturaCad();
+                        break;
+
+                    case "escanear_dwg":
+                        int fuso = root.TryGetProperty("fuso", out var fusoProp) ? fusoProp.GetInt32() : 23;
+                        var postes = CadBridge.EscanearPostesDwg(fuso);
+                        AtualizarStatus($"{postes.Count} postes encontrados no DWG.");
+                        EnviarMensagemWeb(new { action = "postes_dwg", postes });
+                        break;
+
+                    case "status":
+                        string msg = root.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
+                        AtualizarStatus(msg);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                AtualizarStatus($"Erro na comunicação: {ex.Message}");
+            }
+        }
+
+        private void BtnCapturarCad_Click(object sender, RoutedEventArgs e)
+        {
+            ExecutarCapturaCad();
+        }
+
+        private void ExecutarCapturaCad()
+        {
+            AtualizarStatus("Clique no DWG para capturar coordenadas...");
+            var cap = CadBridge.CapturarPontoCad(23);
+            if (cap.Success)
+            {
+                AtualizarStatus($"Ponto capturado: X={cap.X:F2}, Y={cap.Y:F2}");
+                EnviarMensagemWeb(new
+                {
+                    action = "ponto_capturado",
+                    x = cap.X,
+                    y = cap.Y,
+                    lat = cap.Lat,
+                    lon = cap.Lon
+                });
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(cap.Error))
+                    AtualizarStatus(cap.Error);
+            }
+        }
+
+        private void BtnRecarregar_Click(object sender, RoutedEventArgs e)
+        {
+            if (WebView?.CoreWebView2 != null)
+            {
+                LoadingPanel.Visibility = Visibility.Visible;
+                WebView.CoreWebView2.Reload();
+            }
+        }
+
+        private void EnviarMensagemWeb(object obj)
+        {
+            if (WebView?.CoreWebView2 != null)
+            {
+                string json = JsonSerializer.Serialize(obj);
+                WebView.CoreWebView2.PostWebMessageAsJson(json);
+            }
+        }
+
+        private void AtualizarStatus(string texto)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                TxtStatus.Text = texto;
+            });
+        }
+    }
+}

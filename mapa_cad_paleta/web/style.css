@@ -1,0 +1,347 @@
+/* CSS da Paleta Cartográfica OSM do AutoCAD */
+:root {
+    --primary: #1B365D;
+    --primary-dark: #0F1E36;
+    --accent: #0284C7;
+    --accent-hover: #0369A1;
+    --success: #10B981;
+    --bg-main: #F8FAFC;
+    --card-bg: #FFFFFF;
+    --border: #E2E8F0;
+    --text-main: #1E293B;
+    --text-muted: #64748B;
+    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-x: hidden;
+}
+
+.palette-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Header Compacto */
+.palette-header {
+    background: #FFFFFF;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    z-index: 1000;
+}
+
+.layer-selector {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-layer {
+    background: #F1F5F9;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.2s;
+}
+
+.btn-layer:hover {
+    background: #E2E8F0;
+    color: var(--text-main);
+}
+
+.btn-layer.active {
+    background: var(--primary);
+    color: #FFFFFF;
+    border-color: var(--primary);
+}
+
+.header-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-action-sm {
+    border-radius: 4px;
+    border: none;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-action-sm:hover {
+    opacity: 0.9;
+}
+
+.btn-cad-read {
+    background: #0284C7;
+    color: #FFFFFF;
+}
+
+.btn-cad-sync {
+    background: #475569;
+    color: #FFFFFF;
+}
+
+/* Mapa Leaflet */
+.map-view {
+    height: 260px;
+    min-height: 220px;
+    width: 100%;
+    z-index: 10;
+    border-bottom: 1px solid var(--border);
+}
+
+/* Painel de Conteúdo e Formulários */
+.panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.card-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.section-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.badge-fuso {
+    background: #E0F2FE;
+    color: #0369A1;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+/* Formulários em Grid */
+.grid-2-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.grid-3-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.form-group label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.form-group input,
+.form-group select {
+    padding: 5px 7px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text-main);
+    background: #FFFFFF;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.label-sub {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 6px;
+    display: block;
+}
+
+/* Chips de Seleção */
+.chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.chip {
+    background: #F1F5F9;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2px 7px;
+    font-size: 10px;
+    cursor: pointer;
+    color: var(--text-main);
+    transition: all 0.15s;
+}
+
+.chip:hover {
+    background: #E2E8F0;
+}
+
+.chip.selected {
+    background: #0284C7;
+    color: #FFFFFF;
+    border-color: #0284C7;
+    font-weight: 600;
+}
+
+.chips-container-sm {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.chip-sm {
+    background: #F8FAFC;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 9.5px;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.chip-sm:hover {
+    background: #E0F2FE;
+    color: #0284C7;
+    border-color: #0284C7;
+}
+
+/* Botões de Ação */
+.btn-secondary {
+    background: #F1F5F9;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-main);
+    width: 100%;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #E2E8F0;
+}
+
+.actions-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.btn-primary-cad {
+    background: #10B981;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.25);
+    transition: all 0.2s;
+}
+
+.btn-primary-cad:hover {
+    background: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
+}
+
+.btn-primary-cad:active {
+    transform: translateY(0);
+}
+
+.checkbox-auto-inc {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.checkbox-auto-inc input {
+    cursor: pointer;
+}
+
+/* Toast de Notificação */
+.status-toast {
+    background: #F1F5F9;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.status-toast.success {
+    background: #ECFDF5;
+    border-color: #A7F3D0;
+    color: #065F46;
+    font-weight: 600;
+}
+
+.status-toast.error {
+    background: #FEF2F2;
+    border-color: #FECACA;
+    color: #991B1B;
+    font-weight: 600;
+}

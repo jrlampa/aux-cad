@@ -22,6 +22,12 @@ htmlcov/
 *.cuix
 *.mnr
 
+# .NET / C# Build Artifacts
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+
 # Vídeos e modelos 3D pesados (>100MB)
 *.mp4
 *.SLDPRT
