@@ -230,10 +230,30 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
 5. **Barra de Ferramentas e Menus Nativos**: `aux_cad_toolbar.lsp` e `aux_cad_menu.mnu` atualizados com 20 ferramentas integradas em 1 clique.
 
 ### 11. Validação, Debug Completo e Testes
-- **Auditoria de Sintaxe AutoLISP**: 100% dos 27 arquivos `.lsp` do projeto validados e com balanceamento de parênteses e strings verificado (0 erros).
+- **Auditoria de Sintaxe AutoLISP**: 100% dos 28 arquivos `.lsp` do projeto validados e com balanceamento de parênteses e strings verificado (0 erros).
 - **Auditoria de Módulos Python**: 100% dos 51 arquivos `.py` compilados e validados contra regras de Clean Code e limites de linhas (<750 linhas).
-- **Suíte de Testes**: **102 testes unitários passando com 100% de sucesso** (`python -m pytest --cov`).
-- **Cobertura de Código**: Cobertura crítica preservada acima de 80% a 99% em todos os módulos principais (`cpfc_core`: 98%, `checklist_ambiental_manager`: 92%, `tabelas_referencia`: 94%, `cqt_live_calc`: 91%, `cqt_excel_io`: 88%, `cqt_quadros_generator`: 88%, `arvore_parser`: 92%, `arvore_database`: 92%, `app_buffer_generator`: 89%).
+- **Suíte de Testes**: **106 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Cobertura de Código**: Cobertura crítica preservada acima de 80% a 99% em todos os módulos principais.
+
+### 12. `mapa_cad_paleta/` (Paleta Cartográfica OSM C# .NET para AutoCAD 2018+)
+- **Objetivo**: Alternativa direta integrada ao AutoCAD ("menos 1 tela"), permitindo visualizar mapas Leaflet (OSM, Satélite ESRI e Google Híbrido), buscar posições e inserir postes com blocos e textos MText diretamente no ModelSpace do desenho ativo sem necessidade de navegador externo ou KMZ intermediário.
+- **Arquitetura Multi-Targeting C#**:
+  - `net8.0-windows` para AutoCAD 2025/2026.
+  - `net48` para AutoCAD 2018-2024.
+  - `Microsoft.Web.WebView2` com carregamento isolado e injeção dinâmica de caminhos nativos no `PATH` do processo `acad.exe`.
+- **Layout Moderno Sidebar**:
+  - Mapa em tela cheia com barra flutuante de camadas (OSM, Satélite ESRI, Google Híbrido), ferramentas de captura (`🎯 Ler DWG`), sincronização de postes existentes (`🔄 Sincronizar`) e alternador retrátil do painel lateral (`📑 Painel ◀/▶`).
+  - Sidebar lateral direita de dados com cards de coordenadas UTM, dados de estruturas MT/BT, chips de equipamentos, cálculo instantâneo de Carga Trifásica (kVA $\leftrightarrow$ kW, FP = 0.92) e botão mestre de inserção.
+- **Persistência Contínua de Estado (`localStorage`)**:
+  - Chave `AUXCAD_PALETA_STATE`: salva automaticamente coordenadas, centro e zoom do mapa, camada de satélite/OSM ativa, número do poste, estruturas selecionadas, equipamentos marcados e potências. Ao fechar e reabrir a paleta, o ambiente é restaurado exatamente de onde o usuário parou.
+- **Controle Flexível de Marcador & Formulário**:
+  - **🗑️ Apagar Marcador**: Remove o marcador do mapa, limpa os campos X e Y e evita inserções acidentais sem posição definida. Suporta também remoção via clique com o botão direito no marcador (`contextmenu`).
+  - **🧹 Limpar Formulário**: Reseta instantaneamente equipamentos, tipo de poste, estruturas e potências sem perder a numeração sequencial.
+  - **Clique no Mapa / Ler DWG**: Recria e posiciona o marcador instantaneamente em qualquer ponto clicado.
+- **Comandos do AutoCAD**:
+  - **`MAPAPALETA`** (alias: **`OSMPALETA`**): Exibe a paleta acoplável à direita com auto-hide.
+  - **`FECHAR_MAPAPALETA`**: Fecha a paleta.
+  - **`RECARREGAR_MAPAPALETA`**: Recarrega a interface web instantaneamente na sessão.
 
 
 

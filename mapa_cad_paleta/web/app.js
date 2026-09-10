@@ -91,10 +91,14 @@ const Snyder = {
     }
 };
 
+// Chave de Persistência Local
+const STORAGE_KEY = 'AUXCAD_PALETA_STATE';
+
 // Estado da Aplicação
 const AppState = {
     map: null,
     marker: null,
+    hasMarker: true,
     currentLat: -22.9068,
     currentLon: -43.1729,
     currentX: 687450.0,
@@ -105,8 +109,64 @@ const AppState = {
     dwgMarkersLayer: null
 };
 
+// Salva o estado completo no localStorage
+function salvarEstadoPersistido() {
+    try {
+        const equips = [];
+        document.querySelectorAll('#equipChips .chip.selected').forEach(c => {
+            equips.push(c.getAttribute('data-val'));
+        });
+
+        const estado = {
+            lat: AppState.currentLat,
+            lon: AppState.currentLon,
+            zoom: AppState.map ? AppState.map.getZoom() : 17,
+            mapCenter: AppState.map ? AppState.map.getCenter() : null,
+            hasMarker: AppState.hasMarker,
+            fuso: AppState.fuso,
+            numero: document.getElementById('inputNumero').value,
+            tipoPoste: document.getElementById('selectTipoPoste').value,
+            estruturaMt: document.getElementById('selectEstruturaMt').value,
+            estruturaBt: document.getElementById('selectEstruturaBt').value,
+            equipamentos: equips,
+            kva: document.getElementById('inputKva').value,
+            kw: document.getElementById('inputKw').value,
+            autoInc: document.getElementById('chkAutoInc').checked,
+            activeLayer: AppState.activeLayer
+        };
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+    } catch (e) {
+        console.warn('Falha ao persistir estado:', e);
+    }
+}
+
+// Carrega o estado persistido do localStorage
+function carregarEstadoPersistido() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch (e) {
+        console.warn('Falha ao ler estado persistido:', e);
+        return null;
+    }
+}
+
 // Inicialização do Mapa
 function initMap() {
+    const salvo = carregarEstadoPersistido();
+
+    if (salvo) {
+        if (salvo.lat && salvo.lon) {
+            AppState.currentLat = salvo.lat;
+            AppState.currentLon = salvo.lon;
+        }
+        if (salvo.fuso) AppState.fuso = salvo.fuso;
+        if (salvo.hasMarker !== undefined) AppState.hasMarker = salvo.hasMarker;
+        if (salvo.activeLayer) AppState.activeLayer = salvo.activeLayer;
+    }
+
     AppState.layers.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '© OpenStreetMap'
@@ -122,10 +182,14 @@ function initMap() {
         attribution: '© Google'
     });
 
+    const initialLayer = AppState.layers[AppState.activeLayer] || AppState.layers.osm;
+    const initialCenter = (salvo && salvo.mapCenter) ? [salvo.mapCenter.lat, salvo.mapCenter.lng] : [AppState.currentLat, AppState.currentLon];
+    const initialZoom = (salvo && salvo.zoom) ? salvo.zoom : 17;
+
     AppState.map = L.map('map', {
-        center: [AppState.currentLat, AppState.currentLon],
-        zoom: 17,
-        layers: [AppState.layers.osm],
+        center: initialCenter,
+        zoom: initialZoom,
+        layers: [initialLayer],
         zoomControl: true
     });
 
@@ -143,21 +207,100 @@ function initMap() {
     AppState.marker = L.marker([AppState.currentLat, AppState.currentLon], {
         draggable: true,
         icon: customIcon
-    }).addTo(AppState.map);
+    });
 
-    // Eventos do Marcador e Mapa
+    // Adiciona ao mapa somente se o marcador estiver ativo
+    if (AppState.hasMarker) {
+        AppState.marker.addTo(AppState.map);
+    }
+
+    // Eventos do Marcador
     AppState.marker.on('dragend', function (e) {
         const pos = e.target.getLatLng();
         atualizarPosicao(pos.lat, pos.lng);
+        salvarEstadoPersistido();
     });
 
+    // Botão direito no marcador para removê-lo rapidamente
+    AppState.marker.on('contextmenu', function (e) {
+        L.DomEvent.stopPropagation(e);
+        apagarMarcador();
+    });
+
+    // Clique no Mapa reposiciona ou recria o marcador
     AppState.map.on('click', function (e) {
-        AppState.marker.setLatLng(e.latlng);
-        atualizarPosicao(e.latlng.lat, e.latlng.lng);
+        posicionarMarcador(e.latlng.lat, e.latlng.lng);
     });
 
-    // Atualiza posição inicial
-    atualizarPosicao(AppState.currentLat, AppState.currentLon);
+    // Salva centro e zoom ao navegar no mapa
+    AppState.map.on('moveend', function () {
+        salvarEstadoPersistido();
+    });
+
+    // Se o marcador estiver ativo, atualiza as coordenadas na tela
+    if (AppState.hasMarker) {
+        atualizarPosicao(AppState.currentLat, AppState.currentLon);
+    } else {
+        document.getElementById('inputX').value = '';
+        document.getElementById('inputY').value = '';
+    }
+
+    // Restaura campos persistidos
+    if (salvo) {
+        if (salvo.numero) document.getElementById('inputNumero').value = salvo.numero;
+        if (salvo.tipoPoste) document.getElementById('selectTipoPoste').value = salvo.tipoPoste;
+        if (salvo.estruturaMt !== undefined) document.getElementById('selectEstruturaMt').value = salvo.estruturaMt;
+        if (salvo.estruturaBt) document.getElementById('selectEstruturaBt').value = salvo.estruturaBt;
+        if (salvo.fuso) document.getElementById('selectFuso').value = salvo.fuso;
+        if (salvo.kva) document.getElementById('inputKva').value = salvo.kva;
+        if (salvo.kw) document.getElementById('inputKw').value = salvo.kw;
+        if (salvo.autoInc !== undefined) document.getElementById('chkAutoInc').checked = salvo.autoInc;
+
+        if (Array.isArray(salvo.equipamentos)) {
+            document.querySelectorAll('#equipChips .chip').forEach(c => {
+                if (salvo.equipamentos.includes(c.getAttribute('data-val'))) {
+                    c.classList.add('selected');
+                }
+            });
+        }
+    }
+}
+
+// Posiciona e exibe o marcador no mapa
+function posicionarMarcador(lat, lon) {
+    if (!AppState.map.hasLayer(AppState.marker)) {
+        AppState.marker.addTo(AppState.map);
+    }
+    AppState.marker.setLatLng([lat, lon]);
+    AppState.hasMarker = true;
+    atualizarPosicao(lat, lon);
+    salvarEstadoPersistido();
+}
+
+// Apaga apenas o marcador do mapa
+function apagarMarcador() {
+    if (AppState.map && AppState.marker && AppState.map.hasLayer(AppState.marker)) {
+        AppState.map.removeLayer(AppState.marker);
+    }
+    AppState.hasMarker = false;
+    document.getElementById('inputX').value = '';
+    document.getElementById('inputY').value = '';
+    salvarEstadoPersistido();
+    showToast('Marcador removido. Clique no mapa para posicionar novamente.', 'info');
+}
+
+// Limpa campos do formulário para o estado padrão
+function limparFormulario() {
+    document.querySelectorAll('#equipChips .chip.selected').forEach(c => {
+        c.classList.remove('selected');
+    });
+    document.getElementById('selectTipoPoste').value = '11/600';
+    document.getElementById('selectEstruturaMt').value = '';
+    document.getElementById('selectEstruturaBt').value = 'S1';
+    document.getElementById('inputKva').value = '';
+    document.getElementById('inputKw').value = '';
+    salvarEstadoPersistido();
+    showToast('Campos do formulário resetados.', 'info');
 }
 
 // Atualiza coordenadas nos inputs
@@ -189,15 +332,26 @@ function setupLayerButtons() {
         [btnOsm, btnEsri, btnGoogle].forEach(b => b.classList.remove('active'));
         activeBtn.classList.add('active');
         AppState.activeLayer = layerName;
+        salvarEstadoPersistido();
     }
 
     btnOsm.addEventListener('click', () => switchLayer('osm', btnOsm));
     btnEsri.addEventListener('click', () => switchLayer('esri', btnEsri));
     btnGoogle.addEventListener('click', () => switchLayer('google', btnGoogle));
+
+    // Ativa botão da camada persistida
+    if (AppState.activeLayer === 'esri') btnEsri.classList.add('active'), btnOsm.classList.remove('active');
+    else if (AppState.activeLayer === 'google') btnGoogle.classList.add('active'), btnOsm.classList.remove('active');
 }
 
 // Configuração de Formulários e Chips
 function setupForms() {
+    // Ação: Apagar Marcador
+    document.getElementById('btnApagarMarcador')?.addEventListener('click', apagarMarcador);
+
+    // Ação: Limpar Formulário
+    document.getElementById('btnLimparForm')?.addEventListener('click', limparFormulario);
+
     // Aplicar coordenadas digitadas
     document.getElementById('btnAplicarCoord').addEventListener('click', () => {
         const x = parseFloat(document.getElementById('inputX').value);
@@ -210,22 +364,34 @@ function setupForms() {
         }
 
         const geo = Snyder.utmToLatLon(x, y, fuso);
-        AppState.marker.setLatLng([geo.lat, geo.lon]);
+        posicionarMarcador(geo.lat, geo.lon);
         AppState.map.flyTo([geo.lat, geo.lon], 18);
-        atualizarPosicao(geo.lat, geo.lon);
         showToast('Marcador atualizado no mapa.', 'success');
     });
 
     // Fuso UTM alterado
     document.getElementById('selectFuso').addEventListener('change', () => {
-        atualizarPosicao(AppState.currentLat, AppState.currentLon);
+        if (AppState.hasMarker) {
+            atualizarPosicao(AppState.currentLat, AppState.currentLon);
+            salvarEstadoPersistido();
+        }
     });
 
     // Chips de Equipamentos (Multi-seleção)
     document.querySelectorAll('#equipChips .chip').forEach(chip => {
         chip.addEventListener('click', () => {
             chip.classList.toggle('selected');
+            salvarEstadoPersistido();
         });
+    });
+
+    // Persistência automática em inputs
+    ['inputNumero', 'selectTipoPoste', 'selectEstruturaMt', 'selectEstruturaBt', 'chkAutoInc'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', salvarEstadoPersistido);
+            if (el.tagName === 'INPUT') el.addEventListener('input', salvarEstadoPersistido);
+        }
     });
 
     // Conversão Bidirecional kVA <-> kW (FP = 0.92)
@@ -234,20 +400,14 @@ function setupForms() {
 
     inputKva.addEventListener('input', () => {
         const kva = parseFloat(inputKva.value);
-        if (!isNaN(kva) && kva > 0) {
-            inputKw.value = (kva * 0.92).toFixed(1);
-        } else {
-            inputKw.value = '';
-        }
+        inputKw.value = (!isNaN(kva) && kva > 0) ? (kva * 0.92).toFixed(1) : '';
+        salvarEstadoPersistido();
     });
 
     inputKw.addEventListener('input', () => {
         const kw = parseFloat(inputKw.value);
-        if (!isNaN(kw) && kw > 0) {
-            inputKva.value = (kw / 0.92).toFixed(1);
-        } else {
-            inputKva.value = '';
-        }
+        inputKva.value = (!isNaN(kw) && kw > 0) ? (kw / 0.92).toFixed(1) : '';
+        salvarEstadoPersistido();
     });
 
     // Chips de Carga Rápida
@@ -256,16 +416,13 @@ function setupForms() {
             const kw = parseFloat(chip.getAttribute('data-kw'));
             inputKw.value = kw;
             inputKva.value = (kw / 0.92).toFixed(1);
+            salvarEstadoPersistido();
         });
     });
 
-    // Ação: Inserir no CAD
+    // Ações do Painel e CAD
     document.getElementById('btnInserirCad').addEventListener('click', inserirPosteNoCad);
-
-    // Ação: Ler do CAD
     document.getElementById('btnLerCadTop').addEventListener('click', lerPontoDoCad);
-
-    // Ação: Sincronizar DWG
     document.getElementById('btnSincDwg').addEventListener('click', sincronizarDwg);
 
     // Ação: Toggle Sidebar (Painel Lateral)
@@ -290,8 +447,18 @@ function setupForms() {
 
 // Monta o payload e envia para o C# (.NET)
 function inserirPosteNoCad() {
+    if (!AppState.hasMarker) {
+        showToast('⚠️ Nenhum ponto marcado no mapa. Clique no mapa para posicionar!', 'error');
+        return;
+    }
+
     const x = parseFloat(document.getElementById('inputX').value);
     const y = parseFloat(document.getElementById('inputY').value);
+    if (isNaN(x) || isNaN(y)) {
+        showToast('Coordenadas X ou Y inválidas.', 'error');
+        return;
+    }
+
     const numero = document.getElementById('inputNumero').value.trim() || '01';
     const tipoPoste = document.getElementById('selectTipoPoste').value;
     const estruturaMt = document.getElementById('selectEstruturaMt').value;
@@ -341,6 +508,7 @@ function incrementarNumeroPoste() {
     if (!isNaN(num)) {
         const next = num + 1;
         input.value = next < 10 ? `0${next}` : `${next}`;
+        salvarEstadoPersistido();
     }
 }
 
@@ -374,9 +542,8 @@ function setupMensagensCSharp() {
             if (!data) return;
 
             if (data.action === 'ponto_capturado') {
-                AppState.marker.setLatLng([data.lat, data.lon]);
+                posicionarMarcador(data.lat, data.lon);
                 AppState.map.flyTo([data.lat, data.lon], 19);
-                atualizarPosicao(data.lat, data.lon);
                 showToast(`Ponto capturado do CAD: (${data.x.toFixed(2)}, ${data.y.toFixed(2)})`, 'success');
             }
             else if (data.action === 'resultado_insercao') {

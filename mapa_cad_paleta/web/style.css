@@ -216,6 +216,35 @@ html, body {
     letter-spacing: 0.3px;
 }
 
+.btn-text-action {
+    background: transparent;
+    border: none;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--accent);
+    padding: 2px 5px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.btn-text-action:hover {
+    background: #E0F2FE;
+    color: var(--accent-hover);
+}
+
+.btn-text-action.danger {
+    color: #EF4444;
+}
+
+.btn-text-action.danger:hover {
+    background: #FEE2E2;
+    color: #DC2626;
+}
+
 /* Grids e Inputs */
 .grid-2-col {
     display: grid;
