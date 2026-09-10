@@ -64,14 +64,39 @@ namespace MapaCadPaleta
                     }
                 }
 
-                if (Directory.Exists(webDir))
+                string indexHtml = Path.Combine(webDir, "index.html");
+                if (File.Exists(indexHtml))
                 {
-                    WebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                        "auxcad.local",
-                        webDir,
-                        CoreWebView2HostResourceAccessKind.Allow
-                    );
-                    WebView.CoreWebView2.Navigate("https://auxcad.local/index.html");
+                    WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+                    WebView.CoreWebView2.Settings.IsWebMessageEnabled = true;
+
+                    WebView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+                    WebView.NavigationCompleted += (s, args) =>
+                    {
+                        LoadingPanel.Visibility = Visibility.Collapsed;
+                        if (args.IsSuccess)
+                        {
+                            AtualizarStatus("Mapa OSM carregado com sucesso.");
+                        }
+                        else
+                        {
+                            AtualizarStatus($"Status de navegação: {args.WebErrorStatus}");
+                        }
+                    };
+
+                    try
+                    {
+                        WebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                            "appassets.example",
+                            webDir,
+                            CoreWebView2HostResourceAccessKind.Allow
+                        );
+                        WebView.CoreWebView2.Navigate("https://appassets.example/index.html");
+                    }
+                    catch
+                    {
+                        WebView.CoreWebView2.Navigate(new Uri(indexHtml).AbsoluteUri);
+                    }
                 }
                 else
                 {
@@ -80,13 +105,6 @@ namespace MapaCadPaleta
                         "<h3>Pasta 'web' não localizada</h3>" +
                         $"<p>Caminho esperado: {webDir}</p></body></html>");
                 }
-
-                WebView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
-                WebView.NavigationCompleted += (s, args) =>
-                {
-                    LoadingPanel.Visibility = Visibility.Collapsed;
-                    AtualizarStatus("Mapa OSM carregado com sucesso.");
-                };
 
                 _isInitialized = true;
             }
@@ -166,12 +184,16 @@ namespace MapaCadPaleta
             }
         }
 
-        private void BtnRecarregar_Click(object sender, RoutedEventArgs e)
+        private async void BtnRecarregar_Click(object sender, RoutedEventArgs e)
         {
+            LoadingPanel.Visibility = Visibility.Visible;
             if (WebView?.CoreWebView2 != null)
             {
-                LoadingPanel.Visibility = Visibility.Visible;
                 WebView.CoreWebView2.Reload();
+            }
+            else
+            {
+                await InicializarWebViewAsync();
             }
         }
 
