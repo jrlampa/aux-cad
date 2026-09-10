@@ -100,6 +100,7 @@
 (load-aux-safe "ambiental\\kmz_point_layer_report.lsp")
 (load-aux-safe "ambiental\\croqui_cad_inserter.lsp")
 (load-aux-safe "ambiental\\cad2kmz.lsp")
+(load-aux-safe "ambiental\\app_buffer.lsp")
 
 ;; 4. Módulo Cálculo Estrutural e Mecânico de Postes
 (load-aux-safe "mecanico\\CALC_RESULTANTE_v1.0.lsp")
@@ -170,9 +171,10 @@
   (princ "\n")
   (princ "\n  [AMBIENTAL, ORTOFOTO & CHECKLIST]")
   (princ "\n   - KMZCHECK ou MEMORIAL ou CHECKLIST : Checa KMZ e gera Checklist (.xlsx) / Memorial (.docx)")
+  (princ "\n   - APP_BUFFER ou BUFFER_RIO ou APP_HIDRICA : Buffer geodésico de rios/nascentes (Lei 12.651) e auditoria de postes")
   (princ "\n   - INSCROQUI ou ORTOFOTO ou CROQUI : Insere Ortofoto/Croqui georreferenciado no CAD")
   (princ "\n   - CAD2KMZ : Exporta postes e redes para o Google Earth (KMZ)")
-  (princ "\n   - RECARREGAR_KMZ ou RECARREGAR_CHECKLIST : Recarrega rotinas ambientais")
+  (princ "\n   - RECARREGAR_KMZ ou RECARREGAR_CHECKLIST ou RECARREGAR_BUFFER : Recarrega rotinas ambientais")
   (princ "\n")
   (princ "\n  [CÁLCULO ESTRUTURAL & MECÂNICO]")
   (princ "\n   - CALC_RESULTANTE ou TRACAO ou ESFORCO : Tração resultante e sobrecarga em postes")

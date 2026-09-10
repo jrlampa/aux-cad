@@ -19,6 +19,7 @@ ID_Quadros   [_Button("Desenhar Quadros CQT", "ICON_QUADROS", "ICON_QUADROS")]^C
 ID_CqtExcel  [_Button("Desenhar Quadros via Excel", "ICON_CQTEXCEL", "ICON_CQTEXCEL")]^C^CCQTEXCEL
 ID_Separator2 [_Separator]
 ID_KmzCheck  [_Button("Verificação Ambiental KMZ e Checklist", "ICON_KMZ", "ICON_KMZ")]^C^CKMZCHECK
+ID_AppBuffer [_Button("Buffer Hídrico APP (Lei 12.651)", "ICON_BUFFER", "ICON_BUFFER")]^C^CAPP_BUFFER
 ID_InsCroqui [_Button("Inserir Ortofoto no CAD", "ICON_CROQUI", "ICON_CROQUI")]^C^CINSCROQUI
 ID_Separator3 [_Separator]
 ID_Result    [_Button("Cálculo de Esforço Resultante", "ICON_RESULT", "ICON_RESULT")]^C^CCALC_RESULTANTE
@@ -50,22 +51,23 @@ ID_MnQuadros   [&4. Desenhar Quadros de CQT (CQTQUADROS)]^C^CCQTQUADROS
 ID_MnCqtExcel  [&5. Quadros CQT a partir de Excel (CQTEXCEL)]^C^CCQTEXCEL
 [--]
 ID_MnKmz       [&6. Checagem Ambiental e Checklist (KMZCHECK)]^C^CKMZCHECK
-ID_MnCroqui    [&7. Inserir Ortofoto / Croqui (INSCROQUI)]^C^CINSCROQUI
-ID_MnCad2Kmz   [&8. Exportar para Google Earth (CAD2KMZ)]^C^CCAD2KMZ
+ID_MnAppBuffer [&7. Buffer Geodésico Corpos Hídricos (APP_BUFFER)]^C^CAPP_BUFFER
+ID_MnCroqui    [&8. Inserir Ortofoto / Croqui (INSCROQUI)]^C^CINSCROQUI
+ID_MnCad2Kmz   [&9. Exportar para Google Earth (CAD2KMZ)]^C^CCAD2KMZ
 [--]
-ID_MnResult    [&9. Esforço Resultante em Postes (CALC_RESULTANTE)]^C^CCALC_RESULTANTE
-ID_MnTabelas   [&10. Consultar Tabelas Técnicas BT/MT (TABELAS)]^C^CTABELAS
+ID_MnResult    [&10. Esforço Resultante em Postes (CALC_RESULTANTE)]^C^CCALC_RESULTANTE
+ID_MnTabelas   [&11. Consultar Tabelas Técnicas BT/MT (TABELAS)]^C^CTABELAS
 [--]
-ID_MnOrcCad    [&11. Levantamento de Materiais DWG (ORCAD)]^C^CORCAD
-ID_MnOrcUi     [&12. Tabela de Materiais e Preços (ORCUI)]^C^CORCUI
-ID_MnCpfc      [&13. Participação Financeira REN 1.059 (CPFC)]^C^CCPFCCAD
+ID_MnOrcCad    [&12. Levantamento de Materiais DWG (ORCAD)]^C^CORCAD
+ID_MnOrcUi     [&13. Tabela de Materiais e Preços (ORCUI)]^C^CORCUI
+ID_MnCpfc      [&14. Participação Financeira REN 1.059 (CPFC)]^C^CCPFCCAD
 [--]
-ID_MnTlenTab   [&14. Tabela de Comprimentos (TLENTAB)]^C^CTLENTAB
-ID_MnAddBloco  [&15. Inserir Bloco no UCS (ADDBLOCO)]^C^CADDBLOCO
-ID_MnMapaPoste [&16. Estúdio Mapa Web de Postes (MAPAPOSTES)]^C^CMAPAPOSTES
-ID_MnKmzPoste  [&17. Importar KMZ com Postes e Textos (KMZPOSTES)]^C^CIMPORTAR_KMZ_POSTES
-ID_MnCsv       [&18. Importar Pontos UTM (CSV)]^C^CIMPORTAR_PONTOS_UTM
+ID_MnTlenTab   [&15. Tabela de Comprimentos (TLENTAB)]^C^CTLENTAB
+ID_MnAddBloco  [&16. Inserir Bloco no UCS (ADDBLOCO)]^C^CADDBLOCO
+ID_MnMapaPoste [&17. Estúdio Mapa Web de Postes (MAPAPOSTES)]^C^CMAPAPOSTES
+ID_MnKmzPoste  [&18. Importar KMZ com Postes e Textos (KMZPOSTES)]^C^CIMPORTAR_KMZ_POSTES
+ID_MnCsv       [&19. Importar Pontos UTM (CSV)]^C^CIMPORTAR_PONTOS_UTM
 [--]
-ID_MnReload    [&19. Recarregar Todos os Módulos (RECARREGAR_TUDO)]^C^CRECARREGAR_TUDO
+ID_MnReload    [&20. Recarregar Todos os Módulos (RECARREGAR_TUDO)]^C^CRECARREGAR_TUDO
 
 

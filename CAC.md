@@ -49,6 +49,16 @@ aux cad/
   - Suporte a extração do número real do poste via atributos do bloco (`cad2kmz-get-attr-num`).
   - Suporte completo a linhas e polilinhas (`LINE`, `LWPOLYLINE`, `POLYLINE` clássica).
   - Execução protegida via `WScript.Shell` com redirecionamento de log de diagnóstico e verificação do KMZ gerado.
+- `app_buffer_generator.py` (633 linhas): Motor geodésico analítico de buffers de Áreas de Preservação Permanente (APP) para corpos hídricos conforme Código Florestal (Lei 12.651/2012):
+  - **Cursos d'água / Rios / Córregos (<10m)**: Buffer bilateral contínuo de 30m ao longo do traçado geodésico com tampas semicirculares e junções angulares analíticas (`utm_buffer_linestring`).
+  - **Nascentes e Olhos d'água**: Buffer circular geodésico de raio 50m (`utm_buffer_point`).
+  - **Classificação Semântica Inteligente**: Reconhecimento de nomes e diretórios no KMZ/KML (`parse_kml_hydrography`).
+  - **Auditoria Geodésica de Postes**: Ray-Casting analítico de postes contra polígonos de APP (`check_postes_in_hydro_app`), destacando em vermelho (`AMBIENTAL_APP_ALERTA`) postes que incidem em faixa marginal ou nascente.
+  - **Geração de LISP Gráfico 2.5D**: Compilação de rotina ActiveX (`app_draw_buffers.lsp`) desenhando polilinhas fechadas e hachuras no layer `AMBIENTAL_APP_HIDRICA` (Ciano).
+  - **Integração com Memorial e Checklist**: Alimenta automaticamente o arquivo `kmz_boxes.txt`, acionando as linhas 24 (Rio <10m) e 33 (Nascente) do `checklist.xlsx`.
+- `app_buffer.lsp` (276 linhas): Comandos do AutoCAD **`APP_BUFFER`**, **`BUFFER_RIO`**, **`BUFFER_APP`**, **`APP_HIDRICA`** e **`RECARREGAR_BUFFER`**:
+  - Modos de entrada flexíveis: **[K]MZ** (arquivo cartográfico externo), **[D]WG** (linhas/polilinhas/pontos selecionados na tela) ou **[A]uditoria** (seleção de postes para auditoria imediata).
+  - Parâmetros normativos customizáveis no prompt com padrões da Lei 12.651 (30m rios / 50m nascentes).
 - `preferencias_ambiental.json`: Smart Cache de parâmetros de formulário.
 
 ### 2. Módulo de Queda de Tensão BT (`cqt/`)
@@ -196,10 +206,10 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
 5. **Barra de Ferramentas e Menus Nativos**: `aux_cad_toolbar.lsp` e `aux_cad_menu.mnu` atualizados com 20 ferramentas integradas em 1 clique.
 
 ### 11. Validação, Debug Completo e Testes
-- **Auditoria de Sintaxe AutoLISP**: 100% dos 26 arquivos `.lsp` do projeto validados e com balanceamento de parênteses e strings verificado (0 erros).
-- **Auditoria de Módulos Python**: 100% dos 50 arquivos `.py` compilados e validados contra regras de Clean Code e limites de linhas (<750 linhas).
-- **Suíte de Testes**: **95 testes unitários passando com 100% de sucesso** (`python -m pytest --cov`).
-- **Cobertura de Código**: Cobertura crítica preservada acima de 80% a 99% em todos os módulos principais (`cpfc_core`: 98%, `checklist_ambiental_manager`: 92%, `tabelas_referencia`: 94%, `cqt_live_calc`: 91%, `cqt_excel_io`: 88%, `cqt_quadros_generator`: 88%, `arvore_parser`: 92%, `arvore_database`: 92%).
+- **Auditoria de Sintaxe AutoLISP**: 100% dos 27 arquivos `.lsp` do projeto validados e com balanceamento de parênteses e strings verificado (0 erros).
+- **Auditoria de Módulos Python**: 100% dos 51 arquivos `.py` compilados e validados contra regras de Clean Code e limites de linhas (<750 linhas).
+- **Suíte de Testes**: **102 testes unitários passando com 100% de sucesso** (`python -m pytest --cov`).
+- **Cobertura de Código**: Cobertura crítica preservada acima de 80% a 99% em todos os módulos principais (`cpfc_core`: 98%, `checklist_ambiental_manager`: 92%, `tabelas_referencia`: 94%, `cqt_live_calc`: 91%, `cqt_excel_io`: 88%, `cqt_quadros_generator`: 88%, `arvore_parser`: 92%, `arvore_database`: 92%, `app_buffer_generator`: 89%).
 
 
 

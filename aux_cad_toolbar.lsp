@@ -56,6 +56,9 @@
           ;; 6. Botão KMZCHECK
           (vla-AddToolbarItem tb (vla-get-Count tb) "🌳 KMZ Ambiental" "Verifica áreas ambientais e gera Memorial/Checklist" "^C^CKMZCHECK ")
 
+          ;; 6.1 Botão APP_BUFFER
+          (vla-AddToolbarItem tb (vla-get-Count tb) "🌊 APP Hídrica (APP_BUFFER)" "Gera buffers de rios/nascentes (Lei 12.651) e audita postes" "^C^CAPP_BUFFER ")
+
           ;; 7. Botão INSCROQUI
           (vla-AddToolbarItem tb (vla-get-Count tb) "🖼️ Inserir Ortofoto" "Insere a Ortofoto/Croqui de satélite no CAD" "^C^CINSCROQUI ")
 

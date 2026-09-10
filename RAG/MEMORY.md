@@ -52,6 +52,14 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Extração de número do poste via atributos do bloco (`cad2kmz-get-attr-num`).
   - Suporte completo a linhas e polilinhas (`LINE`, `LWPOLYLINE`, `POLYLINE`).
   - Execução protegida via `WScript.Shell` com log de diagnóstico e verificação de saída.
+- `app_buffer_generator.py` (633 linhas): Motor geodésico analítico de buffers de APP hídrica conforme Código Florestal (Lei 12.651/2012):
+  - **Buffer Bilateral Contínuo de 30m**: Cursos d'água / rios / córregos (<10m) com tampas semicirculares e junções angulares (`utm_buffer_linestring`).
+  - **Buffer Circular de Raio 50m**: Nascentes e olhos d'água (`utm_buffer_point`).
+  - **Classificação Semântica Inteligente**: Mapeia feições de rios e nascentes de arquivos KMZ/KML ou exportadas do DWG.
+  - **Auditoria de Postes em APP**: Ray-Casting analítico de postes contra polígonos de APP (`check_postes_in_hydro_app`), alertando postes em infração em vermelho (`AMBIENTAL_APP_ALERTA`).
+  - **Geração Gráfica 2.5D no CAD**: Compila rotina ActiveX (`app_draw_buffers.lsp`) desenhando os polígonos na camada `AMBIENTAL_APP_HIDRICA` (Ciano).
+  - **Integração com Memorial e Checklist**: Alimenta `kmz_boxes.txt` ativando as linhas 24 e 33 do `checklist.xlsx`.
+- `app_buffer.lsp` (276 linhas): Comandos do AutoCAD **`APP_BUFFER`**, **`BUFFER_RIO`**, **`BUFFER_APP`**, **`APP_HIDRICA`** e **`RECARREGAR_BUFFER`** com suporte a seleção no DWG ou arquivo KMZ.
 - `preferencias_ambiental.json`: Smart Cache de preferências locais.
 
 ### 4. `mecanico/` (Projeto Cálculo Mecânico / Esforço em Postes)
@@ -162,25 +170,16 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `ArkanceSystems_CADStudio_Job-Time.msi`
 - `sisrua2/` & `Lampa/`
 
-### 12. `documentos/` (Pranchas, Referências e Notas)
-- `PRANCHA LIGHT.dwg` e `PRANCHA LIGHT.bak`: Templates de prancha oficial.
-- `PLAN_MEDIÇÃO_ELETTRICA_PROJETOS_BASE(1).xlsx` & `Árvore de Dispositivos.xlsx`: Planilhas de medição e dispositivos.
-- `anotações-2.one`: Caderno técnico de anotações.
-- `Captura de tela 2026-01-29 174711.png`
-- `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
-
-## Validação, Debug Completo e Qualidade
-- Suíte completa com **95 testes unitários passando 100%** (`python -m pytest --cov`):
-  - `orcamento\orcamento_excel.py`: 99%
+### 12. Validação, Debug Completo e Testes
+- **Suíte de Testes**: **102 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Cobertura de Código Crítica**:
   - `cpfc\cpfc_core.py`: 98%
-  - `cpfc\cpfc_guia_ren1059.py`: 100%
-  - `ambiental\postes_detalhador.py`: 98%
   - `dados_tecnicos\tabelas_referencia.py`: 94%
-  - `topografia\kmz_pontos_importer.py`: 93%
   - `ambiental\checklist_ambiental_manager.py`: 92%
   - `unifilar\arvore_parser.py`: 92%
   - `unifilar\arvore_database.py`: 92%
   - `cqt\cqt_live_calc.py`: 91%
+  - `ambiental\app_buffer_generator.py`: 89%
   - `cqt\cqt_quadros_generator.py`: 88%
   - `orcamento\orcamento_core.py`: 89%
   - `ambiental\croqui_ambiental_generator.py`: 88%
@@ -193,13 +192,18 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `unifilar\unifilar_manager.py`: 80%
   - `mapa_postes\mapa_servidor.py`: 83%
   - `orcamento\orcamento_manager.py`: 81%
-- **Auditoria de Sintaxe AutoLISP (.lsp)**: Todos os 26 arquivos `.lsp` do projeto verificados por parser estrito com 100% de parênteses e strings balanceadas (0 erros).
-- **Auditoria de Módulos Python (.py)**: Todos os 50 arquivos compilados e em conformidade com as regras de Clean Code e limites de linhas (<750 linhas).
+- **Auditoria de Sintaxe AutoLISP (.lsp)**: Todos os 27 arquivos `.lsp` do projeto verificados por parser estrito com 100% de parênteses e strings balanceadas (0 erros).
+- **Auditoria de Módulos Python (.py)**: Todos os 51 arquivos compilados e em conformidade com as regras de Clean Code e limites de linhas (<750 linhas).
 - **Carregador Central `acaddoc.lsp`**:
   - Funções de compatibilidade globais: `stringp`, `fboundp`, `vl-symbol-p`, `vl-sleep`, `vl-filename-nxname`.
   - Suporte dinâmico a 9 pastas no `SupportPath`.
-  - Novos módulos integrados: Topografia (`TLENTAB`, `IBCOORD`, `pt2blk`, `mlrua`), CQT (`CQTEXCEL`), Tabelas (`BT`, `MT`).
+  - Novos módulos integrados: Topografia (`TLENTAB`, `IBCOORD`, `pt2blk`, `mlrua`), CQT (`CQTEXCEL`), Tabelas (`BT`, `MT`), Ambiental (`APP_BUFFER`).
   - Comando mestre de recarga: **`RECARREGAR_TUDO`** (ou **`RELOAD_AUXCAD`**).
-- **Interface Gráfica & Menus**: `aux_cad_toolbar.lsp` e `aux_cad_menu.mnu` sincronizados com 20 botões e itens de menu organizados.
+- **Interface Gráfica & Menus**: `aux_cad_toolbar.lsp` e `aux_cad_menu.mnu` sincronizados com 21 botões e itens de menu organizados.
 
-
+### 13. `documentos/` (Pranchas, Referências e Notas)
+- `PRANCHA LIGHT.dwg` e `PRANCHA LIGHT.bak`: Templates de prancha oficial.
+- `PLAN_MEDIÇÃO_ELETTRICA_PROJETOS_BASE(1).xlsx` & `Árvore de Dispositivos.xlsx`: Planilhas de medição e dispositivos.
+- `anotações-2.one`: Caderno técnico de anotações.
+- `Captura de tela 2026-01-29 174711.png`
+- `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
