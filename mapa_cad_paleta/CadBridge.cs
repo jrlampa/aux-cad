@@ -38,6 +38,9 @@ namespace MapaCadPaleta
         private const string LAYER_POSTES = "POSTES";
         private const string LAYER_NUMERO = "POSTES_NUMERO";
         private const string LAYER_DESCRICAO = "POSTES_DESCRICAO";
+        private const string LAYER_CABOS_BT = "CABOS_BT";
+        private const string LAYER_CABOS_MT = "CABOS_MT";
+        private const string LAYER_CABOS_TEXTO = "CABOS_TEXTO";
 
         /// <summary>
         /// Insere um poste georreferenciado e sua anotação técnica no DWG ativo.
@@ -109,6 +112,90 @@ namespace MapaCadPaleta
             catch (Exception ex)
             {
                 return (false, $"Falha ao desenhar no CAD: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Desenha a linha de condutores de rede (BT ou MT) entre dois postes e anota a distância do vão.
+        /// </summary>
+        public static (bool Success, string Message) InserirVaoCabos(double x1, double y1, double x2, double y2, string tipoRede, string textoVao)
+        {
+            Document doc = acApp.DocumentManager.MdiActiveDocument;
+            if (doc == null)
+            {
+                return (false, "Nenhum documento DWG ativo no AutoCAD.");
+            }
+
+            Database db = doc.Database;
+            Editor ed = doc.Editor;
+
+            try
+            {
+                using (doc.LockDocument())
+                using (Transaction tr = db.TransactionManager.StartTransaction())
+                {
+                    BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
+                    GarantirLayers(db, tr);
+
+                    string layerCabo = (tipoRede?.ToUpperInvariant() == "MT") ? LAYER_CABOS_MT : LAYER_CABOS_BT;
+
+                    Point3d pt1 = new Point3d(x1, y1, 0.0);
+                    Point3d pt2 = new Point3d(x2, y2, 0.0);
+
+                    // 1. Linha do condutor entre os centros dos postes
+                    Line condutor = new Line(pt1, pt2)
+                    {
+                        Layer = layerCabo
+                    };
+                    btr.AppendEntity(condutor);
+                    tr.AddNewlyCreatedDBObject(condutor, true);
+
+                    // 2. Cálculo de orientação e ponto médio para texto alinhado
+                    double dx = x2 - x1;
+                    double dy = y2 - y1;
+                    double angulo = Math.Atan2(dy, dx);
+
+                    // Corrige ângulo para que o texto nunca fique invertido de cabeça para baixo
+                    if (angulo > Math.PI / 2.0 || angulo < -Math.PI / 2.0)
+                    {
+                        angulo += Math.PI;
+                    }
+
+                    // Vetor perpendicular normalizado para afastar o texto do condutor
+                    double normalX = -Math.Sin(angulo);
+                    double normalY = Math.Cos(angulo);
+                    double offsetDist = 0.6; // 60cm de afastamento da linha
+
+                    double mx = (x1 + x2) / 2.0;
+                    double my = (y1 + y2) / 2.0;
+                    Point3d ptTexto = new Point3d(mx + normalX * offsetDist, my + normalY * offsetDist, 0.0);
+
+                    if (!string.IsNullOrWhiteSpace(textoVao))
+                    {
+                        DBText txtVao = new DBText
+                        {
+                            Position = ptTexto,
+                            AlignmentPoint = ptTexto,
+                            HorizontalMode = TextHorizontalMode.TextCenter,
+                            VerticalMode = TextVerticalMode.TextBottom,
+                            Height = 0.9,
+                            TextString = textoVao.Trim(),
+                            Rotation = angulo,
+                            Layer = LAYER_CABOS_TEXTO
+                        };
+                        btr.AppendEntity(txtVao);
+                        tr.AddNewlyCreatedDBObject(txtVao, true);
+                    }
+
+                    tr.Commit();
+                }
+
+                ed.Regen();
+                return (true, $"Vão de rede ({tipoRede}) desenhado com sucesso.");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Erro ao traçar vão no CAD: {ex.Message}");
             }
         }
 
@@ -186,9 +273,12 @@ namespace MapaCadPaleta
         private static void GarantirLayers(Database db, Transaction tr)
         {
             LayerTable lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_POSTES, 3);    // Verde
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_NUMERO, 4);    // Ciano
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_DESCRICAO, 2); // Amarelo
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_POSTES, 3);      // Verde
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_NUMERO, 4);      // Ciano
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_DESCRICAO, 2);   // Amarelo
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_BT, 4);    // Ciano (BT)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_MT, 6);    // Magenta (MT)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_TEXTO, 2); // Amarelo
         }
 
         private static void CriarLayerSeNaoExistir(Database db, Transaction tr, LayerTable lt, string nome, short colorIndex)

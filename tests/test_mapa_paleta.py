@@ -166,3 +166,113 @@ def test_cad_bridge_codigo_bloco_t_e_anti_sobreposicao():
     assert "payload.X - 2.8" in cs or "payload.X -" in cs
     assert "payload.X + 1.8" in cs or "payload.X +" in cs
 
+
+def test_tracado_continuo_assets_e_algoritmos():
+    """Valida assets de traçado contínuo (P2), cálculo analítico de vãos e rotação de texto no CAD."""
+    import math
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    tracado_js = os.path.join(raiz, "mapa_cad_paleta", "web", "tracado.js")
+    cad_bridge_cs = os.path.join(raiz, "mapa_cad_paleta", "CadBridge.cs")
+
+    assert os.path.exists(tracado_js), "Arquivo tracado.js não encontrado"
+    assert os.path.exists(cad_bridge_cs), "Arquivo CadBridge.cs não encontrado"
+
+    with open(tracado_js, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    assert "toggleModoTracado" in js
+    assert "registrarPosteTracado" in js
+    assert "desenharVaoNoMapa" in js
+    assert "finalizarTrecho" in js
+    assert "desenhar_vao" in js
+
+    with open(cad_bridge_cs, "r", encoding="utf-8") as f:
+        cs = f.read()
+
+    assert "InserirVaoCabos" in cs
+    assert "CABOS_BT" in cs
+    assert "CABOS_MT" in cs
+    assert "CABOS_TEXTO" in cs
+
+    # Validação matemática do vão: P1(685000, 7470000) até P2(685030, 7470040)
+    p1 = (685000.0, 7470000.0)
+    p2 = (685030.0, 7470040.0)
+    dx = p2[0] - p1[0]
+    dy = p2[1] - p1[1]
+    dist = math.hypot(dx, dy)
+    assert abs(dist - 50.0) < 1e-6
+
+    # Teste de rotação de texto do vão: se ângulo estiver apontando para a esquerda, deve inverter
+    angulo = math.atan2(dy, dx)
+    if angulo > math.pi / 2.0 or angulo < -math.pi / 2.0:
+        angulo_corrigido = angulo + math.pi
+    else:
+        angulo_corrigido = angulo
+    # Ângulo original em (30, 40) está no 1º quadrante (aprox 53.13 graus), não precisa inverter
+    assert abs(math.degrees(angulo_corrigido) - 53.13) < 0.1
+
+    # Vetor inverso P2 -> P1 (3º quadrante, -126.87 graus)
+    dx_inv, dy_inv = p1[0] - p2[0], p1[1] - p2[1]
+    ang_inv = math.atan2(dy_inv, dx_inv)
+    assert ang_inv < -math.pi / 2.0
+    ang_inv_corrigido = ang_inv + math.pi
+    # Após correção de legibilidade no CAD, deve apontar no mesmo sentido visual do 1º quadrante
+    assert abs(math.degrees(ang_inv_corrigido) - 53.13) < 0.1
+
+
+def test_restricoes_ambientais_e_raycasting():
+    """Valida assets de restrições ambientais (P4) e o algoritmo Ray-Casting analítico."""
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    amb_js = os.path.join(raiz, "mapa_cad_paleta", "web", "ambiental_overlay.js")
+    parser_cs = os.path.join(raiz, "mapa_cad_paleta", "AmbientalParser.cs")
+
+    assert os.path.exists(amb_js), "Arquivo ambiental_overlay.js não encontrado"
+    assert os.path.exists(parser_cs), "Arquivo AmbientalParser.cs não encontrado"
+
+    with open(amb_js, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    assert "carregarPoligonosAmbientais" in js
+    assert "auditarPontoAmbiental" in js
+    assert "rayCastingPontoEmPoligono" in js
+
+    with open(parser_cs, "r", encoding="utf-8") as f:
+        cs = f.read()
+
+    assert "CarregarArquivo" in cs
+    assert "ExtrairDeKmz" in cs
+    assert "ExtrairDeGeoJson" in cs
+    assert "ClassificarCategoria" in cs
+
+    # Algoritmo Ray-Casting de alta precisão (idêntico ao de ambiental_overlay.js)
+    def ray_casting_ponto_em_poligono(lat, lon, vertices):
+        dentro = False
+        n = len(vertices)
+        j = n - 1
+        for i in range(n):
+            xi, yi = vertices[i][0], vertices[i][1]
+            xj, yj = vertices[j][0], vertices[j][1]
+            intersecao = ((yi > lon) != (yj > lon)) and (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi)
+            if intersecao:
+                dentro = not dentro
+            j = i
+        return dentro
+
+    # Polígono quadrado em torno de (-22.90, -43.20)
+    quadrado_app = [
+        [-22.89, -43.21],
+        [-22.89, -43.19],
+        [-22.91, -43.19],
+        [-22.91, -43.21]
+    ]
+
+    # Ponto no centro (deve estar dentro)
+    assert ray_casting_ponto_em_poligono(-22.90, -43.20, quadrado_app) is True
+
+    # Ponto fora ao norte (fora da APP)
+    assert ray_casting_ponto_em_poligono(-22.88, -43.20, quadrado_app) is False
+
+    # Ponto fora ao leste (fora da APP)
+    assert ray_casting_ponto_em_poligono(-22.90, -43.18, quadrado_app) is False
+
+

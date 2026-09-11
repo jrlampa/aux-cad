@@ -251,21 +251,31 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - Mapa em tela cheia com barra flutuante de camadas (OSM, Satélite ESRI, Google Híbrido), ferramentas de captura (`🎯 Ler DWG`), sincronização de postes existentes (`🔄 Sincronizar`) e alternador retrátil do painel lateral (`📑 Painel ◀/▶`).
   - **Múltiplas Estruturas MT e BT**: Combobox expansível + botão `➕` + chips de atalho rápido (`+ N1`, `+ N2`, `+ N3b`, `+ CE1`, `+ S1`, `+ S2`, `+ F1`, `+ F2-D2`). Permite empilhar N estruturas simultâneas exibidas como badges interativos com remoção em 1 clique (`✕`).
   - **Seleção Dinâmica de Potência do Transformador**: Chip de trafo reativo (`🔋 Trafo <potência>`) com painel expansivo contendo as potências padronizadas de distribuição (15kVA, 30kVA, 45kVA, 75kVA, 112.5kVA, 150kVA, 225kVA, 300kVA e campo customizável).
+- **P2 - Modo Traçado Contínuo de Linhas/Vãos no CAD (`tracado.js`)**:
+  - Permite ligar o botão `📐 Modo Traçado` na barra superior para conectar automaticamente postes consecutivos.
+  - Painel flutuante com alternador de tipo de rede (`BT` em Ciano / `MT` em Roxo), contador de postes conectados e botão `🏁 Finalizar Trecho` / `Limpar`.
+  - **Cálculo Analítico de Vão**: Medição métrica exata em UTM via `Math.hypot(dx, dy)` exibida em etiquetas intermediárias no Leaflet (`38.5m`).
+  - **Desenho Automático no DWG (`CadBridge.InserirVaoCabos`)**: Traça a entidade `Line` entre centros de postes no layer `CABOS_BT` (Cor 4 - Ciano) ou `CABOS_MT` (Cor 6 - Magenta) e insere `DBText` no layer `CABOS_TEXTO` (Cor 2 - Amarelo) alinhado ao vão com correção de ângulo para legibilidade técnica sem inversão de cabeça para baixo.
+- **P4 - Camada de Restrições Ambientais com Auditoria em Tempo Real (`ambiental_overlay.js` & `AmbientalParser.cs`)**:
+  - Botão `🌿 Restrições` na barra superior para carregar e alternar a visualização de polígonos geoespaciais ambientais diretamente sobre as ortofotos de satélite.
+  - **Parser C# Multi-Formato (`AmbientalParser.cs`)**: Leitura e extração direta de arquivos `.kmz` (descompactação zip e parse de KML), `.kml` (XML Linq com suporte a namespaces) e `.geojson`/`.json` com conversão para formato Leaflet `[lat, lon]`.
+  - **Estilização Inteligente por Categoria**: Cores normativas para APP (Laranja `#f77f00`), Exclusão/Faixa de Servidão (Vermelho `#d90429`), Unidade de Conservação (Verde petróleo `#2a9d8f`) e Área Hídrica (Azul `#0077b6`).
+  - **Auditoria Instantânea via Ray-Casting Analítico**: Conforme o marcador do poste é movido ou inserido, o algoritmo de Jordan Ray-Casting verifica se as coordenadas incidem dentro de qualquer polígono cadastrado.
+  - **Banner Dinâmico de Auditoria (`#bannerAmbiental`)**: Exibe em tempo real no topo da sidebar:
+    - *Verde*: `🌿 Ponto Seguro: Fora de restrições ambientais`.
+    - *Vermelho Pulsante*: `⚠️ ATENÇÃO: Ponto dentro de [Nome da Área] ([Categoria])`.
 - **Anti-Sobreposição Gráfica 2.5D no AutoCAD**:
   - `ptPoste`: inserção central na coordenada UTM exata $(X, Y)$ do bloco `POSTE_` (ou círculo `R=0.6m`).
   - `ptNum` (Bloco `PONTO`): deslocado analiticamente para $(X - 2.8, Y + 1.8)$, desobstruindo totalmente a simbologia física do poste e os textos descritivos.
   - `ptDesc` (`MText` técnico): deslocado para $(X + 1.8, Y + 1.2)$ com alinhamento `TopLeft`, empilhando tipo de poste, estruturas MT/BT individuais e identificação de trafo sem colisão visual.
 - **Inserção do Bloco `"T"` de Transformador**:
-  - Quando o equipamento `Trafo` está ativo, o CadBridge verifica se o bloco `"T"` existe na `BlockTable` do desenho ativo (`bt.Has("T")`). Se existir, insere uma `BlockReference` no ponto exato do poste (`ptPoste`), preenchendo atributos `POTENCIA`/`KVA` caso existam. Caso contrário, gera geometria 2.5D composta por círculos tangentes.
+  - Quando o equipamento `Trafo` está ativo, o CadBridge verifica se o bloco `"T"` existe na `BlockTable` do desenho ativo (`bt.Has("T")`). Se existir, insere uma `BlockReference` no ponto exato do poste (`ptPoste`).
 - **Modularização de Código & Clean Architecture**:
-  - Conversão analítica de coordenadas isolada em `snyder.js` (90 linhas), mantendo `app.js` em 707 linhas (abaixo do limite suave de 750 linhas).
-  - C# `CadBridge.cs` rigorosamente otimizado com 421 linhas (abaixo do limite ideal de 500 linhas).
+  - `tracado.js` (188 linhas) e `ambiental_overlay.js` (179 linhas) modularizados separadamente.
+  - `app.js` rigorosamente em 734 linhas (abaixo do limite suave de 750 linhas).
+  - `CadBridge.cs` (512 linhas) e `AmbientalParser.cs` (196 linhas) mantendo alta coesão e responsabilidade única.
 - **Persistência Contínua de Estado (`localStorage`)**:
   - Chave `AUXCAD_PALETA_STATE`: salva automaticamente coordenadas, centro e zoom do mapa, camada ativa, número do poste, listas de estruturas MT/BT, equipamentos e potências.
-- **Controle Flexível de Marcador & Formulário**:
-  - **🗑️ Apagar Marcador**: Remove o marcador do mapa, limpa os campos X e Y.
-  - **🧹 Limpar Formulário**: Reseta instantaneamente equipamentos, tipo de poste, estruturas e potências sem perder a numeração sequencial.
-  - **Clique no Mapa / Ler DWG**: Recria e posiciona o marcador instantaneamente em qualquer ponto clicado.
 - **Comandos do AutoCAD**:
   - **`MAPAPALETA`** (alias: **`OSMPALETA`**): Exibe a paleta acoplável à direita com auto-hide.
   - **`FECHAR_MAPAPALETA`**: Fecha a paleta.

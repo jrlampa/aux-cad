@@ -360,6 +360,11 @@ function atualizarPosicao(lat, lon) {
     document.getElementById('inputX').value = utm.x.toFixed(2);
     document.getElementById('inputY').value = utm.y.toFixed(2);
     document.getElementById('coordBadge').textContent = `Fuso ${fuso}S`;
+
+    // Audita restrições ambientais em tempo real se a camada estiver ativa
+    if (window.auditarPontoAmbiental) {
+        window.auditarPontoAmbiental(lat, lon);
+    }
 }
 
 // Alternância de Camadas
@@ -393,6 +398,16 @@ function setupForms() {
 
     // Ação: Limpar Formulário
     document.getElementById('btnLimparForm')?.addEventListener('click', limparFormulario);
+
+    // Ação: Modo Traçado
+    document.getElementById('btnToggleTracado')?.addEventListener('click', () => {
+        if (window.toggleModoTracado) window.toggleModoTracado();
+    });
+
+    // Ação: Restrições Ambientais
+    document.getElementById('btnToggleAmbiental')?.addEventListener('click', () => {
+        if (window.toggleCamadaAmbiental) window.toggleCamadaAmbiental(AppState.map);
+    });
 
     // Aplicar coordenadas digitadas
     document.getElementById('btnAplicarCoord').addEventListener('click', () => {
@@ -616,6 +631,17 @@ function inserirPosteNoCad() {
     enviarParaCSharp(payload);
     showToast(`Enviando poste ${numero} para o AutoCAD...`, 'info');
 
+    // Registrar no traçado contínuo se o modo estiver ativo
+    if (window.TracadoState && window.TracadoState.ativo && typeof window.registrarPosteTracado === 'function') {
+        window.registrarPosteTracado({
+            numero,
+            x,
+            y,
+            lat: AppState.currentLat,
+            lon: AppState.currentLon
+        }, AppState.map);
+    }
+
     // Auto-incrementar número se marcado
     if (document.getElementById('chkAutoInc').checked) {
         incrementarNumeroPoste();
@@ -672,6 +698,14 @@ function setupMensagensCSharp() {
             }
             else if (data.action === 'postes_dwg') {
                 renderizarPostesDwg(data.postes || []);
+            }
+            else if (data.action === 'poligonos_ambientais') {
+                if (typeof window.carregarPoligonosAmbientais === 'function') {
+                    window.carregarPoligonosAmbientais(data.poligonos || [], AppState.map);
+                    if (typeof window.auditarPontoAmbiental === 'function' && AppState.currentLat && AppState.currentLon) {
+                        window.auditarPontoAmbiental(AppState.currentLat, AppState.currentLon);
+                    }
+                }
             }
         });
     }

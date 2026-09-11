@@ -21,6 +21,8 @@
                     <button id="btnLayerGoogle" class="btn-layer" title="Google Satélite Híbrido">🌍 Híbrido</button>
                 </div>
                 <div class="map-actions">
+                    <button id="btnToggleTracado" class="btn-action-sm btn-tracado" title="Ativar traçado contínuo de vãos de rede">📐 Modo Traçado</button>
+                    <button id="btnToggleAmbiental" class="btn-action-sm btn-ambiental" title="Carregar e exibir restrições ambientais">🌿 Restrições</button>
                     <button id="btnLerCadTop" class="btn-action-sm btn-cad-read" title="Clique no desenho do CAD para posicionar o mapa">🎯 Ler DWG</button>
                     <button id="btnSincDwg" class="btn-action-sm btn-cad-sync" title="Carregar postes existentes no DWG">🔄 Sincronizar</button>
                     <button id="btnToggleSidebar" class="btn-action-sm btn-sidebar-toggle" title="Ocultar/Exibir Sidebar">📑 Painel ◀</button>
@@ -36,6 +38,30 @@
             <div class="sidebar-header">
                 <h3>⚡ LANÇAMENTO DE POSTES</h3>
                 <span id="coordBadge" class="badge-fuso">Fuso 23S</span>
+            </div>
+
+            <!-- Banner de Auditoria de Restrições Ambientais em Tempo Real -->
+            <div id="bannerAmbiental" class="banner-ambiental sem-dados" title="Clique para carregar camada KMZ ambiental">
+                <span>🌿 Camada ambiental: clique para carregar KMZ</span>
+            </div>
+
+            <!-- Painel Expansível de Traçado Contínuo de Rede -->
+            <div id="painelTracado" class="painel-tracado" style="display: none;">
+                <div class="tracado-header">
+                    <span>📐 Traçado Contínuo de Rede</span>
+                    <span id="lblTracadoContagem" class="badge-tracado">0 postes</span>
+                </div>
+                <div class="tracado-controls">
+                    <div class="rede-selector">
+                        <button type="button" id="btnRedeBt" class="btn-rede active" onclick="setTipoRedeTracado('BT')">Rede BT (Ciano)</button>
+                        <button type="button" id="btnRedeMt" class="btn-rede" onclick="setTipoRedeTracado('MT')">Rede MT (Magenta)</button>
+                    </div>
+                    <div class="tracado-actions">
+                        <span id="lblTracadoUltimo" class="tracado-ultimo-txt">Nenhum poste no traçado</span>
+                        <button type="button" id="btnFinalizarTrecho" class="btn-text-action" onclick="finalizarTrecho()" title="Iniciar novo ramal">Novo Ramal</button>
+                        <button type="button" id="btnLimparTracado" class="btn-text-action danger" onclick="limparTracado(window.AppState ? window.AppState.map : null)" title="Limpar traçado do mapa">Limpar</button>
+                    </div>
+                </div>
             </div>
 
             <div class="sidebar-scrollable">
@@ -232,6 +258,8 @@
     <!-- Scripts Locais -->
     <script src="leaflet.js"></script>
     <script src="snyder.js"></script>
+    <script src="tracado.js"></script>
+    <script src="ambiental_overlay.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

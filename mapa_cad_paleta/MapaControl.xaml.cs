@@ -144,6 +144,21 @@ namespace MapaCadPaleta
                         EnviarMensagemWeb(new { action = "postes_dwg", postes });
                         break;
 
+                    case "desenhar_vao":
+                        double x1 = root.TryGetProperty("x1", out var px1) ? px1.GetDouble() : 0;
+                        double y1 = root.TryGetProperty("y1", out var py1) ? py1.GetDouble() : 0;
+                        double x2 = root.TryGetProperty("x2", out var px2) ? px2.GetDouble() : 0;
+                        double y2 = root.TryGetProperty("y2", out var py2) ? py2.GetDouble() : 0;
+                        string tipoRede = root.TryGetProperty("tipoRede", out var pTr) ? pTr.GetString() ?? "BT" : "BT";
+                        string textoVao = root.TryGetProperty("textoVao", out var pTv) ? pTv.GetString() ?? "" : "";
+                        var resVao = CadBridge.InserirVaoCabos(x1, y1, x2, y2, tipoRede, textoVao);
+                        AtualizarStatus(resVao.Message);
+                        break;
+
+                    case "abrir_kmz_ambiental":
+                        AbrirArquivoAmbiental();
+                        break;
+
                     case "status":
                         string msg = root.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
                         AtualizarStatus(msg);
@@ -211,6 +226,37 @@ namespace MapaCadPaleta
             Dispatcher.Invoke(() =>
             {
                 TxtStatus.Text = texto;
+            });
+        }
+
+        private void AbrirArquivoAmbiental()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Selecionar Arquivo de Restrições Ambientais (KMZ, KML ou GeoJSON)",
+                    Filter = "Camadas Ambientais (*.kmz;*.kml;*.geojson;*.json)|*.kmz;*.kml;*.geojson;*.json|Google Earth (*.kmz;*.kml)|*.kmz;*.kml|GeoJSON (*.geojson;*.json)|*.geojson;*.json|Todos os Arquivos (*.*)|*.*"
+                };
+
+                if (dlg.ShowDialog() == true)
+                {
+                    try
+                    {
+                        var poligonos = AmbientalParser.CarregarArquivo(dlg.FileName);
+                        AtualizarStatus($"{poligonos.Count} polígonos ambientais carregados de {Path.GetFileName(dlg.FileName)}.");
+                        EnviarMensagemWeb(new
+                        {
+                            action = "poligonos_ambientais",
+                            arquivo = Path.GetFileName(dlg.FileName),
+                            poligonos
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        AtualizarStatus($"Erro ao ler arquivo ambiental: {ex.Message}");
+                    }
+                }
             });
         }
     }

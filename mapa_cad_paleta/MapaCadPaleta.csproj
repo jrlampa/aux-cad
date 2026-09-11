@@ -41,6 +41,8 @@
     <PackageReference Include="AutoCAD.NET" Version="24.3.0">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
 
   <!-- Assets Web copiados na saída -->
