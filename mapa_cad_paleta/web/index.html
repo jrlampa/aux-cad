@@ -97,45 +97,96 @@
                         </div>
                     </div>
 
-                    <div class="grid-2-col" style="margin-top: 6px;">
-                        <div class="form-group">
-                            <label for="selectEstruturaMt">Estrutura MT:</label>
-                            <select id="selectEstruturaMt">
-                                <option value="" selected>(Nenhuma)</option>
-                                <option value="N1">N1 (Passagem)</option>
-                                <option value="N2">N2 (Ângulo)</option>
-                                <option value="N3b">N3b (Ancoragem)</option>
-                                <option value="N4">N4 (Fim de Linha)</option>
-                                <option value="CE1">CE1 (Compacta)</option>
-                                <option value="CE2">CE2 (Compacta Ângulo)</option>
-                                <option value="B1">B1 (Beco)</option>
-                                <option value="B2">B2 (Beco Ângulo)</option>
-                            </select>
+                    <!-- Seção de Estruturas MT (Multi-seleção) -->
+                    <div class="estruturas-wrapper" style="margin-top: 6px;">
+                        <div class="form-group-combo">
+                            <label for="selectEstruturaMt">Estruturas MT:</label>
+                            <div class="input-with-btn">
+                                <select id="selectEstruturaMt">
+                                    <option value="" selected>Selecione para adicionar...</option>
+                                    <option value="N1">N1 (Passagem)</option>
+                                    <option value="N2">N2 (Ângulo)</option>
+                                    <option value="N3b">N3b (Ancoragem)</option>
+                                    <option value="N4">N4 (Fim de Linha)</option>
+                                    <option value="CE1">CE1 (Compacta)</option>
+                                    <option value="CE2">CE2 (Compacta Ângulo)</option>
+                                    <option value="B1">B1 (Beco)</option>
+                                    <option value="B2">B2 (Beco Ângulo)</option>
+                                </select>
+                                <button type="button" id="btnAddMt" class="btn-add-structure" title="Adicionar estrutura MT">+</button>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="selectEstruturaBt">Estrutura BT:</label>
-                            <select id="selectEstruturaBt">
-                                <option value="S1" selected>S1 (Passagem)</option>
-                                <option value="S2">S2 (Ângulo)</option>
-                                <option value="F1">F1 (Ancoragem)</option>
-                                <option value="F2-D2">F2-D2 (Fim)</option>
-                                <option value="SI1">SI1 (Isolador)</option>
-                                <option value="SI3">SI3 (Ancoragem Tri)</option>
-                                <option value="">(Nenhuma)</option>
-                            </select>
+                        <div class="chips-container-sm" id="quickChipsMt" style="margin-top: 3px;">
+                            <button type="button" class="chip-sm chip-quick-add" data-tipo="mt" data-val="N1">+ N1</button>
+                            <button type="button" class="chip-sm chip-quick-add" data-tipo="mt" data-val="N2">+ N2</button>
+                            <button type="button" class="chip-sm chip-quick-add" data-tipo="mt" data-val="N3b">+ N3b</button>
+                            <button type="button" class="chip-sm chip-quick-add" data-tipo="mt" data-val="CE1">+ CE1</button>
+                        </div>
+                        <div class="tag-list" id="tagsEstruturasMt">
+                            <!-- Tags MT adicionadas dinamicamente -->
+                        </div>
+                    </div>
+
+                    <!-- Seção de Estruturas BT (Multi-seleção) -->
+                    <div class="estruturas-wrapper" style="margin-top: 6px;">
+                        <div class="form-group-combo">
+                            <label for="selectEstruturaBt">Estruturas BT:</label>
+                            <div class="input-with-btn">
+                                <select id="selectEstruturaBt">
+                                    <option value="" selected>Selecione para adicionar...</option>
+                                    <option value="S1">S1 (Passagem)</option>
+                                    <option value="S2">S2 (Ângulo)</option>
+                                    <option value="F1">F1 (Ancoragem)</option>
+                                    <option value="F2-D2">F2-D2 (Fim)</option>
+                                    <option value="SI1">SI1 (Isolador)</option>
+                                    <option value="SI3">SI3 (Ancoragem Tri)</option>
+                                    <option value="SI4">SI4 (Isolador Pino)</option>
+                                </select>
+                                <button type="button" id="btnAddBt" class="btn-add-structure" title="Adicionar estrutura BT">+</button>
+                            </div>
+                        </div>
+                        <div class="chips-container-sm" id="quickChipsBt" style="margin-top: 3px;">
+                            <button type="button" class="chip-sm chip-quick-add" data-tipo="bt" data-val="S1">+ S1</button>
+                            <button type="button" class="chip-sm chip-quick-add" data-tipo="bt" data-val="S2">+ S2</button>
+                            <button type="button" class="chip-sm chip-quick-add" data-tipo="bt" data-val="F1">+ F1</button>
+                            <button type="button" class="chip-sm chip-quick-add" data-tipo="bt" data-val="F2-D2">+ F2-D2</button>
+                        </div>
+                        <div class="tag-list" id="tagsEstruturasBt">
+                            <!-- Tags BT adicionadas dinamicamente -->
                         </div>
                     </div>
 
                     <!-- Equipamentos Rápidos -->
-                    <div class="equip-group">
+                    <div class="equip-group" style="margin-top: 8px;">
                         <label class="label-sub">Equipamentos:</label>
                         <div class="chips-container" id="equipChips">
                             <button type="button" class="chip" data-val="IP">💡 IP</button>
                             <button type="button" class="chip" data-val="ATERR">⚡ ATERR</button>
                             <button type="button" class="chip" data-val="DAE">🛡️ DAE</button>
-                            <button type="button" class="chip" data-val="TRAFO 45kVA">🔋 Trafo 45kVA</button>
+                            <button type="button" class="chip" id="chipTrafo" data-val="TRAFO">🔋 Trafo <span id="lblTrafoKva">45kVA</span></button>
                             <button type="button" class="chip" data-val="CHAVE FUSIVEL">🔌 Chave Fus.</button>
                             <button type="button" class="chip" data-val="PARA-RAIOS">⚡ P-Raios</button>
+                        </div>
+
+                        <!-- Painel de Configuração do Trafo (Exibido quando Trafo ativo) -->
+                        <div id="painelTrafo" class="trafo-power-panel" style="display: none; margin-top: 6px;">
+                            <div class="form-group">
+                                <label for="selectPotenciaTrafo" style="font-size: 11px; font-weight: bold; color: #0284c7;">⚡ Potência do Transformador (Bloco "T"):</label>
+                                <div class="grid-2-col">
+                                    <select id="selectPotenciaTrafo">
+                                        <option value="15kVA">15 kVA (Mono/Trifásico)</option>
+                                        <option value="30kVA">30 kVA (Trifásico)</option>
+                                        <option value="45kVA" selected>45 kVA (Trifásico - Padrão)</option>
+                                        <option value="75kVA">75 kVA (Trifásico)</option>
+                                        <option value="112.5kVA">112.5 kVA (Trifásico)</option>
+                                        <option value="150kVA">150 kVA (Trifásico)</option>
+                                        <option value="225kVA">225 kVA (Trifásico)</option>
+                                        <option value="300kVA">300 kVA (Trifásico)</option>
+                                        <option value="OUTRO">Outra Potência...</option>
+                                    </select>
+                                    <input type="text" id="inputPotenciaCustom" placeholder="Ex: 50kVA" style="display: none;">
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -178,8 +229,9 @@
         </aside>
     </div>
 
-    <!-- Leaflet JS Local -->
+    <!-- Scripts Locais -->
     <script src="leaflet.js"></script>
+    <script src="snyder.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

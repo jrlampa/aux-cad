@@ -117,12 +117,13 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `CadBridge.cs`: Ponte de automação do AutoCAD (`DocumentLock`, `TransactionManager`):
   - Criação automática de layers `POSTES`, `POSTES_NUMERO` e `POSTES_DESCRICAO`.
   - Inserção de bloco `POSTE_` (ou fallback vetorial círculo/cruz) na coordenada UTM milimétrica.
-  - Inserção de bloco `PONTO` com número sequencial no atributo.
-  - Inserção de anotações técnicas empilhadas MText (Tipo, MT, BT, Equipamentos, Carga Especial).
+  - **Inserção do Bloco Específico "T"**: Quando o poste possui transformador, insere o bloco `"T"` oficial na coordenada exata do poste com preenchimento de potência nos atributos e fallback vetorial 2.5D.
+  - **Geometria Anti-Sobreposição**: Afastamento geométrico limpo do bloco numerador `PONTO` $(-2.8, +1.8)$ e do bloco de anotações técnicas `MText` $(+1.8, +1.2)$ garantindo separação visual total sem colisão com o círculo do poste `POSTE_`.
+  - **Suporte a Multi-Estruturas MT e BT**: Renderização empilhada e ordenada de múltiplas estruturas de média e baixa tensão no MText.
   - Captura interativa de coordenadas no desenho via `Editor.GetPoint` com sincronização no mapa.
   - Varredura e plotagem de postes do DWG direto no Leaflet.
-- `SnyderConverter.cs`: Algoritmo geodésico Snyder analítico C# de altíssima precisão para conversão bidirecional entre Lat/Lon WGS84 e UTM SIRGAS 2000 (Fusos 22S, 23S e 24S).
-- `web/index.html`, `web/style.css` e `web/app.js`: Interface moderna em tema executivo `#1B365D` otimizada para paleta estreita com OSM, Satélite ESRI, Google Híbrido, marcador arrastável, conversão kVA $\leftrightarrow$ kW com FP = 0.92, chips rápidos e botões de 1 clique ("📍 Inserir no CAD", "🎯 Ler DWG", "🔄 Sincronizar").
+- `SnyderConverter.cs` & `web/snyder.js`: Algoritmo geodésico Snyder analítico de altíssima precisão para conversão bidirecional entre Lat/Lon WGS84 e UTM SIRGAS 2000 (Fusos 22S, 23S e 24S) com responsabilidade única modularizada.
+- `web/index.html`, `web/style.css` e `web/app.js`: Interface moderna em tema executivo `#1B365D` otimizada para paleta estreita com OSM, Satélite ESRI, Google Híbrido, marcador arrastável, multi-estruturas MT e BT com tags dinâmicas e quick chips, seleção de potência do transformador (15 a 300 kVA), conversão kVA $\leftrightarrow$ kW com FP = 0.92, chips rápidos e botões de 1 clique ("📍 Inserir no CAD", "🎯 Ler DWG", "🔄 Sincronizar").
 - `mapa_paleta_loader.lsp`: Carregador AutoLISP dinâmico baseado na variável de versão do AutoCAD (`ACADVER`) disparando `NETLOAD`.
 
 ### 9. `dados_tecnicos/` (Tabelas de Referência Técnicas BT & MT: SQLite3, JSON e AutoLISP)

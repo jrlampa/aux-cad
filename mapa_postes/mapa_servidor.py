@@ -104,6 +104,10 @@ class PosteStudio:
     tipo_poste: str = "11/M"
     estrutura_mt: str = "N1"
     estrutura_bt: str = "S1"
+    estruturas_mt: List[str] = field(default_factory=list)
+    estruturas_bt: List[str] = field(default_factory=list)
+    tem_trafo: bool = False
+    potencia_trafo: str = "45kVA"
     equipamentos: List[str] = field(default_factory=list)
     clientes_mono: int = 0
     clientes_bi: int = 0
@@ -193,10 +197,22 @@ def gerar_lisp_postes_studio(
 
         # Linhas descritivas do poste
         desc_linhas = [p.tipo_poste]
-        if p.estrutura_mt and p.estrutura_mt != "Nenhum":
+        if p.estruturas_mt:
+            for mt in p.estruturas_mt:
+                if mt and mt != "Nenhum":
+                    desc_linhas.append(mt)
+        elif p.estrutura_mt and p.estrutura_mt != "Nenhum":
             desc_linhas.append(p.estrutura_mt)
-        if p.estrutura_bt and p.estrutura_bt != "Nenhum":
+
+        if p.estruturas_bt:
+            for bt in p.estruturas_bt:
+                if bt and bt != "Nenhum":
+                    desc_linhas.append(bt)
+        elif p.estrutura_bt and p.estrutura_bt != "Nenhum":
             desc_linhas.append(p.estrutura_bt)
+
+        tem_trafo = p.tem_trafo or any("TRAFO" in eq.upper() for eq in p.equipamentos)
+
         for eq in p.equipamentos:
             if eq:
                 desc_linhas.append(eq)
@@ -246,6 +262,20 @@ def gerar_lisp_postes_studio(
             f"    (progn (setq blk (vla-InsertBlock space pBase \"POSTE_\" 1.0 1.0 1.0 0.0)) (vla-put-Layer blk \"POSTES_SIMBOLO\"))",
             f"    (progn (setq c (vla-AddCircle space pBase 0.6)) (vla-put-Layer c \"POSTES_SIMBOLO\") (setq ptObj (vla-AddPoint space pBase)) (vla-put-Layer ptObj \"POSTES_SIMBOLO\"))",
             "  )",
+            ""
+        ])
+
+        if tem_trafo:
+            linhas.extend([
+                "  ;; Inserção do Bloco 'T' (Transformador)",
+                "  (if (tblsearch \"BLOCK\" \"T\")",
+                f"    (progn (setq blk (vla-InsertBlock space pBase \"T\" 1.0 1.0 1.0 0.0)) (vla-put-Layer blk \"POSTES_SIMBOLO\"))",
+                f"    (progn (setq c1 (vla-AddCircle space (vlax-3d-point (list {x} {round(y + 0.35, 3)} 0.0)) 0.35)) (vla-put-Layer c1 \"POSTES_SIMBOLO\") (setq c2 (vla-AddCircle space (vlax-3d-point (list {x} {round(y + 1.05, 3)} 0.0)) 0.35)) (vla-put-Layer c2 \"POSTES_SIMBOLO\"))",
+                "  )",
+                ""
+            ])
+
+        linhas.extend([
             "",
             "  ;; B) Bloco 'PONTO'",
             "  (if (tblsearch \"BLOCK\" \"PONTO\")",

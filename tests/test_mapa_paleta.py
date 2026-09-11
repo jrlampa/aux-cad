@@ -102,3 +102,67 @@ def test_sintaxe_lisp_paleta_loader():
 
     assert parenteses == 0, f"Parênteses desbalanceados: saldo de {parenteses}"
     assert not em_string, "String não fechada no arquivo LISP"
+
+
+def test_multi_estruturas_e_trafo_no_frontend():
+    """Valida a presença de seletores multi-estruturas MT/BT, tags e seletor de trafo no HTML/JS/CSS."""
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    web_dir = os.path.join(raiz, "mapa_cad_paleta", "web")
+
+    with open(os.path.join(web_dir, "index.html"), "r", encoding="utf-8") as f:
+        html = f.read()
+
+    # Multi-estruturas MT e BT
+    assert 'id="selectEstruturaMt"' in html
+    assert 'id="btnAddMt"' in html
+    assert 'id="tagsEstruturasMt"' in html
+    assert 'id="selectEstruturaBt"' in html
+    assert 'id="btnAddBt"' in html
+    assert 'id="tagsEstruturasBt"' in html
+    assert 'chip-quick-add' in html
+
+    # Configuração de Trafo
+    assert 'id="chipTrafo"' in html
+    assert 'id="painelTrafo"' in html
+    assert 'id="selectPotenciaTrafo"' in html
+    assert 'id="lblTrafoKva"' in html
+
+    with open(os.path.join(web_dir, "app.js"), "r", encoding="utf-8") as f:
+        js = f.read()
+
+    assert "adicionarEstruturaMt" in js
+    assert "removerEstruturaMt" in js
+    assert "adicionarEstruturaBt" in js
+    assert "removerEstruturaBt" in js
+    assert "setTrafoAtivo" in js
+    assert "potenciaTrafo" in js
+    assert "temTrafo" in js
+    assert "estruturasMt" in js
+    assert "estruturasBt" in js
+
+
+def test_cad_bridge_codigo_bloco_t_e_anti_sobreposicao():
+    """Valida no código C# de CadBridge a inserção do bloco T e offsets anti-sobreposição de PONTO."""
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    cs_file = os.path.join(raiz, "mapa_cad_paleta", "CadBridge.cs")
+    assert os.path.exists(cs_file)
+
+    with open(cs_file, "r", encoding="utf-8") as f:
+        cs = f.read()
+
+    # Payload
+    assert "EstruturasMt" in cs
+    assert "EstruturasBt" in cs
+    assert "TemTrafo" in cs
+    assert "PotenciaTrafo" in cs
+
+    # Inserção do bloco 'T'
+    assert 'InserirBlocoTrafo' in cs
+    assert 'bt.Has("T")' in cs
+    assert 'PossuiTrafo' in cs
+
+    # Anti-sobreposição de PONTO e MText
+    # PONTO afastado lateralmente (ex: X - 2.8, Y + 1.8) e MText à direita (ex: X + 1.8)
+    assert "payload.X - 2.8" in cs or "payload.X -" in cs
+    assert "payload.X + 1.8" in cs or "payload.X +" in cs
+

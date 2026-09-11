@@ -98,6 +98,46 @@ def test_gerar_lisp_postes_studio_com_clientes_e_cargas():
         assert 'POSTES_CARGAS' in conteudo
 
 
+def test_gerar_lisp_postes_studio_com_multi_estruturas_e_trafo_bloco_t():
+    """Valida que múltiplas estruturas MT/BT e o bloco T de transformador são gerados no LISP."""
+    p = PosteStudio(
+        id="p_trafo",
+        numero="01",
+        lat=-22.9068,
+        lon=-43.1729,
+        x_utm=556984.25,
+        y_utm=7502486.19,
+        tipo_poste="11/600",
+        estrutura_mt="N3b",
+        estrutura_bt="S2",
+        estruturas_mt=["N3b", "CE1"],
+        estruturas_bt=["S1", "S2"],
+        equipamentos=["IP", "TRAFO 45kVA"],
+        tem_trafo=True,
+        potencia_trafo="45kVA"
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_lsp = os.path.join(tmpdir, "mapa_postes_trafo.lsp")
+        gerar_lisp_postes_studio([p], out_lsp)
+
+        assert os.path.exists(out_lsp)
+        with open(out_lsp, "r", encoding="utf-8") as f:
+            conteudo = f.read()
+
+        # Verifica bloco POSTE_, bloco PONTO e bloco T do Trafo
+        assert '"POSTE_"' in conteudo
+        assert '"PONTO"' in conteudo
+        assert '"T"' in conteudo  # Bloco específico de Trafo
+
+        # Multi-estruturas geradas nas descrições
+        assert '"N3b"' in conteudo
+        assert '"CE1"' in conteudo
+        assert '"S1"' in conteudo
+        assert '"S2"' in conteudo
+        assert '"TRAFO 45kVA"' in conteudo
+
+
 def test_conversao_potencia_trifasica_fp92():
     """Testa a conversão bidirecional entre kW e kVA com FP = 0.92."""
     from mapa_postes.mapa_servidor import converter_potencia_trifasica

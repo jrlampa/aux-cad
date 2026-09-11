@@ -3,93 +3,7 @@
  * Comunicação bidirecional com C# via Microsoft Edge WebView2
  */
 
-// Conversor Geodésico Snyder Analítico no Frontend (Zero latência)
-const Snyder = {
-    A: 6378137.0,
-    F: 1.0 / 298.257223563,
-    K0: 0.9996,
-    FALSE_EASTING: 500000.0,
-    FALSE_NORTHING_S: 10000000.0,
-
-    latLonToUtm(lat, lon, forcedZone = 23) {
-        const zone = forcedZone || Math.floor((lon + 180.0) / 6.0) + 1;
-        const latRad = lat * Math.PI / 180.0;
-        const lonRad = lon * Math.PI / 180.0;
-        const lon0Rad = ((zone - 1) * 6 - 180 + 3) * Math.PI / 180.0;
-
-        const b = this.A * (1.0 - this.F);
-        const e2 = (this.A * this.A - b * b) / (this.A * this.A);
-        const ep2 = (this.A * this.A - b * b) / (b * b);
-
-        const sinLat = Math.sin(latRad);
-        const cosLat = Math.cos(latRad);
-        const tanLat = Math.tan(latRad);
-
-        const n = this.A / Math.sqrt(1.0 - e2 * sinLat * sinLat);
-        const t = tanLat * tanLat;
-        const c = ep2 * cosLat * cosLat;
-        const p = (lonRad - lon0Rad);
-
-        const m = this.A * ((1.0 - e2 / 4.0 - 3.0 * e2 * e2 / 64.0 - 5.0 * Math.pow(e2, 3) / 256.0) * latRad
-            - (3.0 * e2 / 8.0 + 3.0 * e2 * e2 / 32.0 + 45.0 * Math.Pow ? Math.pow(e2, 3) : Math.pow(e2, 3) / 1024.0) * Math.sin(2.0 * latRad)
-            + (15.0 * e2 * e2 / 256.0 + 45.0 * Math.pow(e2, 3) / 1024.0) * Math.sin(4.0 * latRad)
-            - (35.0 * Math.pow(e2, 3) / 3072.0) * Math.sin(6.0 * latRad));
-
-        const easting = this.FALSE_EASTING + this.K0 * n * (p * cosLat
-            + Math.pow(p, 3) * Math.pow(cosLat, 3) / 6.0 * (1.0 - t + c)
-            + Math.pow(p, 5) * Math.pow(cosLat, 5) / 120.0 * (5.0 - 18.0 * t + t * t + 72.0 * c - 58.0 * ep2));
-
-        let northing = this.K0 * (m + n * tanLat * (p * p * cosLat * cosLat / 2.0
-            + Math.pow(p, 4) * Math.pow(cosLat, 4) / 24.0 * (5.0 - t + 9.0 * c + 4.0 * c * c)
-            + Math.pow(p, 6) * Math.pow(cosLat, 6) / 720.0 * (61.0 - 58.0 * t + t * t + 600.0 * c - 330.0 * ep2)));
-
-        if (lat < 0) {
-            northing += this.FALSE_NORTHING_S;
-        }
-
-        return { x: Math.round(easting * 100) / 100, y: Math.round(northing * 100) / 100, zone };
-    },
-
-    utmToLatLon(x, y, zone = 23) {
-        const lon0Rad = ((zone - 1) * 6 - 180 + 3) * Math.PI / 180.0;
-        const b = this.A * (1.0 - this.F);
-        const e2 = (this.A * this.A - b * b) / (this.A * this.A);
-        const ep2 = (this.A * this.A - b * b) / (b * b);
-        const e1 = (1.0 - Math.sqrt(1.0 - e2)) / (1.0 + Math.sqrt(1.0 - e2));
-
-        const dx = x - this.FALSE_EASTING;
-        const dy = y - this.FALSE_NORTHING_S;
-
-        const m = dy / this.K0;
-        const mu = m / (this.A * (1.0 - e2 / 4.0 - 3.0 * e2 * e2 / 64.0 - 5.0 * Math.pow(e2, 3) / 256.0));
-
-        const phi1 = mu
-            + (3.0 * e1 / 2.0 - 27.0 * Math.pow(e1, 3) / 32.0) * Math.sin(2.0 * mu)
-            + (21.0 * e1 * e1 / 16.0 - 55.0 * Math.pow(e1, 4) / 32.0) * Math.sin(4.0 * mu)
-            + (151.0 * Math.pow(e1, 3) / 96.0) * Math.sin(6.0 * mu);
-
-        const sinPhi1 = Math.sin(phi1);
-        const cosPhi1 = Math.cos(phi1);
-        const tanPhi1 = Math.tan(phi1);
-
-        const n1 = this.A / Math.sqrt(1.0 - e2 * sinPhi1 * sinPhi1);
-        const t1 = tanPhi1 * tanPhi1;
-        const c1 = ep2 * cosPhi1 * cosPhi1;
-        const r1 = this.A * (1.0 - e2) / Math.pow(1.0 - e2 * sinPhi1 * sinPhi1, 1.5);
-        const d = dx / (n1 * this.K0);
-
-        const latRad = phi1 - (n1 * tanPhi1 / r1) * (d * d / 2.0
-            - (5.0 + 3.0 * t1 + 10.0 * c1 - 4.0 * c1 * c1 - 9.0 * ep2) * Math.pow(d, 4) / 24.0);
-
-        const lonRad = lon0Rad + (d
-            - (1.0 + 2.0 * t1 + c1) * Math.pow(d, 3) / 6.0) / cosPhi1;
-
-        return {
-            lat: latRad * 180.0 / Math.PI,
-            lon: lonRad * 180.0 / Math.PI
-        };
-    }
-};
+// Conversor Snyder carregado externamente via snyder.js
 
 // Chave de Persistência Local
 const STORAGE_KEY = 'AUXCAD_PALETA_STATE';
@@ -106,8 +20,87 @@ const AppState = {
     fuso: 23,
     activeLayer: 'osm',
     layers: {},
-    dwgMarkersLayer: null
+    dwgMarkersLayer: null,
+    estruturasMt: [],
+    estruturasBt: ['S1'],
+    temTrafo: false,
+    potenciaTrafo: '45kVA'
 };
+
+// Funções de Gerenciamento de Multi-Estruturas
+function renderizarTagsEstruturas() {
+    const cMt = document.getElementById('tagsEstruturasMt');
+    if (cMt) {
+        cMt.innerHTML = AppState.estruturasMt.map((mt, idx) => `
+            <span class="structure-badge">
+                ${mt}
+                <button type="button" class="badge-remove" onclick="window.removerEstruturaMt(${idx})" title="Remover ${mt}">✕</button>
+            </span>
+        `).join('');
+    }
+
+    const cBt = document.getElementById('tagsEstruturasBt');
+    if (cBt) {
+        cBt.innerHTML = AppState.estruturasBt.map((bt, idx) => `
+            <span class="structure-badge badge-bt">
+                ${bt}
+                <button type="button" class="badge-remove" onclick="window.removerEstruturaBt(${idx})" title="Remover ${bt}">✕</button>
+            </span>
+        `).join('');
+    }
+}
+
+function adicionarEstruturaMt(nome) {
+    if (!nome || !nome.trim()) return;
+    AppState.estruturasMt.push(nome.trim());
+    renderizarTagsEstruturas();
+    salvarEstadoPersistido();
+}
+
+function removerEstruturaMt(idx) {
+    AppState.estruturasMt.splice(idx, 1);
+    renderizarTagsEstruturas();
+    salvarEstadoPersistido();
+}
+
+function adicionarEstruturaBt(nome) {
+    if (!nome || !nome.trim()) return;
+    AppState.estruturasBt.push(nome.trim());
+    renderizarTagsEstruturas();
+    salvarEstadoPersistido();
+}
+
+function removerEstruturaBt(idx) {
+    AppState.estruturasBt.splice(idx, 1);
+    renderizarTagsEstruturas();
+    salvarEstadoPersistido();
+}
+
+window.removerEstruturaMt = removerEstruturaMt;
+window.removerEstruturaBt = removerEstruturaBt;
+
+// Controle de Transformador
+function setTrafoAtivo(ativo) {
+    AppState.temTrafo = ativo;
+    const chip = document.getElementById('chipTrafo');
+    const painel = document.getElementById('painelTrafo');
+    if (chip) {
+        if (ativo) chip.classList.add('selected');
+        else chip.classList.remove('selected');
+    }
+    if (painel) {
+        painel.style.display = ativo ? 'block' : 'none';
+    }
+    atualizarLabelTrafo();
+    salvarEstadoPersistido();
+}
+
+function atualizarLabelTrafo() {
+    const lbl = document.getElementById('lblTrafoKva');
+    if (lbl) {
+        lbl.textContent = AppState.potenciaTrafo || '45kVA';
+    }
+}
 
 // Salva o estado completo no localStorage
 function salvarEstadoPersistido() {
@@ -126,8 +119,10 @@ function salvarEstadoPersistido() {
             fuso: AppState.fuso,
             numero: document.getElementById('inputNumero').value,
             tipoPoste: document.getElementById('selectTipoPoste').value,
-            estruturaMt: document.getElementById('selectEstruturaMt').value,
-            estruturaBt: document.getElementById('selectEstruturaBt').value,
+            estruturasMt: AppState.estruturasMt,
+            estruturasBt: AppState.estruturasBt,
+            temTrafo: AppState.temTrafo,
+            potenciaTrafo: AppState.potenciaTrafo,
             equipamentos: equips,
             kva: document.getElementById('inputKva').value,
             kw: document.getElementById('inputKw').value,
@@ -249,21 +244,58 @@ function initMap() {
     if (salvo) {
         if (salvo.numero) document.getElementById('inputNumero').value = salvo.numero;
         if (salvo.tipoPoste) document.getElementById('selectTipoPoste').value = salvo.tipoPoste;
-        if (salvo.estruturaMt !== undefined) document.getElementById('selectEstruturaMt').value = salvo.estruturaMt;
-        if (salvo.estruturaBt) document.getElementById('selectEstruturaBt').value = salvo.estruturaBt;
         if (salvo.fuso) document.getElementById('selectFuso').value = salvo.fuso;
         if (salvo.kva) document.getElementById('inputKva').value = salvo.kva;
         if (salvo.kw) document.getElementById('inputKw').value = salvo.kw;
         if (salvo.autoInc !== undefined) document.getElementById('chkAutoInc').checked = salvo.autoInc;
 
+        if (Array.isArray(salvo.estruturasMt)) {
+            AppState.estruturasMt = salvo.estruturasMt;
+        } else if (salvo.estruturaMt) {
+            AppState.estruturasMt = [salvo.estruturaMt];
+        }
+
+        if (Array.isArray(salvo.estruturasBt)) {
+            AppState.estruturasBt = salvo.estruturasBt;
+        } else if (salvo.estruturaBt) {
+            AppState.estruturasBt = [salvo.estruturaBt];
+        }
+
+        if (salvo.potenciaTrafo) {
+            AppState.potenciaTrafo = salvo.potenciaTrafo;
+            const selPot = document.getElementById('selectPotenciaTrafo');
+            if (selPot) {
+                const optExists = Array.from(selPot.options).some(o => o.value === salvo.potenciaTrafo);
+                if (optExists) {
+                    selPot.value = salvo.potenciaTrafo;
+                } else {
+                    selPot.value = 'OUTRO';
+                    const customPot = document.getElementById('inputPotenciaCustom');
+                    if (customPot) {
+                        customPot.value = salvo.potenciaTrafo;
+                        customPot.style.display = 'block';
+                    }
+                }
+            }
+        }
+
+        if (salvo.temTrafo !== undefined) {
+            setTrafoAtivo(salvo.temTrafo);
+        } else if (Array.isArray(salvo.equipamentos) && salvo.equipamentos.some(e => e.includes('TRAFO'))) {
+            setTrafoAtivo(true);
+        }
+
         if (Array.isArray(salvo.equipamentos)) {
             document.querySelectorAll('#equipChips .chip').forEach(c => {
-                if (salvo.equipamentos.includes(c.getAttribute('data-val'))) {
+                const v = c.getAttribute('data-val');
+                if (v !== 'TRAFO' && salvo.equipamentos.includes(v)) {
                     c.classList.add('selected');
                 }
             });
         }
     }
+
+    renderizarTagsEstruturas();
 }
 
 // Posiciona e exibe o marcador no mapa
@@ -291,12 +323,22 @@ function apagarMarcador() {
 
 // Limpa campos do formulário para o estado padrão
 function limparFormulario() {
-    document.querySelectorAll('#equipChips .chip.selected').forEach(c => {
+    document.querySelectorAll('#equipChips .chip').forEach(c => {
         c.classList.remove('selected');
     });
     document.getElementById('selectTipoPoste').value = '11/600';
-    document.getElementById('selectEstruturaMt').value = '';
-    document.getElementById('selectEstruturaBt').value = 'S1';
+    AppState.estruturasMt = [];
+    AppState.estruturasBt = ['S1'];
+    setTrafoAtivo(false);
+    AppState.potenciaTrafo = '45kVA';
+    const selPot = document.getElementById('selectPotenciaTrafo');
+    if (selPot) selPot.value = '45kVA';
+    const customPot = document.getElementById('inputPotenciaCustom');
+    if (customPot) {
+        customPot.value = '';
+        customPot.style.display = 'none';
+    }
+    renderizarTagsEstruturas();
     document.getElementById('inputKva').value = '';
     document.getElementById('inputKw').value = '';
     salvarEstadoPersistido();
@@ -377,16 +419,88 @@ function setupForms() {
         }
     });
 
-    // Chips de Equipamentos (Multi-seleção)
-    document.querySelectorAll('#equipChips .chip').forEach(chip => {
+    // Eventos de Estruturas MT
+    document.getElementById('btnAddMt')?.addEventListener('click', () => {
+        const sel = document.getElementById('selectEstruturaMt');
+        if (sel && sel.value) {
+            adicionarEstruturaMt(sel.value);
+            sel.value = '';
+        }
+    });
+
+    document.getElementById('selectEstruturaMt')?.addEventListener('change', (e) => {
+        if (e.target.value) {
+            adicionarEstruturaMt(e.target.value);
+            e.target.value = '';
+        }
+    });
+
+    document.querySelectorAll('#quickChipsMt .chip-quick-add').forEach(chip => {
         chip.addEventListener('click', () => {
-            chip.classList.toggle('selected');
-            salvarEstadoPersistido();
+            adicionarEstruturaMt(chip.getAttribute('data-val'));
         });
     });
 
+    // Eventos de Estruturas BT
+    document.getElementById('btnAddBt')?.addEventListener('click', () => {
+        const sel = document.getElementById('selectEstruturaBt');
+        if (sel && sel.value) {
+            adicionarEstruturaBt(sel.value);
+            sel.value = '';
+        }
+    });
+
+    document.getElementById('selectEstruturaBt')?.addEventListener('change', (e) => {
+        if (e.target.value) {
+            adicionarEstruturaBt(e.target.value);
+            e.target.value = '';
+        }
+    });
+
+    document.querySelectorAll('#quickChipsBt .chip-quick-add').forEach(chip => {
+        chip.addEventListener('click', () => {
+            adicionarEstruturaBt(chip.getAttribute('data-val'));
+        });
+    });
+
+    // Chips de Equipamentos (Multi-seleção) e Trafo
+    document.querySelectorAll('#equipChips .chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            if (chip.id === 'chipTrafo') {
+                setTrafoAtivo(!AppState.temTrafo);
+            } else {
+                chip.classList.toggle('selected');
+                salvarEstadoPersistido();
+            }
+        });
+    });
+
+    // Controle de Potência do Trafo
+    document.getElementById('selectPotenciaTrafo')?.addEventListener('change', (e) => {
+        const val = e.target.value;
+        const customInput = document.getElementById('inputPotenciaCustom');
+        if (val === 'OUTRO') {
+            if (customInput) {
+                customInput.style.display = 'block';
+                customInput.focus();
+                AppState.potenciaTrafo = customInput.value.trim() || '45kVA';
+            }
+        } else {
+            if (customInput) customInput.style.display = 'none';
+            AppState.potenciaTrafo = val;
+        }
+        atualizarLabelTrafo();
+        salvarEstadoPersistido();
+    });
+
+    document.getElementById('inputPotenciaCustom')?.addEventListener('input', (e) => {
+        AppState.potenciaTrafo = e.target.value.trim() || '45kVA';
+        atualizarLabelTrafo();
+        salvarEstadoPersistido();
+    });
+
     // Persistência automática em inputs
-    ['inputNumero', 'selectTipoPoste', 'selectEstruturaMt', 'selectEstruturaBt', 'chkAutoInc'].forEach(id => {
+    ['inputNumero', 'selectTipoPoste', 'chkAutoInc'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('change', salvarEstadoPersistido);
@@ -461,14 +575,17 @@ function inserirPosteNoCad() {
 
     const numero = document.getElementById('inputNumero').value.trim() || '01';
     const tipoPoste = document.getElementById('selectTipoPoste').value;
-    const estruturaMt = document.getElementById('selectEstruturaMt').value;
-    const estruturaBt = document.getElementById('selectEstruturaBt').value;
     const fuso = parseInt(document.getElementById('selectFuso').value, 10) || 23;
 
     // Equipamentos selecionados
     const equipamentos = [];
     document.querySelectorAll('#equipChips .chip.selected').forEach(c => {
-        equipamentos.push(c.getAttribute('data-val'));
+        const val = c.getAttribute('data-val');
+        if (val === 'TRAFO') {
+            equipamentos.push(`TRAFO ${AppState.potenciaTrafo}`);
+        } else {
+            equipamentos.push(val);
+        }
     });
 
     // Carga Especial Trifásica
@@ -485,11 +602,15 @@ function inserirPosteNoCad() {
         y,
         numero,
         tipoPoste,
-        estruturaMt,
-        estruturaBt,
+        estruturaMt: AppState.estruturasMt.join(' / '),
+        estruturaBt: AppState.estruturasBt.join(' / '),
+        estruturasMt: AppState.estruturasMt,
+        estruturasBt: AppState.estruturasBt,
         equipamentos,
         cargaTri,
-        fusoUtm: fuso
+        fusoUtm: fuso,
+        temTrafo: AppState.temTrafo,
+        potenciaTrafo: AppState.potenciaTrafo
     };
 
     enviarParaCSharp(payload);

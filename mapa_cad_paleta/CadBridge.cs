@@ -21,9 +21,13 @@ namespace MapaCadPaleta
         public string TipoPoste { get; set; } = "11/600";
         public string EstruturaMt { get; set; } = "";
         public string EstruturaBt { get; set; } = "";
+        public List<string> EstruturasMt { get; set; } = new();
+        public List<string> EstruturasBt { get; set; } = new();
         public List<string> Equipamentos { get; set; } = new();
         public string CargaTri { get; set; } = "";
         public int FusoUtm { get; set; } = 23;
+        public bool TemTrafo { get; set; } = false;
+        public string PotenciaTrafo { get; set; } = "45kVA";
     }
 
     /// <summary>
@@ -82,12 +86,18 @@ namespace MapaCadPaleta
                     // 1. Inserir Bloco POSTE_ ou Geometria Vetorial Limpa
                     InserirGeometriaPoste(db, tr, btr, bt, ptPoste);
 
-                    // 2. Inserir Bloco PONTO ou Número do Poste
-                    Point3d ptNum = new Point3d(payload.X + 0.8, payload.Y + 0.8, 0.0);
+                    // 2. Se houver Trafo, inserir o bloco específico "T" no poste
+                    if (PossuiTrafo(payload))
+                    {
+                        InserirBlocoTrafo(db, tr, btr, bt, ptPoste, payload);
+                    }
+
+                    // 3. Inserir Bloco PONTO com afastamento seguro anti-colisão (raio livre sem sobrepor POSTE_)
+                    Point3d ptNum = new Point3d(payload.X - 2.8, payload.Y + 1.8, 0.0);
                     InserirNumeroPoste(db, tr, btr, bt, ptNum, payload.Numero);
 
-                    // 3. Inserir Descrição Técnica Empilhada
-                    Point3d ptDesc = new Point3d(payload.X + 1.2, payload.Y - 0.4, 0.0);
+                    // 4. Inserir Descrição Técnica Empilhada à direita com folga lateral limpa
+                    Point3d ptDesc = new Point3d(payload.X + 1.8, payload.Y + 1.2, 0.0);
                     InserirDescricaoTecnica(tr, btr, ptDesc, payload);
 
                     tr.Commit();
@@ -225,6 +235,71 @@ namespace MapaCadPaleta
             }
         }
 
+        private static bool PossuiTrafo(PostePayload payload)
+        {
+            if (payload.TemTrafo) return true;
+            if (payload.Equipamentos != null)
+            {
+                foreach (var eq in payload.Equipamentos)
+                {
+                    if (!string.IsNullOrWhiteSpace(eq) && eq.ToUpperInvariant().Contains("TRAFO"))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        private static void InserirBlocoTrafo(Database db, Transaction tr, BlockTableRecord btr, BlockTable bt, Point3d pt, PostePayload payload)
+        {
+            // O bloco "T" representa a simbologia do transformador no CAD da concessionária
+            if (bt.Has("T"))
+            {
+                BlockTableRecord blkT = (BlockTableRecord)tr.GetObject(bt["T"], OpenMode.ForRead);
+                BlockReference br = new BlockReference(pt, blkT.ObjectId)
+                {
+                    Layer = LAYER_POSTES,
+                    ScaleFactors = new Scale3d(1.0, 1.0, 1.0)
+                };
+                btr.AppendEntity(br);
+                tr.AddNewlyCreatedDBObject(br, true);
+
+                // Atributos de capacidade ou potência se existirem no bloco T
+                if (blkT.HasAttributeDefinitions)
+                {
+                    string pot = !string.IsNullOrWhiteSpace(payload.PotenciaTrafo) ? payload.PotenciaTrafo : "45kVA";
+                    foreach (ObjectId attId in blkT)
+                    {
+                        DBObject obj = tr.GetObject(attId, OpenMode.ForRead);
+                        if (obj is AttributeDefinition attDef)
+                        {
+                            AttributeReference attRef = new AttributeReference();
+                            attRef.SetAttributeFromBlock(attDef, br.BlockTransform);
+                            string tag = attDef.Tag.ToUpperInvariant();
+                            if (tag.Contains("POT") || tag.Contains("KVA") || tag.Contains("CAP") || tag == "T")
+                            {
+                                attRef.TextString = pot;
+                            }
+                            br.AttributeCollection.AppendAttribute(attRef);
+                            tr.AddNewlyCreatedDBObject(attRef, true);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Fallback vetorial 2.5D: Símbolo padronizado de transformador (dois círculos tangentes)
+                Point3d c1Center = new Point3d(pt.X, pt.Y + 0.35, 0.0);
+                Point3d c2Center = new Point3d(pt.X, pt.Y + 1.05, 0.0);
+                Circle circ1 = new Circle(c1Center, Vector3d.ZAxis, 0.35) { Layer = LAYER_POSTES };
+                Circle circ2 = new Circle(c2Center, Vector3d.ZAxis, 0.35) { Layer = LAYER_POSTES };
+
+                btr.AppendEntity(circ1);
+                btr.AppendEntity(circ2);
+                tr.AddNewlyCreatedDBObject(circ1, true);
+                tr.AddNewlyCreatedDBObject(circ2, true);
+            }
+        }
+
         private static void InserirNumeroPoste(Database db, Transaction tr, BlockTableRecord btr, BlockTable bt, Point3d pt, string numero)
         {
             if (bt.Has("PONTO"))
@@ -257,14 +332,21 @@ namespace MapaCadPaleta
             }
             else
             {
+                // Fallback vetorial com círculo e texto centralizado de alta visibilidade
+                Circle c = new Circle(pt, Vector3d.ZAxis, 1.5) { Layer = LAYER_NUMERO };
                 DBText txt = new DBText
                 {
                     Position = pt,
-                    Height = 0.8,
+                    Height = 1.4,
                     TextString = numero,
-                    Layer = LAYER_NUMERO
+                    Layer = LAYER_NUMERO,
+                    HorizontalMode = TextHorizontalMode.TextCenter,
+                    VerticalMode = TextVerticalMode.TextVerticalMid,
+                    AlignmentPoint = pt
                 };
+                btr.AppendEntity(c);
                 btr.AppendEntity(txt);
+                tr.AddNewlyCreatedDBObject(c, true);
                 tr.AddNewlyCreatedDBObject(txt, true);
             }
         }
@@ -273,15 +355,39 @@ namespace MapaCadPaleta
         {
             var linhas = new List<string>();
 
+            // Tipo / Esforço do Poste
             if (!string.IsNullOrWhiteSpace(payload.TipoPoste))
                 linhas.Add(payload.TipoPoste.Trim());
 
-            if (!string.IsNullOrWhiteSpace(payload.EstruturaMt))
+            // Estruturas MT (Multi-estruturas ou formato legado)
+            if (payload.EstruturasMt != null && payload.EstruturasMt.Count > 0)
+            {
+                foreach (string mt in payload.EstruturasMt)
+                {
+                    if (!string.IsNullOrWhiteSpace(mt))
+                        linhas.Add(mt.Trim());
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(payload.EstruturaMt))
+            {
                 linhas.Add(payload.EstruturaMt.Trim());
+            }
 
-            if (!string.IsNullOrWhiteSpace(payload.EstruturaBt))
+            // Estruturas BT (Multi-estruturas ou formato legado)
+            if (payload.EstruturasBt != null && payload.EstruturasBt.Count > 0)
+            {
+                foreach (string btStr in payload.EstruturasBt)
+                {
+                    if (!string.IsNullOrWhiteSpace(btStr))
+                        linhas.Add(btStr.Trim());
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(payload.EstruturaBt))
+            {
                 linhas.Add(payload.EstruturaBt.Trim());
+            }
 
+            // Equipamentos (IP, ATERR, DAE, TRAFO, etc.)
             if (payload.Equipamentos != null)
             {
                 foreach (string eq in payload.Equipamentos)
@@ -291,6 +397,7 @@ namespace MapaCadPaleta
                 }
             }
 
+            // Cargas Especiais Trifásicas
             if (!string.IsNullOrWhiteSpace(payload.CargaTri))
                 linhas.Add(payload.CargaTri.Trim());
 
@@ -301,7 +408,7 @@ namespace MapaCadPaleta
             MText mtext = new MText
             {
                 Location = pt,
-                TextHeight = 0.6,
+                TextHeight = 0.8,
                 Contents = conteudoFormatado,
                 Layer = LAYER_DESCRICAO,
                 Attachment = AttachmentPoint.TopLeft
