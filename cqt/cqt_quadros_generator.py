@@ -44,94 +44,187 @@ def format_num(val, decimals=2, is_pct=False, is_int=False, is_kva=False, is_dmd
         return "-" if s in ["", "None", "0"] else s
 
 
-def extract_from_capa_resumo(wb: openpyxl.Workbook, custom_ponto_trafo: Optional[str] = None) -> Dict:
-    """Extrai os dados de resumo do trafo diretamente da aba oficial CAPA-RESUMO da planilha."""
-    if "CAPA-RESUMO" not in wb.sheetnames:
-        return {}
-    s = wb["CAPA-RESUMO"]
+def extract_from_reference_sheets(wb: openpyxl.Workbook, custom_ponto_trafo: Optional[str] = None) -> Dict:
+    """
+    Extrai os dados de resumo do trafo diretamente das abas de referência de cada cenário:
+    Cargas/Demanda: 'ATUAL', 'ATUAL+NC', 'PROJETADO'
+    Rede/CQT: 'CQT ATUAL', 'CQT ATUAL+NC', 'CQT PROJETADO'
+    """
     resumos = {}
+    scens_data = {}
+    cenarios = ["ATUAL", "ATUAL+NC", "PROJETADO"]
 
-    col_starts = []
-    for c in range(1, 26):
-        v2 = str(s.cell(2, c).value or "").strip().upper()
-        v13 = str(s.cell(13, c + 2).value or "").strip().upper()
-        name = v2 or v13
-        if any(cn in name for cn in ["ATUAL", "PROJETADO", "NC", "NOVO"]):
-            if not any(cs[0] == c for cs in col_starts):
-                col_starts.append((c, v2 or v13))
+    ponto_fallback = custom_ponto_trafo
+    if ponto_fallback and str(ponto_fallback).lower() in ["auto", "none", "null", "0", ""]:
+        ponto_fallback = None
 
-    for c_start, name in col_starts:
-        pt = custom_ponto_trafo
-        if not pt or str(pt).lower() in ["auto", "none", "null", "0", ""]:
-            pt = str(s.cell(13, c_start + 1).value or "").strip()
-            if not pt or pt == "0":
-                pt = "77245"
+    if not ponto_fallback:
+        for cen in cenarios:
+            s_cqt_name = f"CQT {cen}"
+            if s_cqt_name in wb.sheetnames:
+                val = str(wb[s_cqt_name].cell(4, 6).value or "").strip()
+                if val and val.lower() not in ["none", "0", ""]:
+                    ponto_fallback = val
+                    break
+    if not ponto_fallback:
+        ponto_fallback = "77245"
 
-        rot = str(s.cell(14, c_start).value or "").strip()
-        desc = str(s.cell(14, c_start + 1).value or "").strip()
-        trafo_desc = f"{rot} {desc}".strip() if rot or desc else f"TRAFO EXIST.: {pt}"
+    for cen in cenarios:
+        s_car = None
+        for name in [cen, f"{cen}_CARGAS", f"CARGAS_{cen}"]:
+            if name in wb.sheetnames:
+                s_car = wb[name]
+                break
 
-        rq, rd, rt = "-", "-", "-"
-        nrq, nrd, nrt = "-", "-", "-"
-        rq_rq, rq_rd, rq_rt = "-", "-", "-"
-        rq_nrq, rq_nrd, rq_nrt = "-", "-", "-"
-        ip_q, ip_d, ip_t = "-", "-", "-"
-        tot_cli, max_p, carg = "-", "-", "-"
-
-        for r in range(15, 25):
-            c0 = str(s.cell(r, c_start).value or "").strip().upper()
-            c1 = str(s.cell(r, c_start + 1).value or "").strip().upper()
-
-            if "RESIDENCIAL" in c0 and "N." not in c0 and "N " not in c0:
-                rq = format_num(s.cell(r, c_start + 1).value, is_int=True)
-                rd = format_num(s.cell(r, c_start + 2).value, is_dmdi=True)
-                rt = format_num(s.cell(r, c_start + 3).value, decimals=2)
-            elif "N. RESIDENCIAL" in c0 or "N. RESID" in c0 or "N.RESID" in c0:
-                nrq = format_num(s.cell(r, c_start + 1).value, is_int=True)
-                nrd = format_num(s.cell(r, c_start + 2).value, is_dmdi=True)
-                nrt = format_num(s.cell(r, c_start + 3).value, decimals=2)
-            elif "REQ" in c0 or ("REQ" in c1 and "RESID" in c1):
-                rq_rq = format_num(s.cell(r, c_start + 2).value, is_int=True)
-                rq_rd = format_num(s.cell(r, c_start + 3).value, is_dmdi=True) if s.cell(r, c_start + 3).value is not None else "-"
-                rq_rt = format_num(s.cell(r, c_start + 3).value, decimals=2)
-            elif "N. RESID" in c1 or "N.RESID" in c1:
-                rq_nrq = format_num(s.cell(r, c_start + 2).value, is_int=True)
-                rq_nrd = "-"
-                rq_nrt = format_num(s.cell(r, c_start + 3).value, decimals=2)
-            elif "ILUM" in c1 or "ILUM" in c0:
-                ip_q = format_num(s.cell(r, c_start + 2).value, is_int=True)
-                ip_d = "-"
-                ip_t = format_num(s.cell(r, c_start + 3).value, decimals=2)
-            elif "TOTAL CLIENTES" in c0 or "TOTAL DE CLIENTES" in c0:
-                tot_cli = format_num(s.cell(r, c_start + 1).value, is_int=True)
-            elif any(m in c0 for m in ["MX", "MAX", "MÁX"]):
-                max_p = format_num(s.cell(r, c_start + 1).value, is_kva=True)
-            elif "CARREGAMENTO" in c0:
-                carg = format_num(s.cell(r, c_start + 1).value, is_pct=True)
-
-        if max_p == "-" and carg == "-":
+        if not s_car:
             continue
 
-        cen_key = name.upper()
-        if "ATUAL+NC" in cen_key:
-            cen_key = "ATUAL+NC"
-        elif "ATUAL" in cen_key and "MELHORADO" not in cen_key:
-            cen_key = "ATUAL"
-        elif "PROJETADO" in cen_key:
-            cen_key = "PROJETADO"
+        s_cqt = None
+        for name in [f"CQT {cen}", f"CQT_{cen}", f"CQT-{cen}"]:
+            if name in wb.sheetnames:
+                s_cqt = wb[name]
+                break
 
-        resumos[cen_key] = {
-            "cenario": cen_key,
-            "ponto_trafo": pt,
+        pt = custom_ponto_trafo
+        if not pt or str(pt).lower() in ["auto", "none", "null", "0", ""]:
+            pt = str(s_cqt.cell(4, 6).value or "").strip() if s_cqt else ""
+            if not pt or pt.lower() in ["none", "0", ""]:
+                pt = ponto_fallback if cen != "PROJETADO" else "ANXXXX"
+
+        pot = None
+        if s_car.cell(10, 3).value is not None:
+            pot = s_car.cell(10, 3).value
+        elif s_cqt and s_cqt.cell(3, 6).value is not None:
+            pot = s_cqt.cell(3, 6).value
+        if pot is None or str(pot).strip() in ["", "0", "None"]:
+            pot = 75
+        try:
+            pot_f = float(pot)
+            pot_str = f"{int(pot_f)}" if pot_f.is_integer() else f"{pot_f}".replace(".", ",")
+        except Exception:
+            pot_str = str(pot).strip()
+
+        prefix_trafo = "TRAFO PROJ.:" if cen == "PROJETADO" else "TRAFO EXIST.:"
+        trafo_desc = f"{prefix_trafo} {pt}-3-{pot_str}kVA"
+
+        tot_cli_val = s_car.cell(4, 3).value
+        tot_cli = int(float(tot_cli_val)) if tot_cli_val not in [None, "", "None"] else 0
+
+        dmdi_val = s_car.cell(5, 3).value
+        try:
+            dmdi_f = float(dmdi_val) if dmdi_val not in [None, "", "None"] else 0.0
+        except Exception:
+            dmdi_f = 0.0
+
+        dem_res_val = s_car.cell(6, 4).value
+        dem_ip_val = s_car.cell(7, 4).value
+        dem_esp_val = s_car.cell(8, 4).value
+        dem_tot_val = s_car.cell(10, 4).value
+        if (dem_tot_val is None or dem_tot_val == "") and s_cqt:
+            dem_tot_val = s_cqt.cell(5, 6).value
+
+        carg_val = s_car.cell(10, 2).value
+        if (carg_val is None or carg_val == "") and s_cqt:
+            carg_val = s_cqt.cell(3, 7).value
+        try:
+            if carg_val is not None and str(carg_val).strip() not in ["", "None"]:
+                carg_f = float(carg_val)
+                if carg_f <= 15.0:
+                    carg_val = carg_f * 100.0
+        except Exception:
+            pass
+
+        esp_count = sum(int(float(s_car.cell(r, 15).value or 0)) for r in range(3, 58) if s_car.cell(r, 15).value not in [None, "", "None"])
+
+        res_count_cell = s_car.cell(6, 2).value
+        if res_count_cell is not None and str(res_count_cell).strip() not in ["", "None"]:
+            try:
+                res_count = int(float(res_count_cell))
+            except Exception:
+                res_count = max(0, tot_cli - esp_count)
+        else:
+            res_count = max(0, tot_cli - esp_count)
+
+        if res_count == 0 and tot_cli > 0 and esp_count == 0:
+            res_count = tot_cli
+
+        ip_count = sum(int(float(s_car.cell(r, 7).value or 0)) for r in range(3, 8) if s_car.cell(r, 7).value not in [None, "", "None"])
+        if ip_count == 0:
+            ip_count = sum(int(float(s_car.cell(r, c).value or 0)) for r in range(3, 58) for c in range(19, 24) if s_car.cell(r, c).value not in [None, "", "None"])
+
+        scens_data[cen] = {
+            "ponto": pt,
+            "pot": pot,
             "trafo_desc": trafo_desc,
+            "tot_cli": tot_cli,
+            "res_count": res_count,
+            "esp_count": esp_count,
+            "dmdi_f": dmdi_f,
+            "dem_res": dem_res_val,
+            "ip_count": ip_count,
+            "dem_ip": dem_ip_val,
+            "dem_esp": dem_esp_val,
+            "dem_tot": dem_tot_val,
+            "carg": carg_val,
+        }
+
+    for cen, d in scens_data.items():
+        if d["tot_cli"] == 0 and (d["dem_tot"] in [None, 0, "0", "-"]):
+            continue
+
+        rq = format_num(d["res_count"], is_int=True) if d["res_count"] > 0 else "-"
+        rd = format_num(d["dmdi_f"], is_dmdi=True) if d["dmdi_f"] > 0 else "-"
+        rt = format_num(d["dem_res"], decimals=2)
+        if rt == "-" and d["res_count"] > 0 and d["dmdi_f"] > 0:
+            rt = format_num(d["res_count"] * d["dmdi_f"], decimals=2)
+
+        nrq = format_num(d["esp_count"], is_int=True) if d["esp_count"] > 0 else "-"
+        nrd = "-"
+        nrt = format_num(d["dem_esp"], decimals=2)
+
+        rq_rq, rq_rd, rq_rt = "-", "-", "-"
+        rq_nrq, rq_nrd, rq_nrt = "-", "-", "-"
+
+        if cen == "ATUAL+NC" and "ATUAL" in scens_data:
+            at = scens_data["ATUAL"]
+            if d["res_count"] > at["res_count"]:
+                delta_res = d["res_count"] - at["res_count"]
+                rq_rq = str(delta_res)
+                rq_rd = format_num(d["dmdi_f"], is_dmdi=True)
+                rq_rt = format_num(delta_res * d["dmdi_f"], decimals=2)
+
+            try:
+                esp_now = float(d["dem_esp"] or 0)
+                esp_at = float(at["dem_esp"] or 0)
+            except Exception:
+                esp_now, esp_at = 0.0, 0.0
+
+            if esp_now > esp_at or d["esp_count"] > at["esp_count"]:
+                delta_esp_q = max(0, d["esp_count"] - at["esp_count"])
+                delta_esp_t = esp_now - esp_at
+                rq_nrq = str(delta_esp_q) if delta_esp_q > 0 else "1"
+                rq_nrt = format_num(delta_esp_t, decimals=2)
+
+        ip_q = format_num(d["ip_count"], is_int=True) if d["ip_count"] > 0 else "-"
+        ip_d = "-"
+        ip_t = format_num(d["dem_ip"], decimals=2)
+
+        tot_cli_str = format_num(d["tot_cli"], is_int=True)
+        max_p_str = format_num(d["dem_tot"], is_kva=True)
+        carg_str = format_num(d["carg"], is_pct=True)
+
+        resumos[cen] = {
+            "cenario": cen,
+            "ponto_trafo": d["ponto"],
+            "trafo_desc": d["trafo_desc"],
             "residencial": {"qtde": rq, "dmdi": rd, "total": rt},
             "n_residencial": {"qtde": nrq, "dmdi": nrd, "total": nrt},
             "req_resid": {"qtde": rq_rq, "dmdi": rq_rd, "total": rq_rt},
             "req_n_resid": {"qtde": rq_nrq, "dmdi": rq_nrd, "total": rq_nrt},
             "ilum_publica": {"qtde": ip_q, "dmdi": ip_d, "total": ip_t},
-            "total_clientes": tot_cli,
-            "max_prev": max_p,
-            "carregamento": carg,
+            "total_clientes": tot_cli_str,
+            "max_prev": max_p_str,
+            "carregamento": carg_str,
         }
 
     return resumos
@@ -187,20 +280,20 @@ def extract_trechos_from_sheets(wb: openpyxl.Workbook) -> List[Dict]:
 def extract_quadros_data(xlsm_path: str, active_scenarios: Optional[List[str]] = None, custom_ponto_trafo: Optional[str] = None) -> Dict:
     """
     Extrai os dados de carga e queda de tensão de todos os cenários da planilha CQT (.xlsx ou .xlsm).
-    Prioriza a leitura direta das abas CAPA-RESUMO e CQT; se incompletas, calcula analiticamente.
+    Prioriza a leitura direta das abas de referência (ATUAL, CQT ATUAL, etc.); se incompletas, calcula analiticamente.
     """
     if not os.path.exists(xlsm_path):
         raise FileNotFoundError(f"Arquivo não encontrado: {xlsm_path}")
 
     wb = openpyxl.load_workbook(xlsm_path, data_only=True)
 
-    # 1. Tenta extração direta da aba CAPA-RESUMO
-    resumo_scenarios = extract_from_capa_resumo(wb, custom_ponto_trafo)
+    # 1. Tenta extração direta das abas de referência (ATUAL, ATUAL+NC, PROJETADO e CQT)
+    resumo_scenarios = extract_from_reference_sheets(wb, custom_ponto_trafo)
 
     # 2. Tenta extração direta dos trechos das abas CQT
     active_trechos_list = extract_trechos_from_sheets(wb)
 
-    # 3. Fallback de cálculo se CAPA-RESUMO ou Trechos estiverem ausentes
+    # 3. Fallback de cálculo se abas de referência ou Trechos estiverem ausentes/incompletos
     if not resumo_scenarios or not active_trechos_list:
         cenarios_data = {}
         cenarios_calc = {}
@@ -236,11 +329,6 @@ def extract_quadros_data(xlsm_path: str, active_scenarios: Optional[List[str]] =
                     pass
 
         trafo_desc_base = f"TRAFO EXIST.: {ponto_trafo_base}-3-{pot_base}kVA"
-        if "CAPA-RESUMO" in wb.sheetnames:
-            t_exist = str(wb["CAPA-RESUMO"]["A14"].value or "").strip()
-            t_val = str(wb["CAPA-RESUMO"]["B14"].value or "").strip()
-            if t_exist and t_val and t_val != "None":
-                trafo_desc_base = f"{t_exist} {t_val}".strip()
 
         if not active_scenarios:
             active_scenarios_calc = [c for c in ["PROJETADO", "ATUAL+NC", "ATUAL"] if c in cenarios_data]

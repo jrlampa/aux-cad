@@ -73,10 +73,10 @@ aux cad/
 - `cqt_excel_io.py` (276 linhas): Persistência atômica e leitura de planilhas Excel (`load_cables_from_database`, `load_scenario_from_excel`, `load_all_scenarios_from_excel`, `update_cqt_excel`).
 - `cqt_scenario_tab.py` (365 linhas): Componente visual de edição de trechos por cenário (`ScenarioTab`) e painel de Live Preview.
 - `cqt_excel_manager.py` (390 linhas): Interface principal orquestradora (`CQTManagerGUI`) e CLI com botão integrado **"📥 Importar Planilha Existente"** para carregamento integral dos cenários ATUAL, ATUAL+NC e PROJETADO a partir de arquivos `.xlsx` ou `.xlsm`, rigorosamente dentro do limite de 500 linhas.
-- `cqt_quadros_generator.py` (635 linhas):
+- `cqt_quadros_generator.py` (717 linhas):
   - Ponte de alta fidelidade entre a planilha e o CAD para desenho dos Quadros Verdes de Resumo do Trafo (47.03 x 47.10) e Quadros Vermelhos de Queda de Tensão por Trecho (33.21 x 13.64).
-  - **Extração Direta de Alta Fidelidade**: Lê diretamente da aba oficial `CAPA-RESUMO` todos os dados consolidados do trafo (`RESIDENCIAL`, `N. RESIDENCIAL`, `REQ RESID.`, `REQ N. RESID.`, `ILUM. PUBLICA`, `TOTAL CLIENTES`, `MÁX. PREV.`, `CARREGAMENTO`) e das abas `CQT ATUAL` / `CQT ATUAL+NC` / `CQT PROJETADO` as quedas de tensão acumuladas por trecho (Coluna L), garantindo 100% de coincidência entre a prancha DWG e a planilha oficial da concessionária.
-  - **Fallback Analítico Inteligente**: Caso a planilha seja gerada sem cache de fórmulas ou sem a aba `CAPA-RESUMO`, aciona automaticamente o motor `calcular_cqt_topologia` de `cqt_live_calc.py`.
+  - **Extração Direta das Abas de Referência**: Lê diretamente das abas operacionais do projeto (`ATUAL`, `ATUAL+NC`, `PROJETADO` para cargas e `CQT ATUAL` / `CQT ATUAL+NC` / `CQT PROJETADO` para rede e quedas de tensão acumuladas na Coluna L), dispensando a aba `CAPA-RESUMO` (que continha dados legados estáticos). Calcula automaticamente os deltas de REQ. residencial e especial/não-residencial.
+  - **Fallback Analítico Inteligente**: Caso a planilha seja gerada sem cache de fórmulas em células, aciona automaticamente o motor `calcular_cqt_topologia` de `cqt_live_calc.py`.
   - CLI flexível (`--excel`, `--trafo`, `--out`) e rotina LISP de desenho vetorial (`cqt-draw-trafo-box`, `cqt-draw-cqt-box`, `cqt-exec-draw-quadros`).
 - `Abrir_CQT.bat`: Atalho executável direto com 2 cliques.
 
@@ -238,8 +238,8 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
 ### 11. Validação, Debug Completo e Testes
 - **Auditoria de Sintaxe AutoLISP**: 100% dos 28 arquivos `.lsp` do projeto validados e com balanceamento de parênteses e strings verificado (0 erros).
 - **Auditoria de Módulos Python**: 100% dos 52 arquivos `.py` compilados e validados contra regras de Clean Code e limites de linhas (<750 linhas).
-- **Suíte de Testes**: **112 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
-- **Cobertura de Código**: Cobertura crítica de 89% no módulo `unifilar`, 83% no `mapa_servidor` e acima de 80% a 99% em todos os módulos principais.
+- **Suíte de Testes**: **114 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Cobertura de Código**: Cobertura crítica de 89% no módulo `unifilar`, 85% no `cqt_quadros_generator`, 83% no `mapa_servidor` e acima de 80% a 99% em todos os módulos principais.
 
 ### 12. `mapa_cad_paleta/` (Paleta Cartográfica OSM C# .NET para AutoCAD 2018+)
 - **Objetivo**: Alternativa direta integrada ao AutoCAD ("menos 1 tela"), permitindo visualizar mapas Leaflet (OSM, Satélite ESRI e Google Híbrido), buscar posições e inserir postes com blocos e textos MText diretamente no ModelSpace do desenho ativo sem necessidade de navegador externo ou KMZ intermediário.
