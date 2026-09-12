@@ -26,6 +26,7 @@
                     <button id="btnToggleTracado" class="btn-action-sm btn-tracado" title="Ativar traçado contínuo de vãos de rede">📐 Modo Traçado</button>
                     <button id="btnToggleAmbiental" class="btn-action-sm btn-ambiental" title="Carregar e exibir restrições ambientais">🌿 Restrições</button>
                     <button id="btnToggleVias" class="btn-action-sm btn-vias active" title="Alternar visualização de vias, calçadas e obstruções">🏙️ Vias: VISÍVEIS</button>
+                    <button id="btnDesenharViasCad" class="btn-action-sm btn-vias-cad" onclick="if(window.desenharViasNoCad) window.desenharViasNoCad(true)" title="Enviar e desenhar traçado de vias e passeios no AutoCAD">🛣️ Vias no CAD</button>
                     <button id="btnLerCadTop" class="btn-action-sm btn-cad-read" title="Clique no desenho do CAD para posicionar o mapa">🎯 Ler DWG</button>
                     <button id="btnSincDwg" class="btn-action-sm btn-cad-sync" title="Carregar postes existentes no DWG">🔄 Sincronizar</button>
                     <button id="btnToggleSidebar" class="btn-action-sm btn-sidebar-toggle" title="Ocultar/Exibir Sidebar">📑 Painel ◀</button>
@@ -91,6 +92,7 @@
                         <div class="tracado-btns-group" style="display: flex; gap: 4px; align-items: center;">
                             <button type="button" id="btnDesfazerTracado" class="btn-text-action" onclick="desfazerUltimoPoste(window.AppState ? window.AppState.map : null)" title="Desfazer último poste inserido (Ctrl+Z)">↩️ Desfazer</button>
                             <button type="button" id="btnVerPostesTracado" class="btn-text-action" onclick="toggleListaPostes()" title="Ver e gerenciar postes do traçado">📋 Postes</button>
+                            <button type="button" id="btnViasTracadoCad" class="btn-text-action" onclick="if(window.desenharViasNoCad) window.desenharViasNoCad(true)" style="color: #4f46e5; font-weight: 700;" title="Desenhar eixos de vias ao longo da rede no AutoCAD">🛣️ Vias no CAD</button>
                             <button type="button" id="btnFinalizarTrecho" class="btn-text-action" onclick="finalizarTrecho()" title="Iniciar novo ramal">Novo Ramal</button>
                             <button type="button" id="btnLimparTracado" class="btn-text-action danger" onclick="limparTracado(window.AppState ? window.AppState.map : null)" title="Limpar traçado do mapa">Limpar</button>
                         </div>

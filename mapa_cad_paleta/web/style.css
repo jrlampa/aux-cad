@@ -628,6 +628,20 @@ input[type=number] {
     font-weight: 700;
 }
 
+.btn-vias-cad {
+    background: #4F46E5 !important;
+    border-color: #4338CA !important;
+    color: #FFFFFF !important;
+    font-weight: 700 !important;
+    box-shadow: 0 1px 3px rgba(79, 70, 229, 0.35);
+}
+
+.btn-vias-cad:hover {
+    background: #3730A3 !important;
+    border-color: #312E81 !important;
+    transform: translateY(-1px);
+}
+
 .cursor-crosshair, .cursor-crosshair .leaflet-interactive {
     cursor: crosshair !important;
 }

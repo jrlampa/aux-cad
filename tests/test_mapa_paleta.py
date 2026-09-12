@@ -379,8 +379,11 @@ def test_vias_calcadas_obstrucoes_assets_e_parser():
 
     assert "toggleViasObstrucoes" in js
     assert "carregarContextoUrbano" in js
+    assert "desenharViasNoCad" in js
+    assert "converterEEnviarParaCad" in js
     assert "calcularBbox" in js
     assert "renderizarElementosOsm" in js
+    assert "desenharNoCad: true" in js
 
     # Verifica hook automático no traçado contínuo
     with open(tracado_js, "r", encoding="utf-8") as f:
@@ -390,6 +393,8 @@ def test_vias_calcadas_obstrucoes_assets_e_parser():
     with open(index_html, "r", encoding="utf-8") as f:
         html = f.read()
     assert "btnToggleVias" in html
+    assert "btnDesenharViasCad" in html
+    assert "btnViasTracadoCad" in html
     assert "vias_obstrucoes.js" in html
 
     with open(cad_bridge_cs, "r", encoding="utf-8") as f:
