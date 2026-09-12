@@ -115,7 +115,7 @@ function desenharVaoNoMapa(p1, p2, distMetros, mapa) {
         TracadoState.labelsLayer = L.layerGroup().addTo(mapa);
     }
 
-    const corLinha = TracadoState.tipoRede === 'MT' ? '#800080' : '#00b4d8'; // Roxo para MT, Ciano para BT
+    const corLinha = TracadoState.tipoRede === 'MT' ? '#00e5ff' : '#ffd600'; // MT: Ciano (Cyan) | BT: Amarelo (Yellow)
     const linha = L.polyline([[p1.lat, p1.lon], [p2.lat, p2.lon]], {
         color: corLinha,
         weight: 3,

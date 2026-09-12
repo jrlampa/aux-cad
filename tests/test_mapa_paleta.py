@@ -173,6 +173,7 @@ def test_tracado_continuo_assets_e_algoritmos():
     raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     tracado_js = os.path.join(raiz, "mapa_cad_paleta", "web", "tracado.js")
     cad_bridge_cs = os.path.join(raiz, "mapa_cad_paleta", "CadBridge.cs")
+    index_html = os.path.join(raiz, "mapa_cad_paleta", "web", "index.html")
 
     assert os.path.exists(tracado_js), "Arquivo tracado.js não encontrado"
     assert os.path.exists(cad_bridge_cs), "Arquivo CadBridge.cs não encontrado"
@@ -193,6 +194,13 @@ def test_tracado_continuo_assets_e_algoritmos():
     assert "CABOS_BT" in cs
     assert "CABOS_MT" in cs
     assert "CABOS_TEXTO" in cs
+    assert "LAYER_CABOS_BT, 2" in cs  # Amarelo / Yellow
+    assert "LAYER_CABOS_MT, 4" in cs  # Ciano / Cyan
+
+    with open(index_html, "r", encoding="utf-8") as f:
+        html = f.read()
+    assert "Rede BT (Amarelo)" in html
+    assert "Rede MT (Ciano)" in html
 
     # Validação matemática do vão: P1(685000, 7470000) até P2(685030, 7470040)
     p1 = (685000.0, 7470000.0)

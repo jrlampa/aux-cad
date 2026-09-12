@@ -830,7 +830,7 @@ input[type=number] {
 
 .btn-rede {
     flex: 1;
-    padding: 3px 6px;
+    padding: 4px 6px;
     font-size: 10px;
     font-weight: 600;
     border: 1px solid #CBD5E1;
@@ -838,12 +838,23 @@ input[type=number] {
     background: #FFFFFF;
     cursor: pointer;
     color: #475569;
+    transition: all 0.2s ease;
 }
 
-.btn-rede.active {
-    background: var(--primary);
-    color: #FFFFFF;
-    border-color: var(--primary);
+.btn-rede.btn-rede-bt.active {
+    background: #FEF08A;
+    color: #854D0E;
+    border-color: #EAB308;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(234, 179, 8, 0.25);
+}
+
+.btn-rede.btn-rede-mt.active {
+    background: #CFFAFE;
+    color: #0E7490;
+    border-color: #06B6D4;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(6, 182, 212, 0.25);
 }
 
 .tracado-actions {

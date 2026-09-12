@@ -350,9 +350,9 @@ namespace MapaCadPaleta
             CriarLayerSeNaoExistir(db, tr, lt, LAYER_POSTES, 3);      // Verde
             CriarLayerSeNaoExistir(db, tr, lt, LAYER_NUMERO, 4);      // Ciano
             CriarLayerSeNaoExistir(db, tr, lt, LAYER_DESCRICAO, 2);   // Amarelo
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_BT, 4);    // Ciano (BT)
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_MT, 6);    // Magenta (MT)
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_TEXTO, 2); // Amarelo
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_BT, 2);    // Amarelo / Yellow (BT)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_MT, 4);    // Ciano / Cyan (MT)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_TEXTO, 7); // Branco / White (Texto)
             CriarLayerSeNaoExistir(db, tr, lt, LAYER_VIAS_EIXO, 8);      // Cinza escuro (Eixo)
             CriarLayerSeNaoExistir(db, tr, lt, LAYER_VIAS_CALCADA, 9);   // Cinza claro (Passeio)
             CriarLayerSeNaoExistir(db, tr, lt, LAYER_OBSTRUCOES_EDIF, 1);// Vermelho (Edificação)

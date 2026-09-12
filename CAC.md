@@ -266,9 +266,9 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - **Seleção Dinâmica de Potência do Transformador**: Chip de trafo reativo (`🔋 Trafo <potência>`) com painel expansivo contendo as potências padronizadas de distribuição (15kVA, 30kVA, 45kVA, 75kVA, 112.5kVA, 150kVA, 225kVA, 300kVA e campo customizável).
 - **P2 - Modo Traçado Contínuo de Linhas/Vãos no CAD (`tracado.js`)**:
   - Permite ligar o botão `📐 Modo Traçado` na barra superior para conectar automaticamente postes consecutivos.
-  - Painel flutuante com alternador de tipo de rede (`BT` em Ciano / `MT` em Roxo), contador de postes conectados e botão `🏁 Finalizar Trecho` / `Limpar`.
+  - Painel flutuante com alternador de tipo de rede (`BT` em Amarelo / `MT` em Ciano), contador de postes conectados e botão `🏁 Finalizar Trecho` / `Limpar`.
   - **Cálculo Analítico de Vão**: Medição métrica exata em UTM via `Math.hypot(dx, dy)` exibida em etiquetas intermediárias no Leaflet (`38.5m`).
-  - **Desenho Automático no DWG (`CadBridge.InserirVaoCabos`)**: Traça a entidade `Line` entre centros de postes no layer `CABOS_BT` (Cor 4 - Ciano) ou `CABOS_MT` (Cor 6 - Magenta) e insere `DBText` no layer `CABOS_TEXTO` (Cor 2 - Amarelo) alinhado ao vão com correção de ângulo para legibilidade técnica sem inversão de cabeça para baixo.
+  - **Desenho Automático no DWG (`CadBridge.InserirVaoCabos`)**: Traça a entidade `Line` entre centros de postes no layer `CABOS_BT` (Cor 2 - Amarelo / Yellow) ou `CABOS_MT` (Cor 4 - Ciano / Cyan) e insere `DBText` no layer `CABOS_TEXTO` (Cor 7 - Branco / White) alinhado ao vão com correção de ângulo para legibilidade técnica sem inversão de cabeça para baixo.
 - **P4 - Camada de Restrições Ambientais com Auditoria em Tempo Real (`ambiental_overlay.js` & `AmbientalParser.cs`)**:
   - Botão `🌿 Restrições` na barra superior para carregar e alternar a visualização de polígonos geoespaciais ambientais diretamente sobre as ortofotos de satélite.
   - **Parser C# Multi-Formato (`AmbientalParser.cs`)**: Leitura e extração direta de arquivos `.kmz` (descompactação zip e parse de KML), `.kml` (XML Linq com suporte a namespaces) e `.geojson`/`.json` com conversão para formato Leaflet `[lat, lon]`.
