@@ -894,6 +894,11 @@ window.addEventListener('DOMContentLoaded', () => {
             if (typeof window.toggleModoMedicao === 'function') {
                 window.toggleModoMedicao(AppState.map);
             }
+        } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !focoEmTexto) {
+            if (window.TracadoState && window.TracadoState.ativo && typeof window.desfazerUltimoPoste === 'function') {
+                e.preventDefault();
+                window.desfazerUltimoPoste(AppState.map);
+            }
         }
     });
 });

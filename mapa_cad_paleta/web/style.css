@@ -884,6 +884,140 @@ input[type=number] {
     white-space: nowrap;
 }
 
+/* Marcadores Interativos e Arrastáveis do Traçado */
+.tracado-node-marker {
+    transition: transform 0.15s ease;
+}
+
+.tracado-node-marker:hover {
+    transform: scale(1.15);
+    z-index: 9999 !important;
+}
+
+.tracado-node-marker:active {
+    cursor: grabbing !important;
+    transform: scale(1.25);
+}
+
+/* Gaveta Expansível de Lista de Postes */
+.tracado-lista-container {
+    background: #F8FAFC;
+    border: 1px solid #CBD5E1;
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin-top: 6px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.tracado-lista-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 4px;
+    border-bottom: 1px solid #E2E8F0;
+    padding-bottom: 3px;
+}
+
+.btn-icon-close-sm {
+    background: transparent;
+    border: none;
+    font-size: 10px;
+    font-weight: 700;
+    color: #64748B;
+    cursor: pointer;
+    padding: 0 3px;
+    border-radius: 3px;
+}
+
+.btn-icon-close-sm:hover {
+    color: #EF4444;
+    background: #FEE2E2;
+}
+
+.tracado-lista-itens {
+    max-height: 140px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.tracado-poste-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 10px;
+    transition: all 0.15s ease;
+}
+
+.tracado-poste-row:hover {
+    border-color: #94A3B8;
+    background: #F1F5F9;
+}
+
+.tracado-poste-info {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+}
+
+.tracado-num-badge {
+    background: #0284C7;
+    color: #FFFFFF;
+    font-weight: 800;
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+.badge-vao-dist {
+    background: #FEF08A;
+    color: #854D0E;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+.tracado-coords-sm {
+    font-size: 8.5px;
+    color: #64748B;
+    white-space: nowrap;
+}
+
+.tracado-row-actions {
+    display: flex;
+    gap: 2px;
+}
+
+.btn-icon-row {
+    background: transparent;
+    border: 1px solid #CBD5E1;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-size: 9px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-icon-row:hover {
+    background: #E2E8F0;
+}
+
+.btn-icon-row.danger:hover {
+    background: #FEE2E2;
+    border-color: #FECACA;
+}
+
 /* Snap Magnético & Exportação CQT */
 .btn-snap {
     background: #0F172A;

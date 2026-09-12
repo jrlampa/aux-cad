@@ -87,10 +87,26 @@
                         <button type="button" id="btnRedeMt" class="btn-rede btn-rede-mt" onclick="setTipoRedeTracado('MT')">Rede MT (Ciano)</button>
                     </div>
                     <div class="tracado-actions">
-                        <span id="lblTracadoUltimo" class="tracado-ultimo-txt">Nenhum poste no traçado</span>
-                        <button type="button" id="btnFinalizarTrecho" class="btn-text-action" onclick="finalizarTrecho()" title="Iniciar novo ramal">Novo Ramal</button>
-                        <button type="button" id="btnLimparTracado" class="btn-text-action danger" onclick="limparTracado(window.AppState ? window.AppState.map : null)" title="Limpar traçado do mapa">Limpar</button>
+                        <span id="lblTracadoUltimo" class="tracado-ultimo-txt">Nenhum poste</span>
+                        <div class="tracado-btns-group" style="display: flex; gap: 4px; align-items: center;">
+                            <button type="button" id="btnDesfazerTracado" class="btn-text-action" onclick="desfazerUltimoPoste(window.AppState ? window.AppState.map : null)" title="Desfazer último poste inserido (Ctrl+Z)">↩️ Desfazer</button>
+                            <button type="button" id="btnVerPostesTracado" class="btn-text-action" onclick="toggleListaPostes()" title="Ver e gerenciar postes do traçado">📋 Postes</button>
+                            <button type="button" id="btnFinalizarTrecho" class="btn-text-action" onclick="finalizarTrecho()" title="Iniciar novo ramal">Novo Ramal</button>
+                            <button type="button" id="btnLimparTracado" class="btn-text-action danger" onclick="limparTracado(window.AppState ? window.AppState.map : null)" title="Limpar traçado do mapa">Limpar</button>
+                        </div>
                     </div>
+
+                    <!-- Gaveta Expansível de Gestão de Postes do Traçado -->
+                    <div id="painelListaPostes" class="tracado-lista-container" style="display: none;">
+                        <div class="tracado-lista-header">
+                            <span>Postes no Traçado (Arraste no mapa para mover):</span>
+                            <button type="button" class="btn-icon-close-sm" onclick="toggleListaPostes()" title="Fechar lista">✕</button>
+                        </div>
+                        <div id="containerItensPostes" class="tracado-lista-itens">
+                            <!-- Preenchido dinamicamente via JS -->
+                        </div>
+                    </div>
+
                     <div class="tracado-cqt-box" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; gap: 4px; align-items: center;">
                         <input type="text" id="inputProjeto" class="input-proj-cqt" placeholder="PE_12345" value="PE_PROJETO_OSM" style="font-size: 11px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px; flex: 1;" title="Identificação do projeto no CQT">
                         <button type="button" id="btnExportarCqt" class="btn-cqt-export" onclick="exportarParaCqt()" title="Exportar trecho e cargas diretamente para o CQT (Queda de Tensão BT)">⚡ CQT</button>

@@ -156,6 +156,11 @@ namespace MapaCadPaleta
                         AtualizarStatus(resVao.Message);
                         break;
 
+                    case "desfazer_vao":
+                        string numDesfazer = root.TryGetProperty("numero", out var pNum) ? pNum.GetString() ?? "" : "";
+                        AtualizarStatus($"↩️ Traçado: Poste P{numDesfazer} desfeito.");
+                        break;
+
                     case "abrir_kmz_ambiental":
                         AbrirArquivoAmbiental();
                         break;

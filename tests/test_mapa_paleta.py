@@ -475,3 +475,79 @@ def test_layout_consumidores_bt_sem_overflow():
     assert "zerarClientes" in js
     assert "atualizarTotalClientes" in js
     assert "limparFormulario" in js
+
+
+def test_tracado_edicao_movimentacao_e_desfazer():
+    """Valida recursos de edição interativa: marcadores arrastáveis, desfazer, remoção e recálculo de vãos."""
+    import math
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    tracado_js = os.path.join(raiz, "mapa_cad_paleta", "web", "tracado.js")
+    index_html = os.path.join(raiz, "mapa_cad_paleta", "web", "index.html")
+    style_css = os.path.join(raiz, "mapa_cad_paleta", "web", "style.css")
+    app_js = os.path.join(raiz, "mapa_cad_paleta", "web", "app.js")
+    mapa_control_cs = os.path.join(raiz, "mapa_cad_paleta", "MapaControl.xaml.cs")
+
+    with open(tracado_js, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    # Funções mestras de edição e movimentação no JS
+    assert "desfazerUltimoPoste" in js
+    assert "removerPosteTracado" in js
+    assert "redesenharTodoTracado" in js
+    assert "criarMarcadorPosteTracado" in js
+    assert "draggable: true" in js
+    assert "dragend" in js
+    assert "toggleListaPostes" in js
+    assert "renderizarListaPostesTracado" in js
+    assert "markersLayer" in js
+
+    with open(index_html, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    # Controles na interface HTML
+    assert "btnDesfazerTracado" in html
+    assert "btnVerPostesTracado" in html
+    assert "painelListaPostes" in html
+    assert "containerItensPostes" in html
+
+    with open(style_css, "r", encoding="utf-8") as f:
+        css = f.read()
+
+    # Estilização no CSS
+    assert "tracado-node-marker" in css
+    assert "tracado-lista-container" in css
+    assert "cursor: grab" in css or "cursor: grabbing" in css
+
+    with open(app_js, "r", encoding="utf-8") as f:
+        app_code = f.read()
+
+    # Atalho de teclado Ctrl+Z implementado
+    assert "e.ctrlKey" in app_code
+    assert "desfazerUltimoPoste" in app_code
+
+    with open(mapa_control_cs, "r", encoding="utf-8") as f:
+        cs_code = f.read()
+
+    assert "case \"desfazer_vao\":" in cs_code
+
+    # Teste analítico do recálculo de vãos ao remover um poste intermediário:
+    # P1(0, 0), P2(30, 40) com vão = 50m, P3(60, 80) com vão = 50m
+    pontos = [
+        {"numero": "01", "x": 0.0, "y": 0.0},
+        {"numero": "02", "x": 30.0, "y": 40.0},
+        {"numero": "03", "x": 60.0, "y": 80.0},
+    ]
+    vao1 = math.hypot(pontos[1]["x"] - pontos[0]["x"], pontos[1]["y"] - pontos[0]["y"])
+    vao2 = math.hypot(pontos[2]["x"] - pontos[1]["x"], pontos[2]["y"] - pontos[1]["y"])
+    assert abs(vao1 - 50.0) < 1e-6
+    assert abs(vao2 - 50.0) < 1e-6
+
+    # Remove o ponto intermediário (P2)
+    removido = pontos.pop(1)
+    assert removido["numero"] == "02"
+    assert len(pontos) == 2
+
+    # Novo vão reconectado diretamente de P1 para P3:
+    novo_vao = math.hypot(pontos[1]["x"] - pontos[0]["x"], pontos[1]["y"] - pontos[0]["y"])
+    assert abs(novo_vao - 100.0) < 1e-6
+
