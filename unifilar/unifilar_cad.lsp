@@ -105,8 +105,113 @@
   )
 )
 
-;; Insere bloco oficial ('chaves_' ou 'REL') ou gera fallback vetorial 2.5D caso não exista
-(defun unifilar-insert-block (pt blk-name rot scale layer col fallback-type / x y h)
+;; =============================================================================
+;; CONFIGURAÇÃO E GERENCIAMENTO DO BLOCO DO TRANSFORMADOR (TRAFO1)
+;; =============================================================================
+(if (not *UNIFILAR-BLOCO-TRAFO*)
+  (setq *UNIFILAR-BLOCO-TRAFO* "TRAFO1")
+)
+
+;; Lista todos os blocos do desenho que correspondem a transformadores
+(defun unifilar-listar-blocos-trafo (/ blk bname lista)
+  (setq lista nil)
+  (setq blk (tblnext "block" T))
+  (while blk
+    (setq bname (cdr (assoc 2 blk)))
+    (if (and (/= (substr bname 1 1) "*")
+             (or (wcmatch (strcase bname) "*TRAFO*")
+                 (wcmatch (strcase bname) "*TRANSF*")
+                 (= (strcase bname) "T")
+                 (wcmatch (strcase bname) "T *")
+                 (wcmatch (strcase bname) "TR*")))
+      (setq lista (cons bname lista))
+    )
+    (setq blk (tblnext "block"))
+  )
+  (acad_strlsort lista)
+)
+
+;; Pede ao usuário o bloco do transformador com suporte a lista e seleção no CAD
+(defun unifilar-obter-bloco-trafo (/ def-blk blks input sel ent ed bname num-in idx)
+  (setq def-blk *UNIFILAR-BLOCO-TRAFO*)
+  ;; Se TRAFO1 existir na tabela e o atual não, prioriza TRAFO1
+  (if (and (null (tblsearch "BLOCK" def-blk)) (tblsearch "BLOCK" "TRAFO1"))
+    (setq def-blk "TRAFO1")
+  )
+  ;; Fallbacks secundários se não existirem
+  (if (and (null (tblsearch "BLOCK" def-blk)) (tblsearch "BLOCK" "TRAFO"))
+    (setq def-blk "TRAFO")
+  )
+
+  (princ (strcat "\n[UNIFILAR] Bloco do Transformador sugerido: <" def-blk ">"))
+  (setq input (getstring (strcat "\nInforme o bloco [ENTER=" def-blk " | (L)istar | (S)elecionar no CAD]: ")))
+  (setq input (vl-string-trim " \t\r\n" input))
+
+  (cond
+    ;; Pressionou ENTER
+    ((or (null input) (= input ""))
+     (setq *UNIFILAR-BLOCO-TRAFO* def-blk)
+    )
+
+    ;; Opção LISTAR [L] ou [?]
+    ((or (= (strcase input) "L") (= input "?") (= (strcase input) "LISTAR"))
+     (setq blks (unifilar-listar-blocos-trafo))
+     (if blks
+       (progn
+         (princ "\n--- BLOCOS DE TRANSFORMADOR DISPONÍVEIS NO DWG ---")
+         (setq idx 1)
+         (foreach b blks
+           (princ (strcat "\n [" (itoa idx) "] " b (if (= b def-blk) " (atual)" "")))
+           (setq idx (1+ idx))
+         )
+         (princ "\n---------------------------------------------------")
+         (setq num-in (getint (strcat "\nSelecione o número do bloco [1-" (itoa (length blks)) "] ou 0 para cancelar: ")))
+         (if (and num-in (> num-in 0) (<= num-in (length blks)))
+           (setq *UNIFILAR-BLOCO-TRAFO* (nth (1- num-in) blks))
+           (setq *UNIFILAR-BLOCO-TRAFO* def-blk)
+         )
+       )
+       (progn
+         (princ "\n[AVISO] Nenhum bloco com padrão TRAFO/TRANSF/T encontrado na tabela de blocos.")
+         (setq *UNIFILAR-BLOCO-TRAFO* def-blk)
+       )
+     )
+    )
+
+    ;; Opção SELECIONAR [S] no desenho
+    ((or (= (strcase input) "S") (= (strcase input) "SELECIONAR"))
+     (setq sel (entsel "\nClique no bloco de transformador no desenho: "))
+     (if sel
+       (progn
+         (setq ent (car sel)
+               ed  (entget ent))
+         (if (= (cdr (assoc 0 ed)) "INSERT")
+           (progn
+             (setq bname (cdr (assoc 2 ed)))
+             (princ (strcat "\n[UNIFILAR] Bloco capturado do desenho: " bname))
+             (setq *UNIFILAR-BLOCO-TRAFO* bname)
+           )
+           (progn
+             (princ "\n[AVISO] A entidade clicada não é um bloco (INSERT). Mantendo padrão.")
+             (setq *UNIFILAR-BLOCO-TRAFO* def-blk)
+           )
+         )
+       )
+       (setq *UNIFILAR-BLOCO-TRAFO* def-blk)
+     )
+    )
+
+    ;; Digitou um nome explicitamente
+    (t
+     (setq *UNIFILAR-BLOCO-TRAFO* input)
+    )
+  )
+  (princ (strcat "\n[UNIFILAR] Bloco do Transformador definido: '" *UNIFILAR-BLOCO-TRAFO* "'"))
+  *UNIFILAR-BLOCO-TRAFO*
+)
+
+;; Insere bloco oficial ('chaves_', 'REL', 'TRAFO1'...) ou gera fallback vetorial 2.5D caso não exista
+(defun unifilar-insert-block (pt blk-name rot scale layer col fallback-type / x y h c1 c2)
   (setq x (car pt))
   (setq y (cadr pt))
   (if (tblsearch "BLOCK" blk-name)
@@ -133,6 +238,13 @@
        (unifilar-draw-line (list (- x h) (+ y h) 0.0) (list (- x h) (- y h) 0.0) layer col)
        (unifilar-draw-text (list x (- y (* h 0.4)) 0.0) "R" (* h 1.2) layer col "CENTER")
       )
+      ((or (= fallback-type "TRAFO") (= fallback-type "TRAFO1") (= fallback-type "T"))
+       ;; Símbolo normativo de Transformador: Dois círculos tangentes verticais
+       (setq r (* scale 0.65))
+       (unifilar-draw-circle (list x (+ y (* r 0.8)) 0.0) r layer col)
+       (unifilar-draw-circle (list x (- y (* r 0.8)) 0.0) r layer col)
+       (unifilar-draw-text (list (+ x (* r 1.4)) (- y (* r 0.4)) 0.0) "T" (* scale 1.1) layer col "LEFT")
+      )
       ((= fallback-type "PONTO")
        ;; Símbolo de Ponto: Círculo de nó
        (unifilar-draw-circle pt (* scale 1.0) layer col)
@@ -149,13 +261,14 @@
 )
 
 ;; Desenha o Diagrama Unifilar com esquema gráfico sem escala
-(defun unifilar-draw-esquema-grafico (pt-ins se alim prot-rot prot-tipo ponto-alvo cli-a cli-b kva bloco-nome h-txt / x y sp x-al y-cur x-diag x-se-ini x-se-fim x-tr y-se y-ch y-pt fb-tipo)
+(defun unifilar-draw-esquema-grafico (pt-ins se alim prot-rot prot-tipo ponto-alvo cli-a cli-b kva bloco-nome bloco-trafo h-txt / x y sp x-al y-cur x-diag x-se-ini x-se-fim x-tr y-se y-ch y-pt fb-tipo)
   (unifilar-ensure-layer "UNIFILAR" 3)
   (unifilar-ensure-layer "UNIFILAR_SE" 3)
   (unifilar-ensure-layer "UNIFILAR_LINHA" 7)
   (unifilar-ensure-layer "UNIFILAR_PROTECAO" 1)
   (unifilar-ensure-layer "UNIFILAR_PONTO" 2)
 
+  (if (or (null bloco-trafo) (= bloco-trafo "")) (setq bloco-trafo "TRAFO1"))
   (setq x (car pt-ins))
   (setq y (cadr pt-ins))
   (setq sp (* h-txt 1.6))
@@ -204,17 +317,19 @@
   (unifilar-draw-line (list x-tr (- y-ch (* h-txt 1.5)) 0.0) (list x-tr (+ y-pt (* h-txt 1.2)) 0.0) "UNIFILAR_LINHA" 7)
   (unifilar-draw-text (list (+ x-tr (* h-txt 0.6)) (- y-ch (* h-txt 3.2)) 0.0) "RAMAL MT" (* h-txt 0.7) "UNIFILAR_LINHA" 8 "LEFT")
 
-  ;; 2.5 Ponto do Projeto
-  (unifilar-insert-block (list x-tr y-pt 0.0) "PONTO" 0.0 1.0 "UNIFILAR_PONTO" 2 "PONTO")
+  ;; 2.5 Ponto do Projeto / Transformador (TRAFO1)
+  (unifilar-insert-block (list x-tr y-pt 0.0) bloco-trafo 0.0 1.0 "UNIFILAR_PONTO" 2 "TRAFO")
   (unifilar-draw-text (list (+ x-tr (* h-txt 2.2)) y-pt 0.0) (strcat ponto-alvo " (" kva " kVA)") (* h-txt 0.9) "UNIFILAR_PONTO" 2 "LEFT")
-  (princ "\n[UNIFILAR] Diagrama Unifilar com esquema gráfico gerado com sucesso!")
+  (princ (strcat "\n[UNIFILAR] Diagrama Unifilar gerado com bloco de transformador '" bloco-trafo "'!"))
 )
 
 ;; Traça ramal geográfico do dispositivo KMZ até o ponto do projeto
-(defun unifilar-draw-ramal-geografico (ponto-alvo x-prot y-prot rotulo bloco-nome / pt-dest dist-m fb-tipo mid-x mid-y)
+(defun unifilar-draw-ramal-geografico (ponto-alvo x-prot y-prot rotulo bloco-nome bloco-trafo / pt-dest dist-m fb-tipo mid-x mid-y)
   (unifilar-ensure-layer "MT_ALIMENTADOR" 6)
   (unifilar-ensure-layer "UNIFILAR_PROTECAO" 1)
+  (unifilar-ensure-layer "UNIFILAR_PONTO" 2)
 
+  (if (or (null bloco-trafo) (= bloco-trafo "")) (setq bloco-trafo "TRAFO1"))
   (princ (strcat "\n[KMZ] Dispositivo " rotulo " localizado em UTM: X=" (rtos x-prot 2 2) ", Y=" (rtos y-prot 2 2)))
   (setq pt-dest (getpoint "\nClique no poste ou ponto de destino do projeto no desenho: "))
   (if pt-dest
@@ -227,15 +342,18 @@
       ;; 2. Traça a linha do ramal conectando a chave ao ponto
       (unifilar-draw-line (list x-prot y-prot 0.0) pt-dest "MT_ALIMENTADOR" 6)
 
-      ;; 3. Mede a distância real
+      ;; 3. Insere o bloco do transformador no ponto de destino se houver
+      (unifilar-insert-block pt-dest bloco-trafo 0.0 1.0 "UNIFILAR_PONTO" 2 "TRAFO")
+
+      ;; 4. Mede a distância real
       (setq dist-m (distance (list x-prot y-prot 0.0) pt-dest))
 
-      ;; 4. Texto no ponto médio da linha
+      ;; 5. Texto no ponto médio da linha
       (setq mid-x (/ (+ x-prot (car pt-dest)) 2.0))
       (setq mid-y (/ (+ y-prot (cadr pt-dest)) 2.0))
       (unifilar-draw-text (list mid-x (+ mid-y 1.0) 0.0) (strcat "RAMAL MT " (rtos dist-m 2 1) "m") 2.0 "MT_ALIMENTADOR" 6 "CENTER")
 
-      (princ (strcat "\n[UNIFILAR] Ramal MT traçado do dispositivo " rotulo " até " ponto-alvo " (Extensão: " (rtos dist-m 2 1) "m)."))
+      (princ (strcat "\n[UNIFILAR] Ramal MT traçado do dispositivo " rotulo " até " ponto-alvo " (Extensão: " (rtos dist-m 2 1) "m, Bloco: " bloco-trafo ")."))
     )
     (princ "\n[UNIFILAR] Traçado cancelado.")
   )
@@ -477,6 +595,12 @@
   (setq h-txt (getvar "TEXTSIZE"))
   (if (or (<= h-txt 0.0) (> h-txt 10.0)) (setq h-txt 2.5))
 
+  ;; Configuração do Bloco do Transformador (Padrão: TRAFO1, com suporte a lista e seleção no CAD)
+  (setq bloco-trafo "TRAFO1")
+  (if (or (= opc "1") (= opc "Esquema") (= opc "2") (= opc "Ramal") (= opc "3") (= opc "Ambos"))
+    (setq bloco-trafo (unifilar-obter-bloco-trafo))
+  )
+
   (cond
     ;; -------------------------------------------------------------------------
     ;; MODO 1 OU 3: ESQUEMA GRÁFICO NA PRANCHA (+ RAMAL SE AMBOS)
@@ -484,11 +608,11 @@
     ((or (= opc "1") (= opc "Esquema") (= opc "3") (= opc "Ambos"))
      (setq pt-ins (getpoint "\nClique no ponto de inserção do Diagrama Unifilar na Prancha: "))
      (if pt-ins
-       (unifilar-draw-esquema-grafico pt-ins se alim prot-rot prot-tipo ponto cli-a cli-b kva bloco-prot h-txt)
+       (unifilar-draw-esquema-grafico pt-ins se alim prot-rot prot-tipo ponto cli-a cli-b kva bloco-prot bloco-trafo h-txt)
      )
      (if (or (= opc "3") (= opc "Ambos"))
        (if (and utm-x utm-y)
-         (unifilar-draw-ramal-geografico ponto utm-x utm-y prot-rot bloco-prot)
+         (unifilar-draw-ramal-geografico ponto utm-x utm-y prot-rot bloco-prot bloco-trafo)
          (princ "\n[UNIFILAR] Coordenadas KMZ não disponíveis para traçar o ramal no DWG.")
        )
      )
@@ -499,7 +623,7 @@
     ;; -------------------------------------------------------------------------
     ((or (= opc "2") (= opc "Ramal"))
      (if (and utm-x utm-y)
-       (unifilar-draw-ramal-geografico ponto utm-x utm-y prot-rot bloco-prot)
+       (unifilar-draw-ramal-geografico ponto utm-x utm-y prot-rot bloco-prot bloco-trafo)
        (princ "\n[UNIFILAR] Dispositivo de proteção não possui coordenadas KMZ mapeadas para traçar no DWG.")
      )
     )

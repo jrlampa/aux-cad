@@ -177,14 +177,15 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `arvore_database.py` (227 linhas): Motor de persistência e indexação local em SQLite (`unifilar/arvore_cache.sqlite3`) a partir da planilha `documentos/Árvore de Dispositivos.xlsx`, com busca indexada ultrarrápida (<10ms).
 - `arvore_client.py` (162 linhas): Cliente com suporte a consultas online à intranet (`URL_ARVORE_DISPOSITIVOS`), autenticação corporativa NTLM com credenciais do `.env` e fallback automático e resiliente para o banco local ou modo resumo manual (`consultar_resumo_manual`).
 - `dispositivos_kmz_finder.py` (267 linhas): Localizador geoespacial e analítico de chaves fusíveis, religadores e chaves nos 14 arquivos KMZ de apoio da concessionária (`kmz - Dispositivos 05-2020`). Indexa **134.082 dispositivos reais** com cache local em `dispositivos_kmz_cache.json` e busca instantânea (<5ms) por código (`CF636018`, `SG59356`, `AR010625`) ou dígitos. Conversão geodésica analítica Snyder de WGS84 para UTM SIRGAS 2000 (Fuso 23S/24S).
-- `unifilar_diagrama_builder.py` (204 linhas): Construtor vetorial 2.5D do Diagrama Unifilar Esquemático sem escala (SE $\rightarrow$ Tronco MT $\rightarrow$ Proteção $\rightarrow$ Ramal MT $\rightarrow$ Ponto do Projeto). Determinação inteligente de blocos oficiais do AutoCAD: **`"chaves_"`** para chaves fusíveis / seccionadoras e **`"REL"`** para religadores.
+- `unifilar_diagrama_builder.py` (204 linhas): Construtor vetorial 2.5D do Diagrama Unifilar Esquemático sem escala (SE $\rightarrow$ Tronco MT $\rightarrow$ Proteção $\rightarrow$ Ramal MT $\rightarrow$ Ponto do Projeto). Determinação inteligente de blocos oficiais do AutoCAD: **`"chaves_"`** para chaves fusíveis / seccionadoras, **`"REL"`** para religadores e **`"TRAFO1"`** (com fallback prioritário `TRAFO1` $\rightarrow$ `TRAFO` $\rightarrow$ `T` $\rightarrow$ `TRANSF` $\rightarrow$ vetorial 2.5D) para transformadores.
 - `unifilar_manager.py` (161 linhas): Orquestrador de linha de comando e ponte de dados JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`, `--fuso`, `--escala`), unificando árvore, busca KMZ e geometria do diagrama.
-- `unifilar_cad.lsp` (601 linhas): Rotina AutoLISP com comandos **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**):
+- `unifilar_cad.lsp` (668 linhas): Rotina AutoLISP com comandos **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**):
   - Permite digitar o Ponto Elétrico, selecionar no DWG (`entsel`) ou **colar diretamente o resumo copiado do SGT/GOMNET** no prompt.
   - Suporte a confirmação e ajuste rápido interativo de Clientes A/B e KVA antes da inserção gráfica.
+  - Seleção interativa do bloco de Transformador via `(unifilar-obter-bloco-trafo)`: confirma `<TRAFO1>` com `[ENTER]`, lista numerada dos blocos no DWG com `[L]`, seleção direta na tela com clique `[S]`, ou digitação livre.
   - Opções integradas de geração:
-    - **[1] Esquema Prancha**: Desenha o título verde sublinhado, textos técnicos alinhados à direita e o Diagrama Unifilar Esquemático 2.5D sem escala com barramento SE, tronco MT, bloco oficial (`"chaves_"` ou `"REL"`) com fallback vetorial e ponto alvo com potência kVA.
-    - **[2] Ramal Geográfico DWG**: Traça no ModelSpace o ramal MT a partir da coordenada real do dispositivo no KMZ até o poste/ponto selecionado no DWG, inserindo bloco da proteção e cota métrica com extensão real do ramal.
+    - **[1] Esquema Prancha**: Desenha o título verde sublinhado, textos técnicos alinhados à direita e o Diagrama Unifilar Esquemático 2.5D sem escala com barramento SE, tronco MT, bloco oficial (`"chaves_"` ou `"REL"`), transformador selecionado (`"TRAFO1"`) e ponto alvo com potência kVA.
+    - **[2] Ramal Geográfico DWG**: Traça no ModelSpace o ramal MT a partir da coordenada real do dispositivo no KMZ até o poste/ponto selecionado no DWG, inserindo bloco da proteção, bloco do trafo e cota métrica com extensão real do ramal.
     - **[3] Ambos**: Executa o esquema na prancha e o traçado geográfico no DWG.
     - **[4] Somente Texto**: Inserção dos textos técnicos clássicos.
     - **[A]tualizar**: Seleciona textos existentes no DWG (onde há `SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO: ...`, `Clientes Grupo...`) e substitui os dados reais mantendo a prancha intacta.
@@ -195,7 +196,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `sisrua2/` & `Lampa/`
 
 ### 12. Validação, Debug Completo e Testes
-- **Suíte de Testes**: **130 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Suíte de Testes**: **146 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
 - **Cobertura de Código Crítica**:
   - `unifilar\unifilar_diagrama_builder.py`: 100%
   - `cpfc\cpfc_core.py`: 98%

@@ -267,9 +267,10 @@ def gerar_lisp_postes_studio(
 
         if tem_trafo:
             linhas.extend([
-                "  ;; Inserção do Bloco 'T' (Transformador)",
-                "  (if (tblsearch \"BLOCK\" \"T\")",
-                f"    (progn (setq blk (vla-InsertBlock space pBase \"T\" 1.0 1.0 1.0 0.0)) (vla-put-Layer blk \"POSTES_SIMBOLO\"))",
+                "  ;; Inserção do Bloco de Transformador ('TRAFO1', 'TRAFO' ou 'T')",
+                "  (setq blk-trafo (cond ((tblsearch \"BLOCK\" \"TRAFO1\") \"TRAFO1\") ((tblsearch \"BLOCK\" \"TRAFO\") \"TRAFO\") ((tblsearch \"BLOCK\" \"T\") \"T\") (t nil)))",
+                "  (if blk-trafo",
+                f"    (progn (setq blk (vla-InsertBlock space pBase blk-trafo 1.0 1.0 1.0 0.0)) (vla-put-Layer blk \"POSTES_SIMBOLO\"))",
                 f"    (progn (setq c1 (vla-AddCircle space (vlax-3d-point (list {x} {round(y + 0.35, 3)} 0.0)) 0.35)) (vla-put-Layer c1 \"POSTES_SIMBOLO\") (setq c2 (vla-AddCircle space (vlax-3d-point (list {x} {round(y + 1.05, 3)} 0.0)) 0.35)) (vla-put-Layer c2 \"POSTES_SIMBOLO\"))",
                 "  )",
                 ""

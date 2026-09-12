@@ -418,10 +418,21 @@ namespace MapaCadPaleta
 
         private static void InserirBlocoTrafo(Database db, Transaction tr, BlockTableRecord btr, BlockTable bt, Point3d pt, PostePayload payload)
         {
-            // O bloco "T" representa a simbologia do transformador no CAD da concessionária
-            if (bt.Has("T"))
+            // Procura a simbologia oficial de transformador da concessionária: TRAFO1, TRAFO, T ou TRANSF
+            string[] nomesBlocos = new string[] { "TRAFO1", "TRAFO", "T", "TRANSF" };
+            string nomeEncontrado = null;
+            foreach (string nome in nomesBlocos)
             {
-                BlockTableRecord blkT = (BlockTableRecord)tr.GetObject(bt["T"], OpenMode.ForRead);
+                if (bt.Has(nome))
+                {
+                    nomeEncontrado = nome;
+                    break;
+                }
+            }
+
+            if (nomeEncontrado != null)
+            {
+                BlockTableRecord blkT = (BlockTableRecord)tr.GetObject(bt[nomeEncontrado], OpenMode.ForRead);
                 BlockReference br = new BlockReference(pt, blkT.ObjectId)
                 {
                     Layer = LAYER_POSTES,
@@ -430,7 +441,7 @@ namespace MapaCadPaleta
                 btr.AppendEntity(br);
                 tr.AddNewlyCreatedDBObject(br, true);
 
-                // Atributos de capacidade ou potência se existirem no bloco T
+                // Atributos de capacidade ou potência se existirem no bloco
                 if (blkT.HasAttributeDefinitions)
                 {
                     string pot = !string.IsNullOrWhiteSpace(payload.PotenciaTrafo) ? payload.PotenciaTrafo : "45kVA";

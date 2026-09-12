@@ -426,3 +426,19 @@ def test_arvore_client_consultar_web_mock(monkeypatch):
     assert res.protecao_codigo == "SG59356"
 
 
+def test_unifilar_lisp_suporte_bloco_trafo1():
+    """Valida que unifilar_cad.lsp configura TRAFO1 como bloco padrão de transformador com suporte a lista e seleção."""
+    import os
+    lsp_path = os.path.join(os.path.dirname(__file__), "..", "unifilar", "unifilar_cad.lsp")
+    assert os.path.exists(lsp_path)
+
+    with open(lsp_path, "r", encoding="utf-8") as f:
+        conteudo = f.read()
+
+    assert '*UNIFILAR-BLOCO-TRAFO*' in conteudo
+    assert '"TRAFO1"' in conteudo
+    assert 'unifilar-obter-bloco-trafo' in conteudo
+    assert 'unifilar-listar-blocos-trafo' in conteudo
+    assert 'fallback-type "TRAFO1"' in conteudo or 'fallback-type "TRAFO"' in conteudo
+
+

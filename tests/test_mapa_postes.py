@@ -125,10 +125,11 @@ def test_gerar_lisp_postes_studio_com_multi_estruturas_e_trafo_bloco_t():
         with open(out_lsp, "r", encoding="utf-8") as f:
             conteudo = f.read()
 
-        # Verifica bloco POSTE_, bloco PONTO e bloco T do Trafo
+        # Verifica bloco POSTE_, bloco PONTO e bloco de Trafo (TRAFO1 / T)
         assert '"POSTE_"' in conteudo
         assert '"PONTO"' in conteudo
-        assert '"T"' in conteudo  # Bloco específico de Trafo
+        assert '"TRAFO1"' in conteudo  # Bloco específico de Trafo prioritário
+        assert '"T"' in conteudo       # Fallback de compatibilidade
 
         # Multi-estruturas geradas nas descrições
         assert '"N3b"' in conteudo

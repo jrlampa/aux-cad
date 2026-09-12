@@ -227,12 +227,15 @@ aux cad/
   - Determinação inteligente de blocos oficiais do AutoCAD: **`"chaves_"`** para chaves fusíveis / seccionadoras e **`"REL"`** para religadores.
 - `unifilar_manager.py` (161 linhas):
   - Orquestrador CLI e ponte de intercâmbio JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`, `--fuso`, `--escala`), unificando árvore, busca KMZ e geometria do diagrama.
-- `unifilar_cad.lsp` (601 linhas):
+- `unifilar_cad.lsp` (640 linhas):
   - Comandos do AutoCAD **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**).
   - Suporta digitação do ponto elétrico, seleção direta no DWG (`entsel`) ou **colagem direta da linha de resumo copiada do SGT/GOMNET** no prompt.
+  - **Gerenciamento do Bloco do Transformador (`TRAFO1`)**:
+    - Substituição do bloco genérico `"T"` pelo bloco oficial **`"TRAFO1"`** (com fallback sequencial para `"TRAFO"` e `"T"`).
+    - Suporte interativo completo: tecla Enter para aceitar `<TRAFO1>` (ou o último memorizado na sessão), opção `[L]` ou `[?]` para listar blocos disponíveis no DWG e selecionar por número, ou opção `[S]` para selecionar diretamente um bloco na tela com 1 clique.
   - Opções integradas de geração:
-    - **[1] Esquema Prancha**: Gera o título verde sublinhado, textos técnicos alinhados à direita e o Diagrama Unifilar Esquemático 2.5D sem escala com barramento SE, tronco MT, bloco oficial (`"chaves_"` ou `"REL"`) com fallback vetorial e ponto alvo com potência kVA.
-    - **[2] Ramal Geográfico DWG**: Traça no ModelSpace o ramal MT a partir da coordenada real do dispositivo no KMZ até o poste/ponto selecionado no DWG, inserindo bloco da proteção e cota métrica com extensão real do ramal.
+    - **[1] Esquema Prancha**: Gera o título verde sublinhado, textos técnicos alinhados à direita e o Diagrama Unifilar Esquemático 2.5D sem escala com barramento SE, tronco MT, bloco oficial da proteção (`"chaves_"` ou `"REL"`), ramal MT e bloco oficial do Transformador (`"TRAFO1"` / `"TRAFO"` ou fallback vetorial normativo de 2 círculos tangentes) com indicação de kVA.
+    - **[2] Ramal Geográfico DWG**: Traça no ModelSpace o ramal MT a partir da coordenada real do dispositivo no KMZ até o poste/ponto selecionado no DWG, inserindo bloco da proteção, bloco do transformador (`TRAFO1`) e cota métrica com extensão real do ramal.
     - **[3] Ambos**: Executa o esquema na prancha e o traçado geográfico no DWG.
     - **[4] Somente Texto**: Inserção dos textos técnicos clássicos.
     - **[A]tualizar**: Seleciona textos existentes no DWG e substitui placeholders preservando a diagramação existente.

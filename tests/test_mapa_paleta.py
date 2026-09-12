@@ -156,9 +156,9 @@ def test_cad_bridge_codigo_bloco_t_e_anti_sobreposicao():
     assert "TemTrafo" in cs
     assert "PotenciaTrafo" in cs
 
-    # Inserção do bloco 'T'
+    # Inserção do bloco de transformador (priorizando TRAFO1)
     assert 'InserirBlocoTrafo' in cs
-    assert 'bt.Has("T")' in cs
+    assert 'TRAFO1' in cs
     assert 'PossuiTrafo' in cs
 
     # Anti-sobreposição de PONTO e MText
