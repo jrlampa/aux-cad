@@ -368,7 +368,7 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - `.dockerignore` otimizado descartando caches, arquivos DWG pesados e binários intermediários.
   - `requirements.txt` com versionamento explícito das dependências essenciais (`openpyxl`, `pytest`, `pytest-cov`, `requests`, `python-docx`, `Pillow`).
   - `.github/workflows/ci.yml` configurado com matriz Python 3.11 e 3.12, disparando testes em push/PR na branch `dev` e `main` com barreira de qualidade mínima de 80% de cobertura.
-- **Métricas de Qualidade**: 145 testes unitários passando com 100% de sucesso.
+- **Métricas de Qualidade**: 149 testes unitários passando com 100% de sucesso.
 
 ### 15. Módulo AutoPrancha Enel / HBT (`prancha/`)
 - **Conceito & Método Concessionária**: No fluxo de trabalho da Enel e HBT Engenharia, as pranchas completas de projeto (folha com bordas, margens ABNT, linhas de dobra e carimbo oficial) são inseridas **diretamente no ModelSpace** (sem uso de PaperSpace/Layouts para carimbo), em escala métrica 1:1 real ($1\text{ unidade} = 1\text{ metro}$).
@@ -385,3 +385,14 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - Criação automática de camadas técnicas: `A-PRANCHA` (corte externo), `A-PRANCHA-MARGEM` (margem interna em ciano 0.50mm), `A-PRANCHA-DOBRA` (marcas discretas de dobra a cada 185/210mm) e `A-PRANCHA-CARIMBO`.
   - Inserção do Carimbo Técnico Enel/HBT com escala calculada, data atual e dados da obra no canto inferior direito.
   - Centralização geométrica perfeita da área útil da folha sobre a área delimitada pelo projetista.
+
+### 16. Módulo Diagrama Unifilar & Proteção KMZ (`unifilar/`)
+- **Automação de Proteção & Árvore Elétrica**:
+  - `arvore_parser.py`: Leitura de caminho elétrico e determinação da primeira proteção a montante, quantificação de Clientes A/B e potência instalada em kVA.
+  - `dispositivos_kmz_finder.py`: Consulta georreferenciada nos 14 arquivos KMZ de apoio da concessionária com 134.082 dispositivos indexados, convertendo WGS84 para coordenadas de projeto UTM SIRGAS 2000 (Fuso 23S/24S).
+  - `unifilar_diagrama_builder.py`: Construtor 2.5D do esquema unifilar sem escala no ModelSpace com resolução inteligente de blocos oficiais:
+    - **Chaves Fusíveis / Seccionadoras**: bloco **`chaves_`** (fallback geométrico 2.5D).
+    - **Religadores**: bloco **`REL.`** (com compatibilidade bidirecional e fallback para `REL` e símbolo vetorial 2.5D).
+    - **Transformadores**: bloco **`TRAFO1`** (com prioridade configurável e seleção interativa no DWG via `[L]` lista, `[S]` clique na tela ou `[ENTER]`).
+  - `unifilar_cad.lsp`: Comandos **`UNIFILAR`** e **`PROTECAO`** gerando esquema em prancha, ramal geográfico interativo no ModelSpace a partir da coordenada real do KMZ ou atualização in-place dos textos técnicos da prancha.
+

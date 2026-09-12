@@ -39,7 +39,7 @@ def processar_ponto(
 
     linhas = resultado.gerar_linhas_diagrama() if resultado.sucesso else []
 
-    # Determina o bloco CAD oficial ('chaves_' ou 'REL')
+    # Determina o bloco CAD oficial ('chaves_' ou 'REL.')
     bloco_protecao = "chaves_"
     geo_disp = None
     esquema_dict = None

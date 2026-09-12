@@ -210,15 +210,23 @@
   *UNIFILAR-BLOCO-TRAFO*
 )
 
-;; Insere bloco oficial ('chaves_', 'REL', 'TRAFO1'...) ou gera fallback vetorial 2.5D caso não exista
-(defun unifilar-insert-block (pt blk-name rot scale layer col fallback-type / x y h c1 c2)
+;; Insere bloco oficial ('chaves_', 'REL.', 'TRAFO1'...) ou gera fallback vetorial 2.5D caso não exista
+(defun unifilar-insert-block (pt blk-name rot scale layer col fallback-type / x y h c1 c2 eff-blk)
   (setq x (car pt))
   (setq y (cadr pt))
-  (if (tblsearch "BLOCK" blk-name)
+  ;; Resolve o nome do bloco com suporte a REL. e REL
+  (setq eff-blk blk-name)
+  (cond
+    ((tblsearch "BLOCK" blk-name) (setq eff-blk blk-name))
+    ((and (= blk-name "REL.") (tblsearch "BLOCK" "REL")) (setq eff-blk "REL"))
+    ((and (= blk-name "REL") (tblsearch "BLOCK" "REL.")) (setq eff-blk "REL."))
+    ((and (or (= blk-name "TRAFO") (= blk-name "T")) (tblsearch "BLOCK" "TRAFO1")) (setq eff-blk "TRAFO1"))
+  )
+  (if (tblsearch "BLOCK" eff-blk)
     (entmake
       (list
         '(0 . "INSERT")
-        (cons 2 blk-name)
+        (cons 2 eff-blk)
         (cons 10 pt)
         (cons 41 scale)
         (cons 42 scale)
@@ -307,8 +315,8 @@
   (unifilar-draw-line (list x-tr (- y-se (* h-txt 0.2)) 0.0) (list x-tr (+ y-ch (* h-txt 1.5)) 0.0) "UNIFILAR_LINHA" 7)
   (unifilar-draw-text (list (+ x-tr (* h-txt 0.6)) (- y-se (* h-txt 3.2)) 0.0) "TRONCO MT" (* h-txt 0.7) "UNIFILAR_LINHA" 8 "LEFT")
 
-  ;; 2.3 Bloco da Proteção (chaves_ ou REL)
-  (setq fb-tipo (if (= bloco-nome "REL") "REL" "CHAVE"))
+  ;; 2.3 Bloco da Proteção (chaves_ ou REL.)
+  (setq fb-tipo (if (or (= bloco-nome "REL.") (= bloco-nome "REL")) "REL" "CHAVE"))
   (unifilar-insert-block (list x-tr y-ch 0.0) bloco-nome 0.0 1.0 "UNIFILAR_PROTECAO" 1 fb-tipo)
   (unifilar-draw-text (list (+ x-tr (* h-txt 2.2)) y-ch 0.0) prot-rot (* h-txt 0.9) "UNIFILAR_PROTECAO" 1 "LEFT")
 
@@ -335,7 +343,7 @@
   (if pt-dest
     (progn
       ;; 1. Insere o bloco da proteção na coordenada real
-      (setq fb-tipo (if (= bloco-nome "REL") "REL" "CHAVE"))
+      (setq fb-tipo (if (or (= bloco-nome "REL.") (= bloco-nome "REL")) "REL" "CHAVE"))
       (unifilar-insert-block (list x-prot y-prot 0.0) bloco-nome 0.0 1.0 "UNIFILAR_PROTECAO" 1 fb-tipo)
       (unifilar-draw-text (list (+ x-prot 2.0) (+ y-prot 1.5) 0.0) rotulo 2.5 "UNIFILAR_PROTECAO" 1 "LEFT")
 

@@ -107,8 +107,8 @@ class TestUnifilarDiagramaBuilder:
     """Testes para o construtor geométrico 2.5D do diagrama unifilar."""
 
     def test_determinar_bloco_protecao(self):
-        assert determinar_bloco_protecao("RELIGADOR", "REL 9923") == "REL"
-        assert determinar_bloco_protecao("REL", "AL-01") == "REL"
+        assert determinar_bloco_protecao("RELIGADOR", "REL 9923") == "REL."
+        assert determinar_bloco_protecao("REL", "AL-01") == "REL."
         assert determinar_bloco_protecao("CHAVE FUSIVEL", "CF636018") == "chaves_"
         assert determinar_bloco_protecao("SECCIONADORA", "SG-100") == "chaves_"
         assert determinar_bloco_protecao("CHAVE_FACA_FUSIVEL", "") == "chaves_"

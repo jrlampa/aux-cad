@@ -13,14 +13,14 @@ def determinar_bloco_protecao(tipo_protecao: str, rotulo: str = "") -> str:
     """
     Retorna o nome do bloco oficial do AutoCAD correspondente ao tipo de proteção.
     - Chave Fusível: 'chaves_'
-    - Religador: 'REL'
+    - Religador: 'REL.'
     - Disjuntor/Outro: 'chaves_' (fallback padrão)
     """
     t = (tipo_protecao or "").lower()
     r = (rotulo or "").lower()
 
     if "religador" in t or "rel" in t or r.startswith("rl") or "rel" in r:
-        return "REL"
+        return "REL."
     if "fusivel" in t or "fusível" in t or "chave" in t or r.startswith("cf"):
         return "chaves_"
     return "chaves_"
@@ -143,7 +143,7 @@ def construir_esquema_unifilar(
         escala=1.0,
         layer="UNIFILAR_PROTECAO",
         atributos={"TAG": protecao_rotulo, "TIPO": protecao_tipo},
-        fallback_tipo="REL" if nome_bloco == "REL" else "CHAVE"
+        fallback_tipo="REL" if nome_bloco in ("REL.", "REL") else "CHAVE"
     ))
     textos.append(EntidadeTexto(x_tronco + h * 2.0, y_chave, protecao_rotulo, altura=h * 0.9, layer="UNIFILAR_PROTECAO", cor=1, alinhamento="LEFT"))
 
