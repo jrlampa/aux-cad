@@ -109,6 +109,13 @@
                         </div>
                     </div>
 
+                    <div class="tracado-options-row" style="margin-top: 5px; padding-top: 4px; border-top: 1px dotted #cbd5e1; display: flex; align-items: center; justify-content: space-between;">
+                        <label class="tracado-chk-label" style="font-size: 10.5px; color: #0284c7; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Desenha automaticamente eixos de vias e calçadas no AutoCAD conforme novos postes são traçados">
+                            <input type="checkbox" id="chkTracadoViasCad" checked onchange="if(window.sincronizarOpcaoViasCad) window.sincronizarOpcaoViasCad(this.checked)">
+                            <span>🛣️ Gerar vias no CAD a cada poste</span>
+                        </label>
+                    </div>
+
                     <div class="tracado-cqt-box" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; gap: 4px; align-items: center;">
                         <input type="text" id="inputProjeto" class="input-proj-cqt" placeholder="PE_12345" value="PE_PROJETO_OSM" style="font-size: 11px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px; flex: 1;" title="Identificação do projeto no CQT">
                         <button type="button" id="btnExportarCqt" class="btn-cqt-export" onclick="exportarParaCqt()" title="Exportar trecho e cargas diretamente para o CQT (Queda de Tensão BT)">⚡ CQT</button>
@@ -357,10 +364,14 @@
                 <button id="btnInserirCad" class="btn-primary-cad">
                     📍 INSERIR POSTE NO CAD
                 </button>
-                <div class="checkbox-auto-inc">
-                    <label>
+                <div class="footer-options">
+                    <label class="footer-chk-label" title="Incrementa automaticamente o número do poste (Ex: P01 -> P02)">
                         <input type="checkbox" id="chkAutoInc" checked>
-                        Incrementar Nº (+1) após inserir
+                        <span>Incrementar Nº (+1) após inserir</span>
+                    </label>
+                    <label class="footer-chk-label" title="Desenha automaticamente as vias, calçadas e obstruções urbanas no AutoCAD ao inserir o poste">
+                        <input type="checkbox" id="chkAutoViasCad" checked onchange="if(window.sincronizarOpcaoViasCad) window.sincronizarOpcaoViasCad(this.checked)">
+                        <span style="color: #0284c7; font-weight: 600;">🛣️ Gerar vias no CAD ao inserir poste</span>
                     </label>
                 </div>
                 <div id="statusToast" class="status-toast">

@@ -8,6 +8,7 @@ const ViasObstrucoesState = {
     ativo: true,
     desenharNoCad: true, // Envio automático ao AutoCAD habilitado por padrão
     cacheGrid: new Set(), // Chaves "lat_lon" de quadrículas já carregadas
+    waysProcessados: new Set(), // IDs de 'way' já renderizados/enviados (evita duplicações)
     elementosAcumulados: {
         vias: [],
         calcadas: [],
@@ -18,6 +19,54 @@ const ViasObstrucoesState = {
     camadaObstrucoes: null,
     carregando: false
 };
+
+/**
+ * Sincroniza a opção de gerar vias automaticamente no AutoCAD conforme novos postes são inseridos
+ */
+function sincronizarOpcaoViasCad(ativo) {
+    ViasObstrucoesState.desenharNoCad = !!ativo;
+
+    const chkAuto = document.getElementById('chkAutoViasCad');
+    if (chkAuto && chkAuto.checked !== ViasObstrucoesState.desenharNoCad) {
+        chkAuto.checked = ViasObstrucoesState.desenharNoCad;
+    }
+
+    const chkTracado = document.getElementById('chkTracadoViasCad');
+    if (chkTracado && chkTracado.checked !== ViasObstrucoesState.desenharNoCad) {
+        chkTracado.checked = ViasObstrucoesState.desenharNoCad;
+    }
+
+    try {
+        localStorage.setItem('AUXCAD_AUTO_VIAS_CAD', ViasObstrucoesState.desenharNoCad ? 'true' : 'false');
+    } catch (e) {
+        console.warn('Falha ao persistir AUXCAD_AUTO_VIAS_CAD:', e);
+    }
+
+    if (typeof showToast === 'function') {
+        if (ViasObstrucoesState.desenharNoCad) {
+            showToast('🛣️ Gerar vias no AutoCAD ao inserir postes: ATIVADO', 'info');
+        } else {
+            showToast('🛣️ Gerar vias no AutoCAD ao inserir postes: DESATIVADO', 'info');
+        }
+    }
+}
+
+/**
+ * Inicializa a opção de gerar vias do localStorage
+ */
+function inicializarOpcaoViasCad() {
+    let ativo = true;
+    try {
+        const val = localStorage.getItem('AUXCAD_AUTO_VIAS_CAD');
+        if (val !== null) ativo = (val === 'true');
+    } catch (e) {}
+
+    ViasObstrucoesState.desenharNoCad = ativo;
+    const chkAuto = document.getElementById('chkAutoViasCad');
+    if (chkAuto) chkAuto.checked = ativo;
+    const chkTracado = document.getElementById('chkTracadoViasCad');
+    if (chkTracado) chkTracado.checked = ativo;
+}
 
 /**
  * Inicializa as camadas no mapa Leaflet
@@ -254,6 +303,10 @@ function renderizarElementosOsm(osmData, mapa) {
     osmData.elements.forEach(el => {
         if (el.type !== 'way' || !el.nodes || el.nodes.length < 2) return;
 
+        // Evita reprocessar o mesmo way já desenhado no CAD/Leaflet
+        if (el.id && ViasObstrucoesState.waysProcessados.has(el.id)) return;
+        if (el.id) ViasObstrucoesState.waysProcessados.add(el.id);
+
         const coords = el.nodes.map(nodeId => nodes[nodeId]).filter(Boolean);
         if (coords.length < 2) return;
 
@@ -375,3 +428,13 @@ window.carregarContextoUrbano = carregarContextoUrbano;
 window.desenharViasNoCad = desenharViasNoCad;
 window.calcularBbox = calcularBbox;
 window.renderizarElementosOsm = renderizarElementosOsm;
+window.sincronizarOpcaoViasCad = sincronizarOpcaoViasCad;
+window.inicializarOpcaoViasCad = inicializarOpcaoViasCad;
+
+// Inicializa preferências de vias assim que o DOM estiver pronto
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inicializarOpcaoViasCad);
+} else {
+    inicializarOpcaoViasCad();
+}
+

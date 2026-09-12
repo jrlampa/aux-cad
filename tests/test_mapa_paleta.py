@@ -384,17 +384,28 @@ def test_vias_calcadas_obstrucoes_assets_e_parser():
     assert "calcularBbox" in js
     assert "renderizarElementosOsm" in js
     assert "desenharNoCad: true" in js
+    assert "sincronizarOpcaoViasCad" in js
+    assert "waysProcessados" in js
 
-    # Verifica hook automático no traçado contínuo
+    # Verifica hook automático no traçado contínuo e na inserção direta
     with open(tracado_js, "r", encoding="utf-8") as f:
         tjs = f.read()
     assert "carregarContextoUrbano" in tjs
+    assert "chkTracadoViasCad" in tjs
+
+    app_js = os.path.join(web_dir, "app.js")
+    with open(app_js, "r", encoding="utf-8") as f:
+        ajs = f.read()
+    assert "chkAutoViasCad" in ajs
+    assert "carregarContextoUrbano" in ajs
 
     with open(index_html, "r", encoding="utf-8") as f:
         html = f.read()
     assert "btnToggleVias" in html
     assert "btnDesenharViasCad" in html
     assert "btnViasTracadoCad" in html
+    assert "chkAutoViasCad" in html
+    assert "chkTracadoViasCad" in html
     assert "vias_obstrucoes.js" in html
 
     with open(cad_bridge_cs, "r", encoding="utf-8") as f:

@@ -116,7 +116,8 @@ function salvarEstadoPersistido() {
             tri: parseInt(document.getElementById('inputTri')?.value || '0', 10) || 0,
             kva: document.getElementById('inputKva').value,
             kw: document.getElementById('inputKw').value,
-            autoInc: document.getElementById('chkAutoInc').checked,
+            autoInc: document.getElementById('chkAutoInc')?.checked ?? true,
+            autoViasCad: document.getElementById('chkAutoViasCad')?.checked ?? true,
             activeLayer: AppState.activeLayer
         };
 
@@ -786,8 +787,16 @@ function inserirPosteNoCad() {
         }, AppState.map);
     }
 
+    // Gerar vias no AutoCAD automaticamente ao inserir poste se a opção estiver ativada
+    const chkVias = document.getElementById('chkAutoViasCad');
+    const gerarVias = chkVias ? chkVias.checked : (window.ViasObstrucoesState && window.ViasObstrucoesState.desenharNoCad);
+    if (gerarVias && typeof window.carregarContextoUrbano === 'function' && AppState.currentLat && AppState.currentLon) {
+        if (window.ViasObstrucoesState) window.ViasObstrucoesState.desenharNoCad = true;
+        window.carregarContextoUrbano(AppState.currentLat, AppState.currentLon, 130, AppState.map);
+    }
+
     // Auto-incrementar número se marcado
-    if (document.getElementById('chkAutoInc').checked) {
+    if (document.getElementById('chkAutoInc')?.checked) {
         incrementarNumeroPoste();
     }
 }

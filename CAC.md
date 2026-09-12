@@ -152,6 +152,11 @@ aux cad/
   - Varredura e sincronização de postes existentes no DWG para plotagem no Leaflet.
 - `SnyderConverter.cs` (112 linhas): Conversor analítico Snyder geodésico C# bidirecional entre Lat/Lon WGS84 e UTM SIRGAS 2000 (Fuso 22S, 23S e 24S) com precisão milimétrica.
 - `web/index.html`, `web/style.css` e `web/app.js`: Interface moderna em tema corporativo `#1B365D`, alternância entre OSM, Satélite ESRI e Google Híbrido, marcador arrastável, conversão instantânea kVA $\leftrightarrow$ kW com FP = 0.92, chips rápidos de equipamentos/cargas e botões de 1 clique ("📍 Inserir no CAD", "🎯 Ler DWG", "🔄 Sincronizar").
+- **Geração Automática de Vias no AutoCAD ao Inserir Postes**:
+  - Opção explícita no rodapé da sidebar (`chkAutoViasCad`): *"🛣️ Gerar vias no CAD ao inserir poste"*.
+  - Opção dedicada no painel do traçado contínuo (`chkTracadoViasCad`): *"🛣️ Gerar vias no CAD a cada poste"*.
+  - Sincronização bidirecional, persistência no `localStorage` (`AUXCAD_AUTO_VIAS_CAD`) e deduplicação inteligente por `waysProcessados`.
+  - Cobertura geodésica contínua: calcula automaticamente a área do vão e o ponto médio entre postes consecutivos para traçar os eixos viários e calçadas sem lacunas no DWG (`VIAS_EIXO`, `VIAS_CALCADA`, `OBSTRUCOES_EDIF`).
 - `mapa_paleta_loader.lsp` (75 linhas): Carregador AutoLISP com detecção dinâmica da versão do AutoCAD (`ACADVER`) e disparo via `NETLOAD`.
 
 ### 8. Módulo de Dados Técnicos e Tabelas de Referência (`dados_tecnicos/`)

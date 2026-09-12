@@ -420,17 +420,34 @@ input[type=number] {
     box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
 }
 
-.checkbox-auto-inc {
+.footer-options {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 3px 0;
+}
+
+.footer-chk-label {
     font-size: 10.5px;
     color: var(--text-muted);
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 4px;
+    justify-content: flex-start;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
 }
 
-.checkbox-auto-inc input {
+.footer-chk-label:hover {
+    color: var(--text-main);
+}
+
+.footer-chk-label input[type="checkbox"],
+.tracado-chk-label input[type="checkbox"] {
     cursor: pointer;
+    accent-color: #0284c7;
+    margin: 0;
 }
 
 .status-toast {
