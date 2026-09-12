@@ -27,6 +27,7 @@ aux cad/
 ├── mapa_postes/                    # Módulo Estúdio Web de Satélite, Coordenadas e Clientes
 ├── mapa_cad_paleta/                # Módulo Paleta C# (.NET) para AutoCAD 2018+ com Mapa OSM (Menos 1 tela)
 ├── dados_tecnicos/                 # Módulo Dados Técnicos e Tabelas de Referência
+├── prancha/                        # Módulo AutoPrancha (Enquadramento Inteligente no ModelSpace - Enel/HBT)
 ├── softwares/                      # Instaladores e ferramentas de terceiros
 └── documentos/                     # Pranchas DWG, planilhas de referência e notas técnicas
 ```
@@ -360,4 +361,20 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - `.dockerignore` otimizado descartando caches, arquivos DWG pesados e binários intermediários.
   - `requirements.txt` com versionamento explícito das dependências essenciais (`openpyxl`, `pytest`, `pytest-cov`, `requests`, `python-docx`, `Pillow`).
   - `.github/workflows/ci.yml` configurado com matriz Python 3.11 e 3.12, disparando testes em push/PR na branch `dev` e `main` com barreira de qualidade mínima de 80% de cobertura.
-- **Métricas de Qualidade**: 122 testes unitários passando com 100% de sucesso.
+- **Métricas de Qualidade**: 145 testes unitários passando com 100% de sucesso.
+
+### 15. Módulo AutoPrancha Enel / HBT (`prancha/`)
+- **Conceito & Método Concessionária**: No fluxo de trabalho da Enel e HBT Engenharia, as pranchas completas de projeto (folha com bordas, margens ABNT, linhas de dobra e carimbo oficial) são inseridas **diretamente no ModelSpace** (sem uso de PaperSpace/Layouts para carimbo), em escala métrica 1:1 real ($1\text{ unidade} = 1\text{ metro}$).
+- **Motor Analítico de Enquadramento (`autoprancha_core.py`)**:
+  - Mapeamento normativo dos formatos de papel ABNT NBR 10068: A0 ($1189 \times 841$ mm), A1 ($841 \times 594$ mm), A2 ($594 \times 420$ mm), A3 ($420 \times 297$ mm) e A4 ($297 \times 210$ mm).
+  - Desconto automático de margens: 25mm na margem esquerda (encadernação/pasta) e 10mm nas demais (topo, base e direita).
+  - Reserva técnica do Carimbo + Legenda Enel/HBT no canto inferior direito ($185 \times 60$ mm no papel).
+  - Escalas normativas de rede de distribuição: 1:500, 1:750, 1:1000, 1:1250, 1:1500 e 1:2000. Fator métrico no Model: $\text{Escala}/1000.0$.
+  - Função `calcular_enquadramento`: recebe a diagonal da rede ($x_1, y_1, x_2, y_2$), adiciona folga de respiro de 10% a 15% e seleciona a menor folha e escala adequadas, priorizando a escala mãe 1:1000 e o formato A1 da Enel.
+- **Rotina AutoLISP no AutoCAD (`autoprancha.lsp`)**:
+  - Comandos: **`AUTOPRANCHA`** (atalhos: **`PRANCHA`**, **`ENQUADRAR`**, **`FOLHA`**) e **`RECARREGAR_PRANCHA`**.
+  - Captura interativa em 2 cliques com retângulo elástico dinâmico (`getcorner`).
+  - Modos flexíveis: **Auto** (cálculo total ótimo), **Escala** (forçar escala específica) e **Formato** (forçar formato de folha).
+  - Criação automática de camadas técnicas: `A-PRANCHA` (corte externo), `A-PRANCHA-MARGEM` (margem interna em ciano 0.50mm), `A-PRANCHA-DOBRA` (marcas discretas de dobra a cada 185/210mm) e `A-PRANCHA-CARIMBO`.
+  - Inserção do Carimbo Técnico Enel/HBT com escala calculada, data atual e dados da obra no canto inferior direito.
+  - Centralização geométrica perfeita da área útil da folha sobre a área delimitada pelo projetista.

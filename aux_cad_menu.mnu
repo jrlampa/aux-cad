@@ -11,6 +11,8 @@
 ID_TbAuxCad [_Toolbar("AUX CAD - Engenharia", _Top, _Show, 100, 100, 1)]
 ID_Ajuda     [_Button("Guia de Comandos (COMANDOS)", "ICON_HELP", "ICON_HELP")]^C^CCOMANDOS
 ID_Separator0 [_Separator]
+ID_Prancha   [_Button("AutoPrancha Enquadramento ModelSpace", "ICON_PRANCHA", "ICON_PRANCHA")]^C^CAUTOPRANCHA
+ID_Separator01 [_Separator]
 ID_Unifilar  [_Button("Diagrama Unifilar e Proteção", "ICON_UNIFILAR", "ICON_UNIFILAR")]^C^CUNIFILAR
 ID_Separator1 [_Separator]
 ID_Cqt       [_Button("CQT - Queda de Tensão", "ICON_CQT", "ICON_CQT")]^C^CCQT
@@ -45,7 +47,9 @@ ID_Reload    [_Button("Recarregar Todas as Rotinas", "ICON_RELOAD", "ICON_RELOAD
 ID_MnAuxCad  [&AUX CAD]
 ID_MnAjuda     [&0. Guia Rápido de Comandos (COMANDOS)]^C^CCOMANDOS
 [--]
-ID_MnUnifilar  [&1. Diagrama Unifilar e Proteção (UNIFILAR)]^C^CUNIFILAR
+ID_MnPrancha   [&1. AutoPrancha Enquadramento ModelSpace (AUTOPRANCHA)]^C^CAUTOPRANCHA
+[--]
+ID_MnUnifilar  [&2. Diagrama Unifilar e Proteção (UNIFILAR)]^C^CUNIFILAR
 [--]
 ID_MnCqt       [&2. Queda de Tensão CQT (CQT)]^C^CCQT
 ID_MnCqtCad    [&3. Extrair Vãos para CQT (CQTCAD)]^C^CCQTCAD

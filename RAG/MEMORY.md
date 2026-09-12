@@ -262,3 +262,20 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `anotações-2.one`: Caderno técnico de anotações.
 - `Captura de tela 2026-01-29 174711.png`
 - `Application does not support just-i.txt` & `Autodesk mudou o motor do AutoCAD r.txt`: Notas técnicas de suporte.
+
+### 17. `prancha/` (AutoPrancha - Enquadramento Inteligente no ModelSpace - Padrão Enel / HBT)
+- **Conceito & Contexto**: Atende ao fluxo de trabalho oficial da Enel e HBT Engenharia, onde pranchas com margens, bordas, marcas de dobra e carimbo oficial são posicionadas **diretamente no ModelSpace** em escala 1:1 métrica real ($1\text{ unidade} = 1\text{ metro}$).
+- `autoprancha_core.py` (160 linhas): Motor analítico de enquadramento geométrico:
+  - Mapeia formatos ABNT NBR 10068: A0 ($1189 \times 841$ mm), A1 ($841 \times 594$ mm), A2 ($594 \times 420$ mm), A3 ($420 \times 297$ mm), A4 ($297 \times 210$ mm).
+  - Margens normativas: 25mm na margem esquerda e 10mm nas demais.
+  - Reserva técnica do Carimbo Enel/HBT no canto inferior direito ($185 \times 60$ mm na folha).
+  - Escalas normativas de distribuição: 1:500, 1:750, 1:1000, 1:1250, 1:1500 e 1:2000 (Fator: $\text{Escala}/1000.0$).
+  - Algoritmo `calcular_enquadramento` com margem de respiro (10%) e prioridade para escala 1:1000 e formato A1 da concessionária.
+- `autoprancha.lsp` (230 linhas): Rotina AutoLISP no AutoCAD:
+  - Comandos: **`AUTOPRANCHA`** (atalhos: **`PRANCHA`**, **`ENQUADRAR`**, **`FOLHA`**) e **`RECARREGAR_PRANCHA`**.
+  - Seleção por diagonal em 2 cliques com retângulo elástico dinâmico (`getcorner`).
+  - Modos: **Auto**, **Escala** (fixa escala) ou **Formato** (fixa folha).
+  - Desenho automático em camadas dedicadas: `A-PRANCHA` (corte externo), `A-PRANCHA-MARGEM` (margem interna ciano 0.50mm), `A-PRANCHA-DOBRA` (marcas de dobra 185/210mm) e `A-PRANCHA-CARIMBO`.
+  - Inserção do Carimbo Técnico Enel/HBT preenchido no canto inferior direito.
+  - Centralização geométrica sobre o centro da rede e zoom automático na folha inserida.
+- **Cobertura & Testes**: `tests/test_autoprancha.py` com **10 testes unitários específicos (94% de cobertura)** e suíte global com **145 testes unitários passando com 100% de sucesso**.

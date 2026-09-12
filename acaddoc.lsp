@@ -69,6 +69,7 @@
 (add-support-path (strcat *aux-cad-root* "cpfc"))
 (add-support-path (strcat *aux-cad-root* "unifilar"))
 (add-support-path (strcat *aux-cad-root* "mapa_cad_paleta"))
+(add-support-path (strcat *aux-cad-root* "prancha"))
 
 (defun load-aux-safe (subpath / fullpath res)
   (setq fullpath (strcat *aux-cad-root* subpath))
@@ -135,6 +136,9 @@
 
 ;; 11. Módulo Paleta Cartográfica OSM C# (.NET) - Menos 1 tela
 (load-aux-safe "mapa_cad_paleta\\mapa_paleta_loader.lsp")
+
+;; 12. Módulo AutoPrancha Enel / HBT (Enquadramento Inteligente no ModelSpace)
+(load-aux-safe "prancha\\autoprancha.lsp")
 
 
 ;; =============================================================================
@@ -222,6 +226,7 @@
   ;; Exibe também caixa de diálogo visual na tela
   (setq msg (strcat
     "=== GUIA DE COMANDOS AUX CAD ===\n\n"
+    "• ENQUADRAMENTO / PRANCHA: Digite AUTOPRANCHA (ou PRANCHA)\n"
     "• DIAGRAMA UNIFILAR: Digite UNIFILAR (ou PROTECAO)\n"
     "• QUEDA DE TENSÃO BT: Digite CQT (ou CQTQUADROS / CQTEXCEL)\n"
     "• MEMORIAL / CHECKLIST: Digite KMZCHECK (ou CHECKLIST)\n"
@@ -248,6 +253,7 @@
 (defun c:ROTINAS () (c:COMANDOS))
 
 ;; Aliases diretos para as ferramentas
+(defun c:ENQUADRAMENTO () (c:AUTOPRANCHA))
 (defun c:KMZPOSTES () (c:IMPORTAR_KMZ_POSTES))
 (defun c:ORTOFOTO () (c:INSCROQUI))
 (defun c:CROQUI () (c:INSCROQUI))
