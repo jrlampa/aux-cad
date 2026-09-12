@@ -153,18 +153,26 @@ def test_p2_snap_magnetico_assets_e_calculo():
 
 
 def test_p3_aux_cad_hub_e_launcher():
-    """Valida o Hub central unificado e o atalho de execução."""
+    """Valida o Hub central unificado e os atalhos de execução da raiz."""
     hub_py = os.path.join(RAIZ, "aux_cad_hub.py")
     abrir_bat = os.path.join(RAIZ, "Abrir_AUXCAD.bat")
+    abrir_unifilar = os.path.join(RAIZ, "Abrir_Unifilar.bat")
+    abrir_prancha = os.path.join(RAIZ, "Abrir_AutoPrancha.bat")
+    clean_bat = os.path.join(RAIZ, "clean.bat")
 
     assert os.path.exists(hub_py)
     assert os.path.exists(abrir_bat)
+    assert os.path.exists(abrir_unifilar)
+    assert os.path.exists(abrir_prancha)
+    assert os.path.exists(clean_bat)
 
     # Verifica sintaxe e imports do script
     import aux_cad_hub
     assert hasattr(aux_cad_hub, "AuxCadHubApp")
     assert hasattr(aux_cad_hub, "verificar_processo_autocad")
     assert hasattr(aux_cad_hub, "obter_branch_git")
+    assert hasattr(aux_cad_hub.AuxCadHubApp, "_abrir_unifilar")
+    assert hasattr(aux_cad_hub.AuxCadHubApp, "_abrir_autoprancha")
 
     branch = aux_cad_hub.obter_branch_git()
     assert isinstance(branch, str)
@@ -173,6 +181,11 @@ def test_p3_aux_cad_hub_e_launcher():
     with open(abrir_bat, "r", encoding="utf-8") as f:
         bat_content = f.read()
     assert "aux_cad_hub.py" in bat_content
+
+    with open(clean_bat, "r", encoding="utf-8") as f:
+        clean_content = f.read()
+    assert "*.bak" in clean_content
+    assert "__pycache__" in clean_content
 
 
 def test_p4_docker_e_ci_pipeline():

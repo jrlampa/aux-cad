@@ -346,20 +346,23 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - Indicador visual com anel pulsante ciano (`.snap-magnetico-marker` com animação `@keyframes snapPulse`) e tooltip identificando o ponto de snap (`🧲 P01`).
   - Conexão e fixação automática nos eventos de clique e arrasto no mapa e medição.
 
-#### P3. Hub Central & Launcher Unificado (`aux_cad_hub.py` & `Abrir_AUXCAD.bat`)
+#### P3. Hub Central & Launcher Unificado (`aux_cad_hub.py` & Atalhos da Raiz)
 - **Painel Executivo Unificado (Tema Navy/Slate `#0F172A` / `#1E293B`)**:
   - Ponto de entrada único na raiz do projeto executável via 2 cliques no `Abrir_AUXCAD.bat`.
+  - Atalhos diretos de 2 cliques na raiz: `Abrir_AUXCAD.bat`, `Abrir_Unifilar.bat`, `Abrir_AutoPrancha.bat`, `Abrir_CQT.bat`, `Abrir_Orcamento.bat`, `Abrir_CPFC.bat`, `Abrir_Mapa_Postes.bat`.
   - Diagnóstico em tempo real: versão do Python, detecção de processo do AutoCAD (`acad.exe`), status de compilação da DLL .NET e branch git ativa.
-  - Cards de 1 clique para todos os 8 módulos da suíte:
-    1. ⚡ Queda de Tensão BT (CQT)
-    2. 💰 Orçamento & Materiais
-    3. 📑 Participação Financeira (CPFC REN 1.059)
-    4. 🌳 Estudo & Memorial Ambiental
-    5. 🗺️ Estúdio Web de Satélite & Postes
-    6. 📐 Paleta Cartográfica OSM no AutoCAD
-    7. 📊 Tabelas de Referência Normativas
-    8. 🧪 Central de Testes & QA (execução em background com relatório)
-  - Ações rápidas de rodapé: abertura da pasta raiz e limpeza de temporários via `clean.bat`.
+  - Cards de 1 clique para todos os 10 módulos da suíte:
+    1. ⚡ Diagrama Unifilar & Proteção a Montante (KMZ / SGT)
+    2. 📐 AutoPrancha Enel / HBT (ModelSpace 1:1)
+    3. ⚡ Queda de Tensão BT (CQT)
+    4. 💰 Orçamento & Materiais
+    5. 📑 Participação Financeira (CPFC REN 1.059)
+    6. 🌳 Estudo & Memorial Ambiental
+    7. 🗺️ Estúdio Web de Satélite & Postes
+    8. 📐 Paleta Cartográfica OSM no AutoCAD (.NET)
+    9. 📊 Tabelas de Referência Normativas
+    10. 🧪 Central de Testes & QA (execução em background com relatório de 149 testes)
+  - Manutenção inteligente de raiz: `clean.bat` aprimorado com limpeza profunda de `%temp%`, `Temp` do Windows, arquivos residuais do AutoCAD (`*.bak`, `*.dcl_tmp`, `*.tmp`) e caches Python (`__pycache__`, `.pytest_cache`, `.coverage`), preservando 100% dos modelos e desenhos.
 
 #### P4. Docker First & Pipeline de Integração Contínua (CI/CD)
 - **Containerização Total e Reprodutibilidade**:

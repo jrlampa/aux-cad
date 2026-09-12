@@ -50,8 +50,8 @@ class AuxCadHubApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title(f"{APP_TITLE} ({APP_VERSION})")
-        self.root.geometry("860x680")
-        self.root.minsize(800, 620)
+        self.root.geometry("900x780")
+        self.root.minsize(840, 700)
         self.root.configure(bg="#0F172A")
 
         self.branch_git = obter_branch_git()
@@ -164,6 +164,22 @@ class AuxCadHubApp:
         cards = [
             {
                 "icone": "⚡",
+                "titulo": "Diagrama Unifilar & Proteção",
+                "descricao": "Localização da proteção a montante (SG/CF/REL), árvore de dispositivos e inserção do unifilar 2.5D no DWG.",
+                "acao_texto": "Guia / Unifilar",
+                "comando": self._abrir_unifilar,
+                "cor_borda": "#0284C7"
+            },
+            {
+                "icone": "📐",
+                "titulo": "AutoPrancha (Enel / HBT)",
+                "descricao": "Enquadramento automático da rede no ModelSpace 1:1, seleção ótima de folha A0..A4 e escala 1:500..1:2000.",
+                "acao_texto": "Guia / Prancha",
+                "comando": self._abrir_autoprancha,
+                "cor_borda": "#0D9488"
+            },
+            {
+                "icone": "⚡",
                 "titulo": "Queda de Tensão (CQT)",
                 "descricao": "Cálculo analítico BT, Live Preview de QT, carregamento do trafo e desenho dos Quadros Verdes/Vermelhos no CAD.",
                 "acao_texto": "Abrir CQT",
@@ -221,14 +237,14 @@ class AuxCadHubApp:
             {
                 "icone": "🧪",
                 "titulo": "Suíte de Testes & QA",
-                "descricao": "Executa a suíte completa de testes unitários (118+ testes) e verifica a integridade de todos os módulos.",
+                "descricao": "Executa a suíte completa de testes unitários (149 testes) e verifica a integridade de todos os módulos.",
                 "acao_texto": "Executar Testes",
                 "comando": self._executar_testes,
                 "cor_borda": "#DC2626"
             }
         ]
 
-        # Layout em grade 2x4
+        # Layout em grade 2x5
         for idx, c in enumerate(cards):
             r = idx // 2
             col = idx % 2
@@ -321,6 +337,40 @@ class AuxCadHubApp:
         btn_acao.pack(anchor="e")
 
     # --- Comandos de Ação dos Módulos ---
+    def _abrir_unifilar(self):
+        bat = os.path.join(BASE_DIR, "Abrir_Unifilar.bat")
+        if os.path.exists(bat):
+            self._lancar_subprocesso([bat], shell=True)
+        else:
+            msg = (
+                "⚡ DIAGRAMA UNIFILAR & PROTEÇÃO (KMZ / SGT)\n\n"
+                "Comandos no AutoCAD:\n"
+                "  • UNIFILAR ou PROTECAO: Localiza proteção a montante (SG/CF/REL)\n"
+                "  • ARVORE: Consulta caminho elétrico a montante\n\n"
+                "Blocos oficiais suportados:\n"
+                "  ✓ Chaves Fusíveis: bloco 'chaves_'\n"
+                "  ✓ Religadores: bloco 'REL.' (com fallback bidirecional 'REL')\n"
+                "  ✓ Transformadores: bloco 'TRAFO1'"
+            )
+            messagebox.showinfo("Diagrama Unifilar", msg)
+
+    def _abrir_autoprancha(self):
+        bat = os.path.join(BASE_DIR, "Abrir_AutoPrancha.bat")
+        if os.path.exists(bat):
+            self._lancar_subprocesso([bat], shell=True)
+        else:
+            msg = (
+                "📐 AUTOPRANCHA ENEL / HBT (MODELSPACE 1:1)\n\n"
+                "Comandos no AutoCAD:\n"
+                "  • AUTOPRANCHA (ou PRANCHA / ENQUADRAR / FOLHA)\n"
+                "  • RECARREGAR_PRANCHA\n\n"
+                "Funcionalidades:\n"
+                "  ✓ Seleção ótima de folha A0..A4 e escala 1:500..1:2000\n"
+                "  ✓ Desconto de margens e reserva técnica de carimbo\n"
+                "  ✓ Camadas técnicas A-PRANCHA, A-PRANCHA-MARGEM, A-PRANCHA-DOBRA"
+            )
+            messagebox.showinfo("AutoPrancha Enel/HBT", msg)
+
     def _abrir_cqt(self):
         script = os.path.join(BASE_DIR, "cqt", "cqt_excel_manager.py")
         self._lancar_subprocesso([sys.executable, script])

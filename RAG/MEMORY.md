@@ -252,9 +252,11 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - **P2 - Snap Magnético aos Postes e Nós da Rede (`snap_magnetico.js`)**:
   - Atração do cursor dentro de um raio de 18 pixels com suporte a postes do traçado, vértices da régua, postes importados do DWG e marcador principal.
   - Anel visual pulsante ciano (`.snap-magnetico-marker` com `@keyframes snapPulse`) e tooltip `🧲 P01`.
-- **P3 - Hub Central & Launcher Unificado (`aux_cad_hub.py` & `Abrir_AUXCAD.bat`)**:
-  - Launcher executivo moderno em Tkinter (`#0F172A`/`#1E293B`) com 8 cards interativos de 1 clique para todos os módulos (CQT, Orçamento, CPFC, Ambiental, Estúdio Web, Paleta OSM, Tabelas, QA).
+- **P3 - Hub Central & Launcher Unificado (`aux_cad_hub.py` & Atalhos da Raiz)**:
+  - Launcher executivo moderno em Tkinter (`#0F172A`/`#1E293B`) com 10 cards interativos de 1 clique para todos os módulos (Unifilar, AutoPrancha, CQT, Orçamento, CPFC, Ambiental, Estúdio Web, Paleta OSM, Tabelas, QA).
+  - Atalhos executáveis diretos de 2 cliques na raiz: `Abrir_AUXCAD.bat`, `Abrir_Unifilar.bat`, `Abrir_AutoPrancha.bat`, `Abrir_CQT.bat`, `Abrir_Orcamento.bat`, `Abrir_CPFC.bat`, `Abrir_Mapa_Postes.bat`.
   - Diagnóstico em tempo real (Python, AutoCAD `acad.exe`, compilação da DLL .NET e branch git).
+  - Script de manutenção inteligente `clean.bat` limpando temporários do Windows, arquivos residuais do AutoCAD (`*.bak`, `*.dcl_tmp`, `*.tmp`) e caches Python (`__pycache__`, `.pytest_cache`, `.coverage`), preservando 100% dos dados.
 - **P4 - Docker First & CI/CD (`Dockerfile`, `docker-compose.yml`, `.dockerignore`, `ci.yml`, `requirements.txt`)**:
   - Imagem Docker padronizada Python 3.12-slim para testes e execução local do servidor web.
   - Pipeline GitHub Actions com matriz Python 3.11 e 3.12 garantindo barreira de qualidade mínima de 80% de cobertura.
