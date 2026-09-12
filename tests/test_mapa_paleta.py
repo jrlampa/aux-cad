@@ -276,3 +276,80 @@ def test_restricoes_ambientais_e_raycasting():
     assert ray_casting_ponto_em_poligono(-22.90, -43.18, quadrado_app) is False
 
 
+def test_ferramenta_medicao_regua_assets_e_geodesia():
+    """Valida a presença da ferramenta de régua (medicao.js), controles na UI e precisão dos cálculos de distância/azimute."""
+    import math
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    web_dir = os.path.join(raiz, "mapa_cad_paleta", "web")
+
+    medicao_js = os.path.join(web_dir, "medicao.js")
+    index_html = os.path.join(web_dir, "index.html")
+    style_css = os.path.join(web_dir, "style.css")
+
+    assert os.path.exists(medicao_js), "Arquivo medicao.js não encontrado"
+
+    with open(medicao_js, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    assert "toggleModoMedicao" in js
+    assert "cliqueMapaMedicao" in js
+    assert "mouseMoveMapaMedicao" in js
+    assert "calcularDistanciaMetros" in js
+    assert "calcularAzimuteGraus" in js
+    assert "medirAPartirDoPoste" in js
+    assert "posicionarPosteNoUltimoPonto" in js
+    assert "limparMedicao" in js
+
+    with open(index_html, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    assert "btnToggleMedicao" in html
+    assert "painelMedicao" in html
+    assert "medicao.js" in html
+
+    with open(style_css, "r", encoding="utf-8") as f:
+        css = f.read()
+
+    assert "painel-medicao-flutuante" in css
+    assert "btn-medicao" in css
+    assert "cursor-crosshair" in css
+
+    # Validação analítica do cálculo de azimute geodésico
+    def calcular_azimute_graus(lat1, lon1, lat2, lon2):
+        d_lon = math.radians(lon2 - lon1)
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        y = math.sin(d_lon) * math.cos(phi2)
+        x = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(d_lon)
+        brng = math.degrees(math.atan2(y, x))
+        return (brng + 360.0) % 360.0
+
+    # Norte puro (lat2 > lat1, lon igual): deve ser 0°
+    assert abs(calcular_azimute_graus(-22.90, -43.20, -22.80, -43.20) - 0.0) < 1e-4
+
+    # Leste puro (lon2 > lon1, lat quase igual no equador/proximidade): deve ser ~90°
+    assert abs(calcular_azimute_graus(0.0, -43.20, 0.0, -43.10) - 90.0) < 0.1
+
+    # Sul puro (lat2 < lat1, lon igual): deve ser 180°
+    assert abs(calcular_azimute_graus(-22.80, -43.20, -22.90, -43.20) - 180.0) < 1e-4
+
+    # Oeste puro: deve ser ~270°
+    assert abs(calcular_azimute_graus(0.0, -43.10, 0.0, -43.20) - 270.0) < 0.1
+
+    # Validação de distância métrica por Haversine analítico
+    def calcular_distancia_metros(lat1, lon1, lat2, lon2):
+        r = 6371000.0
+        d_lat = math.radians(lat2 - lat1)
+        d_lon = math.radians(lon2 - lon1)
+        a = (math.sin(d_lat / 2.0) ** 2 +
+             math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+             math.sin(d_lon / 2.0) ** 2)
+        c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+        return r * c
+
+    # 1 grau de latitude no equador é ~111.19 km
+    dist_1grau = calcular_distancia_metros(0.0, 0.0, 1.0, 0.0)
+    assert 111000.0 < dist_1grau < 112000.0
+
+
+

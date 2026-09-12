@@ -562,7 +562,25 @@ html, body {
     to { opacity: 1; transform: scale(1); }
 }
 
-/* Estilos do Modo Traçado e Camada Ambiental */
+/* Estilos do Modo Traçado, Camada Ambiental e Régua de Medição */
+.btn-medicao {
+    background: #475569;
+    color: #FFFFFF;
+}
+
+.btn-medicao.active {
+    background: #D97706 !important;
+    border-color: #D97706 !important;
+    color: #FFFFFF !important;
+    font-weight: 700;
+    animation: pulseAmber 2s infinite;
+}
+
+@keyframes pulseAmber {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.4); }
+    50% { box-shadow: 0 0 0 4px rgba(217, 119, 6, 0); }
+}
+
 .btn-tracado.active {
     background: #0284C7 !important;
     border-color: #0284C7 !important;
@@ -575,6 +593,127 @@ html, body {
     border-color: #059669 !important;
     color: #FFFFFF !important;
     font-weight: 700;
+}
+
+.cursor-crosshair, .cursor-crosshair .leaflet-interactive {
+    cursor: crosshair !important;
+}
+
+/* Painel Flutuante de Medição (Régua) */
+.painel-medicao-flutuante {
+    position: absolute;
+    bottom: 24px;
+    left: 20px;
+    z-index: 1000;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(245, 158, 11, 0.6);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #F8FAFC;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    width: 250px;
+    font-size: 11px;
+    animation: fadeInTag 0.2s ease;
+}
+
+.painel-medicao-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    color: #FBBF24;
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    padding-bottom: 4px;
+}
+
+.btn-fechar-medicao {
+    background: transparent;
+    border: none;
+    color: #94A3B8;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 0 4px;
+}
+
+.btn-fechar-medicao:hover {
+    color: #EF4444;
+}
+
+.painel-medicao-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.medicao-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.medicao-stat-label {
+    color: #94A3B8;
+    font-size: 10px;
+}
+
+.medicao-stat-val {
+    font-weight: 700;
+    color: #F8FAFC;
+    font-family: monospace, sans-serif;
+    font-size: 11.5px;
+}
+
+#txtMedicaoTotal {
+    color: #FBBF24;
+    font-size: 13px;
+}
+
+.painel-medicao-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-med-action {
+    flex: 1;
+    background: #334155;
+    color: #F1F5F9;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 3px 4px;
+    font-size: 9.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+}
+
+.btn-med-action:hover {
+    background: #475569;
+    color: #FFFFFF;
+}
+
+.btn-limpar-med:hover {
+    background: #991B1B;
+    border-color: #EF4444;
+}
+
+.medicao-vertice-tooltip {
+    background: rgba(15, 23, 42, 0.9) !important;
+    border: 1px solid #F59E0B !important;
+    color: #FBBF24 !important;
+    font-size: 9.5px !important;
+    font-weight: 700 !important;
+    padding: 2px 5px !important;
+    border-radius: 3px !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+}
+
+.medicao-vertice-tooltip::before {
+    border-top-color: #F59E0B !important;
 }
 
 .banner-ambiental {

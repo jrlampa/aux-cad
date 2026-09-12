@@ -51,29 +51,16 @@ function renderizarTagsEstruturas() {
 }
 
 function adicionarEstruturaMt(nome) {
-    if (!nome || !nome.trim()) return;
-    AppState.estruturasMt.push(nome.trim());
-    renderizarTagsEstruturas();
-    salvarEstadoPersistido();
+    if (nome?.trim()) { AppState.estruturasMt.push(nome.trim()); renderizarTagsEstruturas(); salvarEstadoPersistido(); }
 }
-
 function removerEstruturaMt(idx) {
-    AppState.estruturasMt.splice(idx, 1);
-    renderizarTagsEstruturas();
-    salvarEstadoPersistido();
+    AppState.estruturasMt.splice(idx, 1); renderizarTagsEstruturas(); salvarEstadoPersistido();
 }
-
 function adicionarEstruturaBt(nome) {
-    if (!nome || !nome.trim()) return;
-    AppState.estruturasBt.push(nome.trim());
-    renderizarTagsEstruturas();
-    salvarEstadoPersistido();
+    if (nome?.trim()) { AppState.estruturasBt.push(nome.trim()); renderizarTagsEstruturas(); salvarEstadoPersistido(); }
 }
-
 function removerEstruturaBt(idx) {
-    AppState.estruturasBt.splice(idx, 1);
-    renderizarTagsEstruturas();
-    salvarEstadoPersistido();
+    AppState.estruturasBt.splice(idx, 1); renderizarTagsEstruturas(); salvarEstadoPersistido();
 }
 
 window.removerEstruturaMt = removerEstruturaMt;
@@ -222,9 +209,28 @@ function initMap() {
         apagarMarcador();
     });
 
-    // Clique no Mapa reposiciona ou recria o marcador
+    // Clique no Mapa reposiciona marcador ou adiciona ponto na régua
     AppState.map.on('click', function (e) {
+        if (window.MedicaoState?.ativo && typeof window.cliqueMapaMedicao === 'function') {
+            window.cliqueMapaMedicao(e, AppState.map);
+            return;
+        }
         posicionarMarcador(e.latlng.lat, e.latlng.lng);
+    });
+
+    // Movimentação do mouse atualiza linha elástica da régua
+    AppState.map.on('mousemove', function (e) {
+        if (window.MedicaoState?.ativo && typeof window.mouseMoveMapaMedicao === 'function') {
+            window.mouseMoveMapaMedicao(e, AppState.map);
+        }
+    });
+
+    // Duplo clique finaliza medição
+    AppState.map.on('dblclick', function (e) {
+        if (window.MedicaoState?.ativo && typeof window.toggleModoMedicao === 'function') {
+            L.DomEvent.stopPropagation(e);
+            window.toggleModoMedicao(AppState.map);
+        }
     });
 
     // Salva centro e zoom ao navegar no mapa
@@ -402,6 +408,11 @@ function setupForms() {
     // Ação: Modo Traçado
     document.getElementById('btnToggleTracado')?.addEventListener('click', () => {
         if (window.toggleModoTracado) window.toggleModoTracado();
+    });
+
+    // Ação: Ferramenta de Régua / Medição
+    document.getElementById('btnToggleMedicao')?.addEventListener('click', () => {
+        if (window.toggleModoMedicao) window.toggleModoMedicao(AppState.map);
     });
 
     // Ação: Restrições Ambientais
@@ -738,4 +749,18 @@ window.addEventListener('DOMContentLoaded', () => {
     setupLayerButtons();
     setupForms();
     setupMensagensCSharp();
+
+    // Atalhos de teclado (ESC cancela/conclui régua, M ativa régua)
+    window.addEventListener('keydown', (e) => {
+        const focoEmTexto = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+        if (e.key === 'Escape') {
+            if (window.MedicaoState?.ativo && typeof window.toggleModoMedicao === 'function') {
+                window.toggleModoMedicao(AppState.map);
+            }
+        } else if ((e.key === 'm' || e.key === 'M') && !focoEmTexto) {
+            if (typeof window.toggleModoMedicao === 'function') {
+                window.toggleModoMedicao(AppState.map);
+            }
+        }
+    });
 });

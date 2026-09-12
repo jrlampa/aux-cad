@@ -21,11 +21,39 @@
                     <button id="btnLayerGoogle" class="btn-layer" title="Google Satélite Híbrido">🌍 Híbrido</button>
                 </div>
                 <div class="map-actions">
+                    <button id="btnToggleMedicao" class="btn-action-sm btn-medicao" title="Ativar régua / medição métrica no mapa (Atalho: M)">📏 Régua</button>
                     <button id="btnToggleTracado" class="btn-action-sm btn-tracado" title="Ativar traçado contínuo de vãos de rede">📐 Modo Traçado</button>
                     <button id="btnToggleAmbiental" class="btn-action-sm btn-ambiental" title="Carregar e exibir restrições ambientais">🌿 Restrições</button>
                     <button id="btnLerCadTop" class="btn-action-sm btn-cad-read" title="Clique no desenho do CAD para posicionar o mapa">🎯 Ler DWG</button>
                     <button id="btnSincDwg" class="btn-action-sm btn-cad-sync" title="Carregar postes existentes no DWG">🔄 Sincronizar</button>
                     <button id="btnToggleSidebar" class="btn-action-sm btn-sidebar-toggle" title="Ocultar/Exibir Sidebar">📑 Painel ◀</button>
+                </div>
+            </div>
+
+            <!-- Painel Flutuante da Ferramenta de Medição (Régua) -->
+            <div id="painelMedicao" class="painel-medicao-flutuante" style="display: none;">
+                <div class="painel-medicao-header">
+                    <span>📏 Régua Métrica (UTM)</span>
+                    <button type="button" class="btn-fechar-medicao" onclick="toggleModoMedicao(window.AppState ? window.AppState.map : null)" title="Fechar régua (ESC)">✕</button>
+                </div>
+                <div class="painel-medicao-body">
+                    <div class="medicao-stat">
+                        <span class="medicao-stat-label">Total Medido</span>
+                        <span id="txtMedicaoTotal" class="medicao-stat-val">0.0 m</span>
+                    </div>
+                    <div class="medicao-stat">
+                        <span class="medicao-stat-label">Último Trecho</span>
+                        <span id="txtMedicaoParcial" class="medicao-stat-val">0.0 m</span>
+                    </div>
+                    <div class="medicao-stat">
+                        <span class="medicao-stat-label">Azimute / Vértices</span>
+                        <span class="medicao-stat-val"><span id="txtMedicaoAzimute">0°</span> (<span id="txtMedicaoPontos">0 pts</span>)</span>
+                    </div>
+                </div>
+                <div class="painel-medicao-actions">
+                    <button type="button" class="btn-med-action" onclick="medirAPartirDoPoste(window.AppState ? window.AppState.map : null)" title="Iniciar régua a partir do poste atual">📍 Do Poste</button>
+                    <button type="button" class="btn-med-action" onclick="posicionarPosteNoUltimoPonto(window.AppState ? window.AppState.map : null)" title="Mover marcador do poste para cá">📍 Poste Aqui</button>
+                    <button type="button" class="btn-med-action btn-limpar-med" onclick="limparMedicao(window.AppState ? window.AppState.map : null)" title="Limpar medição atual">🗑️ Limpar</button>
                 </div>
             </div>
 
@@ -258,6 +286,7 @@
     <!-- Scripts Locais -->
     <script src="leaflet.js"></script>
     <script src="snyder.js"></script>
+    <script src="medicao.js"></script>
     <script src="tracado.js"></script>
     <script src="ambiental_overlay.js"></script>
     <script src="app.js"></script>
