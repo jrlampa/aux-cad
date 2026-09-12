@@ -139,6 +139,9 @@
   (while (vl-string-search "," s)
     (setq s (vl-string-subst "." "," s))
   )
+  (while (vl-string-search " " s)
+    (setq s (vl-string-subst "" " " s))
+  )
   s
 )
 
@@ -268,12 +271,20 @@
 ;; Interpolação linear contínua e regra de 3 para cabos MT em função do vão
 (defun tb-interpolar-mt (chave_cabo vao_m / s curva pontos p_min p_max p1 p2 v1 v2 f1 f2 res i p_prev)
   (setq s (tb-norm-str chave_cabo))
+  ;; 1. Match exato prioritário (evita que '4CAA' caia em '336CAA')
   (foreach item *TB-MT-CURVAS*
-    (if (and (not curva)
-             (or (= (car item) s)
-                 (vl-string-search (car item) s)
-                 (vl-string-search s (car item))))
+    (if (and (not curva) (= (tb-norm-str (car item)) s))
       (setq curva item)
+    )
+  )
+  ;; 2. Match parcial se não encontrou exato
+  (if (not curva)
+    (foreach item *TB-MT-CURVAS*
+      (if (and (not curva)
+               (or (vl-string-search (tb-norm-str (car item)) s)
+                   (vl-string-search s (tb-norm-str (car item)))))
+        (setq curva item)
+      )
     )
   )
   (if (not curva)
@@ -362,13 +373,13 @@
 )
 
 ;; Calcula esforço total para uma linha com vão medido (suporta MT, BT, Manual e MT + BT colineares)
-(defun tb-calcular-linha-esforco (input vao_m / s partes sub_res total mt_tot bt_tot f_man f_mt f_bt desc_list)
+(defun tb-calcular-linha-esforco (input vao_m / s partes sub_res total mt_tot bt_tot f_man f_mt f_bt desc_list n_cond is_neutro cabo_limpo qtd_txt)
   (setq s (strcase (vl-string-trim " \t\r\n" input)))
   (cond
     ((= s "")
      '((total . 0.0) (mt . 0.0) (bt . 0.0) (desc . "0 daN")))
 
-    ;; Caso composto com '+' (ex: "1/0 + 150" ou "4/0CAA + PR95")
+    ;; Caso composto com '+' (ex: "1/0 + 150", "4/0CAA + PR95" ou "4CAA + 4/0 + 1#1/0")
     ((vl-string-search "+" s)
      (setq partes (tb-str-split "+" s))
      (setq total 0.0 mt_tot 0.0 bt_tot 0.0 desc_list '())
@@ -399,11 +410,44 @@
      (list (cons 'total f_man) (cons 'mt 0.0) (cons 'bt 0.0) (cons 'desc (strcat "Manual " (rtos f_man 2 0) " daN")))
     )
 
-    ;; Cabo de MT (1/0, 4/0, 336, 4CAA, XLPE etc.) com interpolação de vão
+    ;; Cabo de MT (1/0, 4/0, 336, 4CAA, XLPE etc.) com interpolação de vão e suporte a quantidade (1#, 2#, 3#, 1N, N#)
     ((or (wcmatch s "*CAA*") (wcmatch s "*XLPE*") (wcmatch s "*1/0*") (wcmatch s "*4/0*") (wcmatch s "*336*") (wcmatch s "*2CA*") (wcmatch s "*4CA*"))
-     (setq f_mt (tb-interpolar-mt s vao_m))
-     (if (<= f_mt 0.0) (setq f_mt (tb-get-tracao-mt s 3)))
-     (list (cons 'total f_mt) (cons 'mt f_mt) (cons 'bt 0.0) (cons 'desc (strcat "MT " s " (" (rtos vao_m 2 0) "m: " (rtos f_mt 2 0) " daN)")))
+     (setq n_cond 3)
+     (setq is_neutro nil)
+     (setq cabo_limpo s)
+     (cond
+       ((or (wcmatch s "1N*") (wcmatch s "N#*"))
+        (setq is_neutro T)
+        (setq n_cond 4)
+        (setq cabo_limpo (substr s 3))
+       )
+       ((and (>= (strlen s) 3)
+             (member (substr s 1 1) '("1" "2" "3" "4"))
+             (member (substr s 2 1) '("#" "X" "*")))
+        (setq n_cond (atoi (substr s 1 1)))
+        (setq cabo_limpo (substr s 3))
+       )
+     )
+     (setq f_mt (tb-interpolar-mt cabo_limpo vao_m))
+     (if (<= f_mt 0.0) (setq f_mt (tb-get-tracao-mt cabo_limpo 3)))
+     (cond
+       (is_neutro
+        (setq f_mt (* f_mt (/ 128.0 480.0)))
+        (setq qtd_txt "neutro ")
+       )
+       ((= n_cond 1)
+        (setq f_mt (/ f_mt 3.0))
+        (setq qtd_txt "1#")
+       )
+       ((= n_cond 2)
+        (setq f_mt (* (/ f_mt 3.0) 2.0))
+        (setq qtd_txt "2#")
+       )
+       (t
+        (setq qtd_txt (if (/= n_cond 3) (strcat (itoa n_cond) "#") ""))
+       )
+     )
+     (list (cons 'total f_mt) (cons 'mt f_mt) (cons 'bt 0.0) (cons 'desc (strcat "MT " qtd_txt cabo_limpo " (" (rtos vao_m 2 0) "m: " (rtos f_mt 2 0) " daN)")))
     )
 
     ;; Cabo de BT (PR150, PR95, PR50, PR35, 150, 95, 50, 35)

@@ -210,3 +210,26 @@ def test_calcular_esforco_linha_cenarios():
     assert res_paralelo_2["mt_dan"] == 960.0
     assert res_paralelo_2["bt_dan"] == 393.0
 
+    # 5. Validação de match estrito de 4 CAA (não confundir com 336.4 CAA)
+    res_4caa = calcular_esforco_linha("4CAA", vao_m=40.0)
+    assert res_4caa["total_dan"] == 225.0
+
+    # 6. Prefixos de quantidade de condutores (1#, 2#, 3#, 1N)
+    # 1 condutor de 1/0 a 40m = 160 daN (vs 480 daN para 3 fases)
+    res_1_10 = calcular_esforco_linha("1#1/0", vao_m=40.0)
+    assert res_1_10["total_dan"] == 160.0
+
+    # 1 condutor neutro de 1/0 a 40m = 128 daN
+    res_neutro = calcular_esforco_linha("1N1/0", vao_m=40.0)
+    assert res_neutro["total_dan"] == 128.0
+
+    # Circuito em paralelo: MT 3#4CAA + 3#4/0 + 1#1/0
+    # 4CAA (3 fases = 225 daN) + 4/0 (3 fases = 960 daN) + 1#1/0 (1 fase = 160 daN) = 1345 daN
+    res_paralelo_duplo = calcular_esforco_linha("4CAA + 4/0 + 1#1/0", vao_m=40.0)
+    assert res_paralelo_duplo["total_dan"] == 1345.0
+    assert res_paralelo_duplo["mt_dan"] == 1345.0
+
+    res_paralelo_completo = calcular_esforco_linha("3#4CAA + 3#4/0 + 1#1/0", vao_m=40.0)
+    assert res_paralelo_completo["total_dan"] == 1345.0
+
+

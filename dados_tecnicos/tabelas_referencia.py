@@ -9,6 +9,7 @@ Gera e gerencia consultas rápidas via SQLite3 e JSON, além de exportar dados p
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
+import re
 import sqlite3
 from typing import Any, Dict, List, Optional
 
@@ -437,20 +438,29 @@ def obter_tracao_condutor(condutor: str) -> float:
     return c.tracao_dan if c else 0.0
 
 
-def buscar_tracao_mt(tipo_cabo: str, vao_m: float = 40.0, condutores: int = 3) -> float:
+def buscar_tracao_mt(tipo_cabo: str, vao_m: float = 40.0, condutores: Any = 3) -> float:
     """Retorna a tração em daN do cabo de MT para o vão especificado, com interpolação e extrapolação contínua."""
-    cabo_norm = tipo_cabo.strip().upper().replace(" ", "")
+    cabo_norm = tipo_cabo.strip().upper().replace(" ", "").replace(",", ".")
     chave_encontrada = None
+    # 1. Busca exata prioritária (ex: '4CAA' == '4CAA', evitando falso positivo com '336.4CAA')
     for k in _MT_TABELAS_RAW:
-        if cabo_norm in k.upper().replace(" ", "") or k.upper().replace(" ", "") in cabo_norm:
+        k_norm = k.upper().replace(" ", "").replace(",", ".")
+        if cabo_norm == k_norm:
             chave_encontrada = k
             break
+    # 2. Busca parcial se não achou exato
+    if not chave_encontrada:
+        for k in _MT_TABELAS_RAW:
+            k_norm = k.upper().replace(" ", "").replace(",", ".")
+            if cabo_norm in k_norm or k_norm in cabo_norm:
+                chave_encontrada = k
+                break
     if not chave_encontrada:
         return 0.0
 
     vaos_map = _MT_TABELAS_RAW[chave_encontrada]
     vaos_ordenados = sorted(vaos_map.keys())
-    col_idx = 0 if condutores == 1 else (1 if condutores == 2 else (3 if condutores in (4, "neutro") else 2))
+    col_idx = 0 if condutores == 1 else (1 if condutores == 2 else (3 if condutores in (4, "neutro", "N") else 2))
 
     if int(vao_m) in vaos_map and vao_m == int(vao_m):
         return float(vaos_map[int(vao_m)][col_idx])
@@ -484,12 +494,12 @@ def buscar_tracao_mt(tipo_cabo: str, vao_m: float = 40.0, condutores: int = 3) -
 
 
 def calcular_esforco_linha(expressao: str, vao_m: float = 40.0) -> Dict[str, Any]:
-    """Calcula a tração total da linha em daN, suportando valor manual, cabo BT, cabo MT ou combinação MT + BT."""
+    """Calcula a tração total da linha em daN, suportando valor manual, cabo BT, cabo MT, prefixos (1#, 3#) ou combinação MT + BT."""
     expr = expressao.strip()
     if not expr:
         return {"total_dan": 0.0, "mt_dan": 0.0, "bt_dan": 0.0, "descricao": "0 daN", "modo": "vazio"}
 
-    # Combinação MT + BT colineares (ex: '1/0 + 150' ou '4/0CAA + PR95')
+    # Combinação MT + BT colineares (ex: '1/0 + 150' ou '4/0CAA + PR95' ou '4CAA + 4/0 + 1#1/0')
     if "+" in expr and not expr.startswith("+"):
         partes = [p.strip() for p in expr.split("+") if p.strip()]
         resultados = [calcular_esforco_linha(p, vao_m) for p in partes]
@@ -505,7 +515,22 @@ def calcular_esforco_linha(expressao: str, vao_m: float = 40.0) -> Dict[str, Any
             "modo": "combinado",
         }
 
-    s_upper = expr.upper()
+    # Detecta prefixo de quantidade de condutores (ex: '3#4CAA', '1#1/0', '1X1/0', '1N1/0', 'N#1/0')
+    num_cond = 3
+    is_neutro = False
+    cabo_limpo = expr
+    m_neutro = re.match(r"^(?:1N|N#|NEUTRO\s*)[-\s]*(.+)$", expr, re.IGNORECASE)
+    if m_neutro:
+        is_neutro = True
+        num_cond = 1
+        cabo_limpo = m_neutro.group(1).strip()
+    else:
+        m_qtd = re.match(r"^(\d+)[#X\*][-\s]*(.+)$", expr, re.IGNORECASE)
+        if m_qtd:
+            num_cond = int(m_qtd.group(1))
+            cabo_limpo = m_qtd.group(2).strip()
+
+    s_upper = cabo_limpo.upper()
     # Valor manual forçado com sufixo 'd', 'dan' ou '='
     if s_upper.endswith("DAN") or s_upper.endswith("D") or s_upper.startswith("="):
         num_str = s_upper.replace("DAN", "").replace("D", "").replace("=", "").strip()
@@ -518,19 +543,21 @@ def calcular_esforco_linha(expressao: str, vao_m: float = 40.0) -> Dict[str, Any
     # Identifica se é cabo de MT
     eh_mt = any(t in s_upper for t in ["CAA", "XLPE", "MCM", "1/0", "4/0", "336", "2CA", "4CA"])
     if eh_mt:
-        tracao_mt = buscar_tracao_mt(expr, vao_m=vao_m, condutores=3)
+        cond_param = "neutro" if is_neutro else num_cond
+        tracao_mt = buscar_tracao_mt(cabo_limpo, vao_m=vao_m, condutores=cond_param)
         if tracao_mt > 0.0:
+            qtd_desc = "neutro " if is_neutro else (f"{num_cond}#" if num_cond != 3 else "")
             return {
                 "total_dan": tracao_mt,
                 "mt_dan": tracao_mt,
                 "bt_dan": 0.0,
-                "descricao": f"MT {expr} ({vao_m:.0f}m: {tracao_mt:.0f} daN)",
+                "descricao": f"MT {qtd_desc}{cabo_limpo} ({vao_m:.0f}m: {tracao_mt:.0f} daN)",
                 "modo": "mt",
             }
 
     # Identifica se é cabo de BT (PR150, PR95, PR50, PR35, 150, 95, etc.)
-    c_bt = buscar_condutor(expr)
-    if c_bt and (s_upper.startswith("PR") or expr in ["150", "95", "50", "35"] or "3X" in s_upper):
+    c_bt = buscar_condutor(cabo_limpo)
+    if c_bt and (s_upper.startswith("PR") or cabo_limpo in ["150", "95", "50", "35"] or "3X" in s_upper):
         return {
             "total_dan": c_bt.tracao_dan,
             "mt_dan": 0.0,
