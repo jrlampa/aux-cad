@@ -144,8 +144,8 @@ html, body {
 /* SIDEBAR LATERAL */
 .sidebar {
     width: 350px;
-    min-width: 310px;
-    max-width: 400px;
+    min-width: 250px;
+    max-width: 420px;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -153,6 +153,7 @@ html, body {
     border-left: 1px solid var(--border);
     box-shadow: -3px 0 12px rgba(0, 0, 0, 0.06);
     z-index: 1001;
+    overflow-x: hidden;
     transition: transform 0.25s ease, margin-right 0.25s ease;
 }
 
@@ -190,10 +191,13 @@ html, body {
 .sidebar-scrollable {
     flex: 1;
     overflow-y: auto;
-    padding: 10px;
+    overflow-x: hidden;
+    padding: 8px 10px;
     display: flex;
     flex-direction: column;
     gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .card-section {
@@ -245,23 +249,27 @@ html, body {
     color: #DC2626;
 }
 
-/* Grids e Inputs */
+/* Grids e Inputs Fluidos (Zero Overflow) */
 .grid-2-col {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
+    width: 100%;
 }
 
 .grid-3-col {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
+    width: 100%;
 }
 
 .form-group {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
+    width: 100%;
 }
 
 .form-group label {
@@ -272,7 +280,10 @@ html, body {
 
 .form-group input,
 .form-group select {
-    padding: 5px 7px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 5px 6px;
     border: 1px solid var(--border);
     border-radius: 4px;
     font-size: 11px;
@@ -280,6 +291,16 @@ html, body {
     background: #FFFFFF;
     outline: none;
     transition: border-color 0.2s;
+}
+
+/* Ocultar spinners nativos de input number para evitar estouro horizontal */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type=number] {
+    -moz-appearance: textfield;
 }
 
 .form-group input:focus,
@@ -906,17 +927,248 @@ html, body {
     transform: translateY(-1px);
 }
 
-/* Responsividade se a janela for muito estreita */
+/* ==========================================================================
+   Consumidores BT (CQT) - Design Ergonômico, Steppers e Zero Overflow
+   ========================================================================== */
+.clientes-cqt-card {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 6px;
+    padding: 7px 8px;
+    margin-top: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.clientes-cqt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 7px;
+}
+
+.clientes-cqt-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.clientes-cqt-badge-total {
+    background: #E0F2FE;
+    color: #0369A1;
+    border: 1px solid #BAE6FD;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.clientes-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.cliente-box {
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    border-radius: 6px;
+    padding: 5px 3px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.cliente-box:hover {
+    border-color: #94A3B8;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.cliente-box.cliente-mono {
+    border-top: 3px solid #0284C7;
+}
+
+.cliente-box.cliente-bi {
+    border-top: 3px solid #D97706;
+}
+
+.cliente-box.cliente-tri {
+    border-top: 3px solid #059669;
+    background: #F0FDF4;
+}
+
+.cliente-box-tag {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    width: 100%;
+    justify-content: center;
+}
+
+.fase-badge {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #FFFFFF;
+    line-height: 1.1;
+}
+
+.fase-badge.mono {
+    background: #0284C7;
+}
+
+.fase-badge.bi {
+    background: #D97706;
+}
+
+.fase-badge.tri {
+    background: #059669;
+}
+
+.fase-nome {
+    font-size: 10px;
+    font-weight: 700;
+    color: #475569;
+}
+
+.stepper-control {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: #F1F5F9;
+    border-radius: 4px;
+    border: 1px solid #E2E8F0;
+    padding: 1px;
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+.btn-stepper {
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    border-radius: 3px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    flex-shrink: 0;
+    padding: 0;
+    line-height: 1;
+}
+
+.btn-stepper:hover {
+    background: #E2E8F0;
+    color: #0F172A;
+}
+
+.btn-stepper:active {
+    transform: scale(0.92);
+}
+
+.input-cliente-val {
+    width: 100% !important;
+    min-width: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    text-align: center !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    color: #0F172A !important;
+    padding: 1px 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Quick Actions de Clientes */
+.clientes-quick-actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.quick-title {
+    font-size: 9px;
+    color: #64748B;
+    font-weight: 600;
+    margin-right: 1px;
+}
+
+.btn-quick-cli {
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    border-radius: 3px;
+    padding: 2px 5px;
+    font-size: 9.5px;
+    font-weight: 600;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-quick-cli:hover {
+    background: #E2E8F0;
+    border-color: #94A3B8;
+}
+
+.btn-quick-cli.highlight-tri {
+    background: #ECFDF5;
+    border-color: #A7F3D0;
+    color: #047857;
+    font-weight: 700;
+}
+
+.btn-quick-cli.highlight-tri:hover {
+    background: #D1FAE5;
+    border-color: #6EE7B7;
+}
+
+.btn-quick-cli.btn-cli-zerar {
+    margin-left: auto;
+    color: #DC2626;
+    border-color: #FECACA;
+    background: #FEF2F2;
+}
+
+.btn-quick-cli.btn-cli-zerar:hover {
+    background: #FEE2E2;
+}
+
+/* Responsividade se a janela for estreita */
 @media (max-width: 600px) {
     .layout-wrapper {
         flex-direction: column;
+        overflow: hidden;
     }
     .map-container {
-        height: 50vh;
+        height: 44vh;
+        min-height: 180px;
     }
     .sidebar {
         width: 100%;
         max-width: 100%;
-        height: 50vh;
+        min-width: 0;
+        height: 56vh;
+        overflow-x: hidden;
     }
 }

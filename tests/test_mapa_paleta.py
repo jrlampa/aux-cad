@@ -427,5 +427,43 @@ def test_vias_calcadas_obstrucoes_assets_e_parser():
     assert classificar_elemento_osm({"barrier": "wall"}) == "OBSTRUCAO_BARREIRA"
 
 
+def test_layout_consumidores_bt_sem_overflow():
+    """Valida ergonomia, steppers, totalizador e proteção contra overflow horizontal na paleta."""
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    index_html = os.path.join(raiz, "mapa_cad_paleta", "web", "index.html")
+    style_css = os.path.join(raiz, "mapa_cad_paleta", "web", "style.css")
+    app_js = os.path.join(raiz, "mapa_cad_paleta", "web", "app.js")
 
+    with open(index_html, "r", encoding="utf-8") as f:
+        html = f.read()
 
+    # Componentes de interface dos Consumidores BT
+    assert "clientes-cqt-card" in html
+    assert "badgeTotalClientes" in html
+    assert "lblTotalClientes" in html
+    assert "inputMono" in html
+    assert "inputBi" in html
+    assert "inputTri" in html
+    assert "fase-badge tri" in html
+    assert "btn-stepper" in html
+    assert "alterarCliente('Tri', 1)" in html
+    assert "TRAFO1" in html
+
+    with open(style_css, "r", encoding="utf-8") as f:
+        css = f.read()
+
+    # Regras anti-overflow horizontal
+    assert "overflow-x: hidden" in css
+    assert "clientes-cqt-card" in css
+    assert "stepper-control" in css
+    assert "repeat(3, minmax(0, 1fr))" in css
+    assert "-webkit-appearance: none" in css
+
+    with open(app_js, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    # Funções de manipulação e sincronização
+    assert "alterarCliente" in js
+    assert "zerarClientes" in js
+    assert "atualizarTotalClientes" in js
+    assert "limparFormulario" in js

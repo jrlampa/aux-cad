@@ -329,6 +329,7 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
 - **Exportador Instantâneo de Vãos e Cargas (`tracado.js` & `MapaControl.xaml.cs`)**:
   - Botão `⚡ Exportar para CQT` integrado diretamente no painel de traçado contínuo (`#painelTracado`).
   - Coleta os postes traçados com cálculo analítico de vão em metros, detecção automática do poste com transformador (ou primeiro poste com 45kVA default), condutor BT padrão (`3x150+70` no 1º vão e `3x35+1x54,6` nos demais) e quantidade de consumidores Mono, Bi, Tri e Cargas Especiais Trifásicas.
+  - **Layout Ergonômico de Consumidores BT (CQT)**: Novo design em 3 células integradas com badges coloridos (1F Mono azul, 2F Bi âmbar, 3F Tri verde esmeralda destacado), controles de stepper (+ / -), totalizador dinâmico de clientes em tempo real, atalhos rápidos (`+1 Mono`, `+1 Bi`, `+1 Tri`, `Zerar`), sincronização com `localStorage` e eliminação completa de rolagem horizontal (`overflow-x: hidden`), adaptando-se com fluidez mesmo a paletas estreitas no AutoCAD.
   - Grava atomicamente o arquivo de intercâmbio JSON `C:\Temp\auxcad_cqt_import.json` e dispara a interface gráfica `cqt/cqt_excel_manager.py`, preenchendo automaticamente o cenário `PROJETADO` com Live Preview imediato de queda de tensão ($QT \le 6,00\%$) sem digitação manual redundante.
 
 #### P2. Snap Magnético aos Postes e Nós da Rede (`snap_magnetico.js`)

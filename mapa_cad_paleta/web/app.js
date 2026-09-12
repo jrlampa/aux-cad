@@ -111,6 +111,9 @@ function salvarEstadoPersistido() {
             temTrafo: AppState.temTrafo,
             potenciaTrafo: AppState.potenciaTrafo,
             equipamentos: equips,
+            mono: parseInt(document.getElementById('inputMono')?.value || '0', 10) || 0,
+            bi: parseInt(document.getElementById('inputBi')?.value || '0', 10) || 0,
+            tri: parseInt(document.getElementById('inputTri')?.value || '0', 10) || 0,
             kva: document.getElementById('inputKva').value,
             kw: document.getElementById('inputKw').value,
             autoInc: document.getElementById('chkAutoInc').checked,
@@ -420,6 +423,68 @@ function setupLayerButtons() {
     else if (AppState.activeLayer === 'google') btnGoogle.classList.add('active'), btnOsm.classList.remove('active');
 }
 
+// ==========================================================================
+// Funções de Gestão de Consumidores BT (CQT) e Formulário
+// ==========================================================================
+function alterarCliente(fase, delta) {
+    const id = 'input' + fase;
+    const input = document.getElementById(id);
+    if (!input) return;
+    const atual = parseInt(input.value, 10) || 0;
+    const novo = Math.max(0, atual + delta);
+    input.value = novo;
+    atualizarTotalClientes();
+    salvarEstadoPersistido();
+}
+
+function zerarClientes() {
+    ['inputMono', 'inputBi', 'inputTri'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = 0;
+    });
+    atualizarTotalClientes();
+    salvarEstadoPersistido();
+}
+
+function atualizarTotalClientes() {
+    const mono = parseInt(document.getElementById('inputMono')?.value || '0', 10) || 0;
+    const bi = parseInt(document.getElementById('inputBi')?.value || '0', 10) || 0;
+    const tri = parseInt(document.getElementById('inputTri')?.value || '0', 10) || 0;
+    const total = mono + bi + tri;
+    const lbl = document.getElementById('lblTotalClientes');
+    if (lbl) lbl.textContent = total;
+    return total;
+}
+
+function limparFormulario() {
+    const numInput = document.getElementById('inputNumero');
+    if (numInput) numInput.value = '01';
+    const selPoste = document.getElementById('selectTipoPoste');
+    if (selPoste) selPoste.value = '11/600';
+
+    AppState.estruturasMt = [];
+    AppState.estruturasBt = ['S1'];
+    renderizarTagsEstruturas();
+
+    document.querySelectorAll('#equipChips .chip').forEach(c => c.classList.remove('selected'));
+    setTrafoAtivo(false);
+    zerarClientes();
+
+    const inputKva = document.getElementById('inputKva');
+    const inputKw = document.getElementById('inputKw');
+    if (inputKva) inputKva.value = '';
+    if (inputKw) inputKw.value = '';
+
+    salvarEstadoPersistido();
+    showToast('Formulário limpo com sucesso.', 'info');
+}
+
+// Vincula ao window para uso seguro nos handlers HTML onclick
+window.alterarCliente = alterarCliente;
+window.zerarClientes = zerarClientes;
+window.atualizarTotalClientes = atualizarTotalClientes;
+window.limparFormulario = limparFormulario;
+
 // Configuração de Formulários e Chips
 function setupForms() {
     // Ação: Apagar Marcador
@@ -561,6 +626,38 @@ function setupForms() {
             if (el.tagName === 'INPUT') el.addEventListener('input', salvarEstadoPersistido);
         }
     });
+
+    // Listeners e Sincronização de Consumidores BT (CQT)
+    ['inputMono', 'inputBi', 'inputTri'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => {
+                atualizarTotalClientes();
+                salvarEstadoPersistido();
+            });
+            el.addEventListener('change', () => {
+                const val = parseInt(el.value, 10);
+                if (isNaN(val) || val < 0) el.value = 0;
+                atualizarTotalClientes();
+                salvarEstadoPersistido();
+            });
+        }
+    });
+
+    // Restauração de Consumidores BT do Estado Salvo
+    const estadoSalvo = carregarEstadoPersistido();
+    if (estadoSalvo) {
+        if (estadoSalvo.mono !== undefined && document.getElementById('inputMono')) {
+            document.getElementById('inputMono').value = estadoSalvo.mono;
+        }
+        if (estadoSalvo.bi !== undefined && document.getElementById('inputBi')) {
+            document.getElementById('inputBi').value = estadoSalvo.bi;
+        }
+        if (estadoSalvo.tri !== undefined && document.getElementById('inputTri')) {
+            document.getElementById('inputTri').value = estadoSalvo.tri;
+        }
+        atualizarTotalClientes();
+    }
 
     // Conversão Bidirecional kVA <-> kW (FP = 0.92)
     const inputKva = document.getElementById('inputKva');

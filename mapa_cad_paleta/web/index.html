@@ -231,9 +231,9 @@
                         <!-- Painel de Configuração do Trafo (Exibido quando Trafo ativo) -->
                         <div id="painelTrafo" class="trafo-power-panel" style="display: none; margin-top: 6px;">
                             <div class="form-group">
-                                <label for="selectPotenciaTrafo" style="font-size: 11px; font-weight: bold; color: #0284c7;">⚡ Potência do Transformador (Bloco "T"):</label>
-                                <div class="grid-2-col">
-                                    <select id="selectPotenciaTrafo">
+                                <label for="selectPotenciaTrafo" style="font-size: 11px; font-weight: bold; color: #0284c7;">⚡ Potência do Transformador (Bloco "TRAFO1"):</label>
+                                <div class="trafo-select-wrapper" style="width: 100%;">
+                                    <select id="selectPotenciaTrafo" style="width: 100%;">
                                         <option value="15kVA">15 kVA (Mono/Trifásico)</option>
                                         <option value="30kVA">30 kVA (Trifásico)</option>
                                         <option value="45kVA" selected>45 kVA (Trifásico - Padrão)</option>
@@ -244,40 +244,83 @@
                                         <option value="300kVA">300 kVA (Trifásico)</option>
                                         <option value="OUTRO">Outra Potência...</option>
                                     </select>
-                                    <input type="text" id="inputPotenciaCustom" placeholder="Ex: 50kVA" style="display: none;">
+                                    <input type="text" id="inputPotenciaCustom" placeholder="Ex: 50kVA" style="display: none; margin-top: 4px; width: 100%;">
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Consumidores BT (CQT) -->
-                    <div class="clientes-group" style="margin-top: 8px;">
-                        <label class="label-sub">Consumidores BT (CQT):</label>
-                        <div class="grid-3-col" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
-                            <div class="form-group">
-                                <label for="inputMono" style="font-size: 10px; color: #64748b;">Mono:</label>
-                                <input type="number" id="inputMono" min="0" value="0" style="text-align: center; font-size: 12px; padding: 2px;">
+                    <!-- Consumidores BT (CQT) com Layout Ergonômico e Steppers -->
+                    <div class="clientes-cqt-card">
+                        <div class="clientes-cqt-header">
+                            <div class="clientes-cqt-title">
+                                <span>👥 Consumidores BT (CQT)</span>
                             </div>
-                            <div class="form-group">
-                                <label for="inputBi" style="font-size: 10px; color: #64748b;">Bi:</label>
-                                <input type="number" id="inputBi" min="0" value="0" style="text-align: center; font-size: 12px; padding: 2px;">
+                            <div class="clientes-cqt-badge-total" id="badgeTotalClientes" title="Total de consumidores BT neste poste">
+                                Total: <strong id="lblTotalClientes">0</strong>
                             </div>
-                            <div class="form-group">
-                                <label for="inputTri" style="font-size: 10px; color: #64748b;">Tri:</label>
-                                <input type="number" id="inputTri" min="0" value="0" style="text-align: center; font-size: 12px; padding: 2px;">
+                        </div>
+
+                        <div class="clientes-grid">
+                            <!-- Monofásico (1F) -->
+                            <div class="cliente-box cliente-mono">
+                                <div class="cliente-box-tag">
+                                    <span class="fase-badge mono">1F</span>
+                                    <span class="fase-nome">Mono</span>
+                                </div>
+                                <div class="stepper-control">
+                                    <button type="button" class="btn-stepper btn-stepper-minus" onclick="alterarCliente('Mono', -1)" title="Diminuir monofásicos">-</button>
+                                    <input type="number" id="inputMono" min="0" value="0" class="input-cliente-val" title="Quantidade de clientes Monofásicos">
+                                    <button type="button" class="btn-stepper btn-stepper-plus" onclick="alterarCliente('Mono', 1)" title="Aumentar monofásicos">+</button>
+                                </div>
                             </div>
+
+                            <!-- Bifásico (2F) -->
+                            <div class="cliente-box cliente-bi">
+                                <div class="cliente-box-tag">
+                                    <span class="fase-badge bi">2F</span>
+                                    <span class="fase-nome">Bi</span>
+                                </div>
+                                <div class="stepper-control">
+                                    <button type="button" class="btn-stepper btn-stepper-minus" onclick="alterarCliente('Bi', -1)" title="Diminuir bifásicos">-</button>
+                                    <input type="number" id="inputBi" min="0" value="0" class="input-cliente-val" title="Quantidade de clientes Bifásicos">
+                                    <button type="button" class="btn-stepper btn-stepper-plus" onclick="alterarCliente('Bi', 1)" title="Aumentar bifásicos">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Trifásico (3F) -->
+                            <div class="cliente-box cliente-tri">
+                                <div class="cliente-box-tag">
+                                    <span class="fase-badge tri">3F</span>
+                                    <span class="fase-nome">Tri</span>
+                                </div>
+                                <div class="stepper-control">
+                                    <button type="button" class="btn-stepper btn-stepper-minus" onclick="alterarCliente('Tri', -1)" title="Diminuir trifásicos">-</button>
+                                    <input type="number" id="inputTri" min="0" value="0" class="input-cliente-val" title="Quantidade de clientes Trifásicos">
+                                    <button type="button" class="btn-stepper btn-stepper-plus" onclick="alterarCliente('Tri', 1)" title="Aumentar trifásicos">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Barra de Ações Rápidas de Clientes -->
+                        <div class="clientes-quick-actions">
+                            <span class="quick-title">Adicionar:</span>
+                            <button type="button" class="btn-quick-cli" onclick="alterarCliente('Mono', 1)">+1 Mono</button>
+                            <button type="button" class="btn-quick-cli" onclick="alterarCliente('Bi', 1)">+1 Bi</button>
+                            <button type="button" class="btn-quick-cli highlight-tri" onclick="alterarCliente('Tri', 1)">+1 Tri</button>
+                            <button type="button" class="btn-quick-cli btn-cli-zerar" onclick="zerarClientes()" title="Zerar contagem de consumidores">Zerar</button>
                         </div>
                     </div>
 
                     <!-- Carga Especial Trifásica -->
-                    <div class="carga-group">
+                    <div class="carga-group" style="margin-top: 8px;">
                         <label class="label-sub">Carga Especial Trifásica (FP = 0.92):</label>
                         <div class="grid-2-col">
                             <div class="form-group">
-                                <input type="number" id="inputKva" step="0.1" placeholder="Potência kVA">
+                                <input type="number" id="inputKva" step="0.1" placeholder="Potência (kVA)">
                             </div>
                             <div class="form-group">
-                                <input type="number" id="inputKw" step="0.1" placeholder="Potência kW">
+                                <input type="number" id="inputKw" step="0.1" placeholder="Potência (kW)">
                             </div>
                         </div>
                         <div class="chips-container-sm" id="cargaChips">

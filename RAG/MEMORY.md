@@ -246,6 +246,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - **P1 - Conexão Direta Paleta OSM ➔ CQT (`tracado.js`, `MapaControl.xaml.cs`, `cqt_excel_manager.py`)**:
   - Exportação instantânea de vãos e cargas do traçado contínuo via botão `⚡ Exportar para CQT`.
   - Transfere vãos euclidianos UTM, detecção do trafo e quantidade de clientes Mono, Bi, Tri direto para `C:\Temp\auxcad_cqt_import.json`, disparando a interface gráfica CQT preenchida sem digitação manual.
+  - **Layout Ergonômico de Consumidores BT (CQT)**: Design em 3 células integradas com badges (1F Mono azul, 2F Bi âmbar, 3F Tri verde esmeralda destacado), controles de stepper (+ / -), totalizador dinâmico de clientes em tempo real, atalhos rápidos (`+1 Mono`, `+1 Bi`, `+1 Tri`, `Zerar`), sincronização com `localStorage` e eliminação completa de rolagem horizontal (`overflow-x: hidden`), adaptando-se com fluidez mesmo a paletas estreitas no AutoCAD.
 - **P2 - Snap Magnético aos Postes e Nós da Rede (`snap_magnetico.js`)**:
   - Atração do cursor dentro de um raio de 18 pixels com suporte a postes do traçado, vértices da régua, postes importados do DWG e marcador principal.
   - Anel visual pulsante ciano (`.snap-magnetico-marker` com `@keyframes snapPulse`) e tooltip `🧲 P01`.
@@ -255,7 +256,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - **P4 - Docker First & CI/CD (`Dockerfile`, `docker-compose.yml`, `.dockerignore`, `ci.yml`, `requirements.txt`)**:
   - Imagem Docker padronizada Python 3.12-slim para testes e execução local do servidor web.
   - Pipeline GitHub Actions com matriz Python 3.11 e 3.12 garantindo barreira de qualidade mínima de 80% de cobertura.
-- **Validação & QA**: **122 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Validação & QA**: **147 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
 
 ### 16. `documentos/` (Pranchas, Referências e Notas)
 - `PRANCHA LIGHT.dwg` e `PRANCHA LIGHT.bak`: Templates de prancha oficial.
@@ -279,4 +280,4 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Desenho automático em camadas dedicadas: `A-PRANCHA` (corte externo), `A-PRANCHA-MARGEM` (margem interna ciano 0.50mm), `A-PRANCHA-DOBRA` (marcas de dobra 185/210mm) e `A-PRANCHA-CARIMBO`.
   - Inserção do Carimbo Técnico Enel/HBT preenchido no canto inferior direito.
   - Centralização geométrica sobre o centro da rede e zoom automático na folha inserida.
-- **Cobertura & Testes**: `tests/test_autoprancha.py` com **10 testes unitários específicos (94% de cobertura)** e suíte global com **145 testes unitários passando com 100% de sucesso**.
+- **Cobertura & Testes**: `tests/test_autoprancha.py` com **10 testes unitários específicos (94% de cobertura)** e suíte global com **147 testes unitários passando com 100% de sucesso**.
