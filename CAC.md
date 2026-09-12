@@ -328,11 +328,12 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
 ### 14. Inovações Estratégicas P1 a P4 (Ecossistema Integrado AUX CAD)
 
 #### P1. Conexão Direta Paleta OSM ➔ CQT (Queda de Tensão BT)
-- **Exportador Instantâneo de Vãos e Cargas (`tracado.js` & `MapaControl.xaml.cs`)**:
-  - Botão `⚡ Exportar para CQT` integrado diretamente no painel de traçado contínuo (`#painelTracado`).
-  - Coleta os postes traçados com cálculo analítico de vão em metros, detecção automática do poste com transformador (ou primeiro poste com 45kVA default), condutor BT padrão (`3x150+70` no 1º vão e `3x35+1x54,6` nos demais) e quantidade de consumidores Mono, Bi, Tri e Cargas Especiais Trifásicas.
-  - **Layout Ergonômico de Consumidores BT (CQT)**: Novo design em 3 células integradas com badges coloridos (1F Mono azul, 2F Bi âmbar, 3F Tri verde esmeralda destacado), controles de stepper (+ / -), totalizador dinâmico de clientes em tempo real, atalhos rápidos (`+1 Mono`, `+1 Bi`, `+1 Tri`, `Zerar`), sincronização com `localStorage` e eliminação completa de rolagem horizontal (`overflow-x: hidden`), adaptando-se com fluidez mesmo a paletas estreitas no AutoCAD.
-  - Grava atomicamente o arquivo de intercâmbio JSON `C:\Temp\auxcad_cqt_import.json` e dispara a interface gráfica `cqt/cqt_excel_manager.py`, preenchendo automaticamente o cenário `PROJETADO` com Live Preview imediato de queda de tensão ($QT \le 6,00\%$) sem digitação manual redundante.
+- **Exportador e Launcher Instantâneo (`tracado.js`, `MapaControl.xaml.cs` & `cqt_cad_extractor.lsp`)**:
+  - Botão `⚡ CQT` integrado no painel de traçado contínuo e botão de atalho direto `⚡ CQTUI` na barra de ações rápidas de consumidores BT.
+  - **Execução Não-Bloqueante**: Ao clicar no botão, a interface do CQTUI abre imediatamente. Se houver 2 ou mais postes traçados, transfere todos os vãos, condutores e cargas; se não houver traçado, abre para estudo prévio com os dados de identificação e clientes do formulário.
+  - **Resiliência Multi-Ambiente no Windows 11**: Disparo do Python executado via `cmd.exe /c start "" py ...` contornando restrições de permissão ("Acesso Negado") associadas a App Execution Aliases da Microsoft Store.
+  - **Sincronização Bidirecional com AutoCAD**: Gravação atômica do arquivo de intercâmbio `auxcad_cqt_import.json` tanto em `%TEMP%` quanto em `C:\Temp`. Comandos do AutoCAD **`CQTUI`** (ou **`CQT`** e **`CQT_OSM`**) detectam o arquivo exportado pela Paleta automaticamente.
+  - **Layout Ergonômico de Consumidores BT (CQT)**: Design em 3 células integradas com badges coloridos (1F Mono azul, 2F Bi âmbar, 3F Tri verde esmeralda destacado), controles de stepper (+ / -), totalizador dinâmico de clientes em tempo real, atalhos rápidos (`+1 Mono`, `+1 Bi`, `+1 Tri`, `Zerar`, `⚡ CQTUI`), sincronização com `localStorage` e eliminação completa de rolagem horizontal (`overflow-x: hidden`).
 
 #### P2. Snap Magnético aos Postes e Nós da Rede (`snap_magnetico.js`)
 - **Atração Magnética em Tela (18 pixels de raio)**:

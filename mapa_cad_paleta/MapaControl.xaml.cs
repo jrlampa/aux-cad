@@ -171,6 +171,7 @@ namespace MapaCadPaleta
                         break;
 
                     case "exportar_cqt":
+                    case "abrir_cqtui":
                         ExportarParaCqt(rawJson);
                         break;
 
@@ -280,45 +281,80 @@ namespace MapaCadPaleta
             try
             {
                 using var doc = JsonDocument.Parse(rawJson);
+                string jsonPayload = "{}";
                 if (doc.RootElement.TryGetProperty("dadosCqt", out var dadosProp))
                 {
-                    string tempDir = Path.GetTempPath();
-                    string jsonPath = Path.Combine(tempDir, "auxcad_cqt_import.json");
-                    File.WriteAllText(jsonPath, dadosProp.GetRawText(), System.Text.Encoding.UTF8);
+                    jsonPayload = dadosProp.GetRawText();
+                }
 
-                    // Localizar script CQT subindo níveis a partir da pasta do assembly
-                    string assemblyLocation = Assembly.GetExecutingAssembly().Location;
-                    string projectRoot = Path.GetDirectoryName(assemblyLocation) ?? "";
+                // Salva o JSON tanto em Path.GetTempPath() quanto em C:\Temp para máxima resiliência
+                string tempDir = Path.GetTempPath();
+                string jsonPathUserTemp = Path.Combine(tempDir, "auxcad_cqt_import.json");
+                string jsonPathCTemp = Path.Combine(@"C:\Temp", "auxcad_cqt_import.json");
 
+                try { File.WriteAllText(jsonPathUserTemp, jsonPayload, System.Text.Encoding.UTF8); } catch { }
+                try
+                {
+                    if (!Directory.Exists(@"C:\Temp")) Directory.CreateDirectory(@"C:\Temp");
+                    File.WriteAllText(jsonPathCTemp, jsonPayload, System.Text.Encoding.UTF8);
+                }
+                catch { }
+
+                string chosenJson = File.Exists(jsonPathUserTemp) ? jsonPathUserTemp : jsonPathCTemp;
+
+                // Localizar script cqt_excel_manager.py por múltiplos caminhos candidatos
+                string? cqtScript = null;
+
+                // Candidato 1: Subindo a partir do assembly em execução
+                string assemblyLocation = Assembly.GetExecutingAssembly().Location;
+                if (!string.IsNullOrEmpty(assemblyLocation))
+                {
+                    string root = Path.GetDirectoryName(assemblyLocation) ?? "";
                     for (int i = 0; i < 5; i++)
                     {
-                        if (File.Exists(Path.Combine(projectRoot, "cqt", "cqt_excel_manager.py")))
-                            break;
+                        string test = Path.Combine(root, "cqt", "cqt_excel_manager.py");
+                        if (File.Exists(test)) { cqtScript = test; break; }
+                        var parent = Directory.GetParent(root);
+                        if (parent != null) root = parent.FullName; else break;
+                    }
+                }
 
-                        var parent = Directory.GetParent(projectRoot);
-                        if (parent != null)
-                            projectRoot = parent.FullName;
-                        else
-                            break;
+                // Candidato 2: Subindo a partir do diretório web ativo
+                if (string.IsNullOrEmpty(cqtScript))
+                {
+                    string baseWeb = Path.Combine(Directory.GetCurrentDirectory(), "mapa_cad_paleta");
+                    for (int i = 0; i < 4; i++)
+                    {
+                        string test = Path.Combine(baseWeb, "cqt", "cqt_excel_manager.py");
+                        if (File.Exists(test)) { cqtScript = test; break; }
+                        var parent = Directory.GetParent(baseWeb);
+                        if (parent != null) baseWeb = parent.FullName; else break;
                     }
+                }
 
-                    string cqtScript = Path.Combine(projectRoot, "cqt", "cqt_excel_manager.py");
-                    if (File.Exists(cqtScript))
+                // Candidato 3: Caminho absoluto conhecido do workspace
+                if (string.IsNullOrEmpty(cqtScript))
+                {
+                    string fallback = @"C:\Users\jonat\OneDrive - IM3 Brasil\aux cad\cqt\cqt_excel_manager.py";
+                    if (File.Exists(fallback)) cqtScript = fallback;
+                }
+
+                if (!string.IsNullOrEmpty(cqtScript) && File.Exists(cqtScript))
+                {
+                    // Lançar via CMD com "py" para contornar problemas de permissão com App Execution Alias do Windows 11
+                    var psi = new ProcessStartInfo
                     {
-                        var psi = new ProcessStartInfo
-                        {
-                            FileName = "python",
-                            Arguments = $"\"{cqtScript}\" \"{jsonPath}\"",
-                            UseShellExecute = true,
-                            CreateNoWindow = false
-                        };
-                        Process.Start(psi);
-                        AtualizarStatus($"Trecho exportado com sucesso para o CQT! ({jsonPath})");
-                    }
-                    else
-                    {
-                        AtualizarStatus($"JSON CQT salvo em: {jsonPath}");
-                    }
+                        FileName = "cmd.exe",
+                        Arguments = $"/c start \"\" py \"{cqtScript}\" \"{chosenJson}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    Process.Start(psi);
+                    AtualizarStatus($"⚡ Gerenciador CQTUI aberto com sucesso! ({chosenJson})");
+                }
+                else
+                {
+                    AtualizarStatus($"JSON CQT salvo em: {chosenJson}");
                 }
             }
             catch (Exception ex)

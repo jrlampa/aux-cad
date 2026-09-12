@@ -470,73 +470,89 @@ function finalizarTrecho() {
 
 /**
  * Exporta os trechos e postes do traçado diretamente para o módulo CQT (Queda de Tensão)
+ * Se houver 2 ou mais postes: transfere os vãos, condutores e clientes Mono/Bi/Tri calculados.
+ * Se não houver traçado ativo: abre a CQTUI para estudo prévio com dados do formulário/trafo.
  */
 function exportarParaCqt() {
-    if (!TracadoState.pontos || TracadoState.pontos.length < 2) {
-        if (typeof showToast === 'function') {
-            showToast('Trace pelo menos 2 postes para gerar vãos para o CQT.', 'warning');
-        } else {
-            alert('Trace pelo menos 2 postes para gerar vãos para o CQT.');
-        }
-        return;
-    }
-
     const letras = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
-    
-    // Identifica o poste do trafo (primeiro com trafo ou o primeiro poste do traçado)
-    let posteTrafo = TracadoState.pontos.find(p => p.temTrafo || (p.potenciaTrafo && p.potenciaTrafo !== ''));
-    if (!posteTrafo) {
-        posteTrafo = TracadoState.pontos[0];
-    }
+    const inputProj = document.getElementById('inputProjeto');
+    const nomeProj = (inputProj && inputProj.value.trim()) ? inputProj.value.trim() : 'PE_OSM_TRAÇADO';
 
-    const pontoTrafoNome = posteTrafo.numero ? `P${posteTrafo.numero}` : 'P01';
-    let potTrafoStr = posteTrafo.potenciaTrafo || '45kVA';
-    potTrafoStr = potTrafoStr.replace(/[^0-9.]/g, '') || '45';
+    const inputMono = document.getElementById('inputMono');
+    const inputBi = document.getElementById('inputBi');
+    const inputTri = document.getElementById('inputTri');
+    const cliMono = inputMono ? parseInt(inputMono.value) || 0 : 0;
+    const cliBi = inputBi ? parseInt(inputBi.value) || 0 : 0;
+    const cliTri = inputTri ? parseInt(inputTri.value) || 0 : 0;
+
+    let pontoTrafoNome = 'P01';
+    let potTrafoStr = '45';
+
+    const temPontos = TracadoState.pontos && TracadoState.pontos.length >= 1;
+    const temVaos = TracadoState.pontos && TracadoState.pontos.length >= 2;
+
+    if (temPontos) {
+        let posteTrafo = TracadoState.pontos.find(p => p.temTrafo || (p.potenciaTrafo && p.potenciaTrafo !== ''));
+        if (!posteTrafo) {
+            posteTrafo = TracadoState.pontos[0];
+        }
+        pontoTrafoNome = posteTrafo.numero ? `P${posteTrafo.numero}` : 'P01';
+        potTrafoStr = (posteTrafo.potenciaTrafo || '45kVA').replace(/[^0-9.]/g, '') || '45';
+    } else {
+        const inputNum = document.getElementById('inputNumeroPoste');
+        if (inputNum && inputNum.value.trim()) pontoTrafoNome = `P${inputNum.value.trim()}`;
+        const selTrafo = document.getElementById('selectTrafo');
+        if (selTrafo && selTrafo.value) potTrafoStr = selTrafo.value.replace(/[^0-9.]/g, '') || '45';
+    }
 
     const trechosCqt = [];
 
-    for (let i = 1; i < TracadoState.pontos.length; i++) {
-        const pAnt = TracadoState.pontos[i - 1];
-        const pAtual = TracadoState.pontos[i];
+    if (temVaos) {
+        for (let i = 1; i < TracadoState.pontos.length; i++) {
+            const pAnt = TracadoState.pontos[i - 1];
+            const pAtual = TracadoState.pontos[i];
 
-        // Distância euclidiana métrica UTM
-        const dx = pAtual.x - pAnt.x;
-        const dy = pAtual.y - pAnt.y;
-        const dist = Math.hypot(dx, dy);
+            // Distância euclidiana métrica UTM
+            const dx = pAtual.x - pAnt.x;
+            const dy = pAtual.y - pAnt.y;
+            const dist = Math.hypot(dx, dy);
 
-        const letra = (i - 1 < letras.length) ? letras[i - 1] : `T${i}`;
-        const montante = (i === 1) ? 'TRAFO' : letras[i - 2];
+            const letra = (i - 1 < letras.length) ? letras[i - 1] : `T${i}`;
+            const montante = (i === 1) ? 'TRAFO' : letras[i - 2];
 
-        // Cabo padrão BT
-        const cabo = (i === 1) ? '3x150+70 - Al - F.P 1' : '3x35+1x54,6 - Al - F.P 1';
+            // Cabo padrão BT
+            const cabo = (i === 1) ? '3x150+70 - Al - F.P 1' : '3x35+1x54,6 - Al - F.P 1';
 
-        trechosCqt.push({
-            letra: letra,
-            de: `P${pAnt.numero}`,
-            para: `P${pAtual.numero}`,
-            montante: montante,
-            vaos: 1,
-            comprimento_m: parseFloat(dist.toFixed(1)),
-            condutor: cabo,
-            mono: pAtual.mono || 0,
-            bi: pAtual.bi || 0,
-            tri: pAtual.tri || 0,
-            esp_carga: pAtual.cargaTriKva || 0,
-            ip70: pAtual.ip70 || 0,
-            ip125: pAtual.ip125 || 0,
-            ip250: pAtual.ip250 || 0
-        });
+            trechosCqt.push({
+                letra: letra,
+                de: `P${pAnt.numero}`,
+                para: `P${pAtual.numero}`,
+                montante: montante,
+                vaos: 1,
+                comprimento_m: parseFloat(dist.toFixed(1)),
+                condutor: cabo,
+                mono: pAtual.mono || 0,
+                bi: pAtual.bi || 0,
+                tri: pAtual.tri || 0,
+                esp_carga: pAtual.cargaTriKva || 0,
+                ip70: pAtual.ip70 || 0,
+                ip125: pAtual.ip125 || 0,
+                ip250: pAtual.ip250 || 0
+            });
+        }
     }
-
-    const inputProj = document.getElementById('inputProjeto');
-    const nomeProj = (inputProj && inputProj.value.trim()) ? inputProj.value.trim() : 'PE_OSM_TRAÇADO';
 
     const cqtPayload = {
         projeto: nomeProj,
         ponto_trafo: pontoTrafoNome,
         potencia_trafo: potTrafoStr,
         cenario: 'PROJETADO',
-        trechos: trechosCqt
+        trechos: trechosCqt,
+        consumidores_base: {
+            mono: cliMono,
+            bi: cliBi,
+            tri: cliTri
+        }
     };
 
     // Envio para WebView2 / C# Bridge
@@ -545,8 +561,14 @@ function exportarParaCqt() {
             action: 'exportar_cqt',
             dadosCqt: cqtPayload
         });
-        if (typeof showToast === 'function') {
-            showToast(`⚡ ${trechosCqt.length} vãos exportados para CQT!`, 'success');
+        if (temVaos) {
+            if (typeof showToast === 'function') {
+                showToast(`⚡ ${trechosCqt.length} vãos exportados! Abrindo CQTUI...`, 'success');
+            }
+        } else {
+            if (typeof showToast === 'function') {
+                showToast('⚡ Abrindo Gerenciador CQTUI (estudo prévio)...', 'info');
+            }
         }
     } else {
         // Fallback navegador: download JSON

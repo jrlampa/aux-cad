@@ -279,8 +279,8 @@
 ;;  Abre diretamente a interface gráfica interativa do CQT
 ;;  Ideal para estudos preliminares de viabilidade sem desenho.
 ;; ============================================================
-(defun c:CQTUI (/ py_script xlsm_file cmd)
-  (princ "\nAbrindo Gerenciador CQT para estudo prévio...")
+(defun c:CQTUI (/ py_script xlsm_file json_file target_arg cmd)
+  (princ "\n[AUX CAD] Abrindo Gerenciador CQT (Interface Gráfica)...")
   (if (boundp '*aux-cad-root*)
     (setq py_script (strcat *aux-cad-root* "cqt\\cqt_excel_manager.py"))
     (setq py_script (findfile "cqt\\cqt_excel_manager.py"))
@@ -288,13 +288,39 @@
   (if (or (null py_script) (not (findfile py_script)))
     (setq py_script "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\cqt\\cqt_excel_manager.py")
   )
-  (setq xlsm_file "G:\\Meu Drive\\1-HBT\\HBT\\SETEMBRO\\CQT TRECHO.xlsm")
-  (setq cmd (strcat "/c start \"\" python \"" py_script "\" \"" xlsm_file "\""))
+  
+  ;; Verifica se há arquivo exportado pela Paleta OSM
+  (setq json_file (findfile (strcat (getenv "TEMP") "\\auxcad_cqt_import.json")))
+  (if (null json_file)
+    (setq json_file (findfile "C:\\Temp\\auxcad_cqt_import.json"))
+  )
+
+  (if (and json_file (findfile json_file))
+    (progn
+      (princ (strcat "\n[AUX CAD] Carregando vãos/cargas da Paleta OSM: " json_file))
+      (setq target_arg (strcat "\"" json_file "\""))
+    )
+    (progn
+      (setq xlsm_file "G:\\Meu Drive\\1-HBT\\HBT\\SETEMBRO\\CQT TRECHO.xlsm")
+      (if (findfile xlsm_file)
+        (setq target_arg (strcat "\"" xlsm_file "\""))
+        (setq target_arg "")
+      )
+    )
+  )
+
+  ;; Executa com prioridade para 'py' (launcher padrão do Windows) com fallback para 'python'
+  (setq cmd (strcat "/c start \"\" py \"" py_script "\" " target_arg))
   (startapp "cmd.exe" cmd)
+  (princ "\n[AUX CAD] Interface CQTUI inicializada.")
   (princ)
 )
 
 (defun c:CQT ()
+  (c:CQTUI)
+)
+
+(defun c:CQT_OSM ()
   (c:CQTUI)
 )
 

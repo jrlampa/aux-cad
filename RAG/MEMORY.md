@@ -243,10 +243,12 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - Comandos do AutoCAD: **`MAPAPALETA`** (alias: **`OSMPALETA`**), **`FECHAR_MAPAPALETA`**, **`RECARREGAR_MAPAPALETA`**.
 
 ### 15. Inovações P1 a P4 (Ecossistema Integrado AUX CAD v2.5.0)
-- **P1 - Conexão Direta Paleta OSM ➔ CQT (`tracado.js`, `MapaControl.xaml.cs`, `cqt_excel_manager.py`)**:
-  - Exportação instantânea de vãos e cargas do traçado contínuo via botão `⚡ Exportar para CQT`.
-  - Transfere vãos euclidianos UTM, detecção do trafo e quantidade de clientes Mono, Bi, Tri direto para `C:\Temp\auxcad_cqt_import.json`, disparando a interface gráfica CQT preenchida sem digitação manual.
-  - **Layout Ergonômico de Consumidores BT (CQT)**: Design em 3 células integradas com badges (1F Mono azul, 2F Bi âmbar, 3F Tri verde esmeralda destacado), controles de stepper (+ / -), totalizador dinâmico de clientes em tempo real, atalhos rápidos (`+1 Mono`, `+1 Bi`, `+1 Tri`, `Zerar`), sincronização com `localStorage` e eliminação completa de rolagem horizontal (`overflow-x: hidden`), adaptando-se com fluidez mesmo a paletas estreitas no AutoCAD.
+- **P1 - Conexão Direta Paleta OSM ➔ CQT (`tracado.js`, `MapaControl.xaml.cs`, `cqt_cad_extractor.lsp`, `cqt_excel_manager.py`)**:
+  - Exportação e abertura instantânea da interface CQTUI via botões `⚡ CQT` (no traçado) e `⚡ CQTUI` (nas ações rápidas de consumidores BT).
+  - **Abertura Não-Bloqueante**: Permite abrir a ferramenta para estudo prévio mesmo sem traçado prévio de 2 postes, exportando dados do formulário e de clientes.
+  - **Launcher Resiliente com Launcher Python `py`**: Disparo via `cmd.exe /c start "" py ...` eliminando erros de permissão ("Acesso Negado" Win32Exception) causados por App Execution Aliases da Microsoft Store no Windows 11.
+  - Sincronização em `%TEMP%` e `C:\Temp\auxcad_cqt_import.json`, permitindo também acionamento pelos comandos do AutoCAD **`CQTUI`**, **`CQT`** e **`CQT_OSM`**.
+  - **Layout Ergonômico de Consumidores BT (CQT)**: Design em 3 células integradas com badges (1F Mono azul, 2F Bi âmbar, 3F Tri verde esmeralda destacado), controles de stepper (+ / -), totalizador dinâmico de clientes em tempo real, atalhos rápidos (`+1 Mono`, `+1 Bi`, `+1 Tri`, `Zerar`, `⚡ CQTUI`), sincronização com `localStorage` e eliminação completa de rolagem horizontal (`overflow-x: hidden`), adaptando-se com fluidez mesmo a paletas estreitas no AutoCAD.
 - **P2 - Snap Magnético aos Postes e Nós da Rede (`snap_magnetico.js`)**:
   - Atração do cursor dentro de um raio de 18 pixels com suporte a postes do traçado, vértices da régua, postes importados do DWG e marcador principal.
   - Anel visual pulsante ciano (`.snap-magnetico-marker` com `@keyframes snapPulse`) e tooltip `🧲 P01`.
@@ -256,7 +258,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - **P4 - Docker First & CI/CD (`Dockerfile`, `docker-compose.yml`, `.dockerignore`, `ci.yml`, `requirements.txt`)**:
   - Imagem Docker padronizada Python 3.12-slim para testes e execução local do servidor web.
   - Pipeline GitHub Actions com matriz Python 3.11 e 3.12 garantindo barreira de qualidade mínima de 80% de cobertura.
-- **Validação & QA**: **148 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Validação & QA**: **149 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
 
 ### 16. `documentos/` (Pranchas, Referências e Notas)
 - `PRANCHA LIGHT.dwg` e `PRANCHA LIGHT.bak`: Templates de prancha oficial.

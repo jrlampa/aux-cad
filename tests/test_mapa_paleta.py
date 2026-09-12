@@ -551,3 +551,46 @@ def test_tracado_edicao_movimentacao_e_desfazer():
     novo_vao = math.hypot(pontos[1]["x"] - pontos[0]["x"], pontos[1]["y"] - pontos[0]["y"])
     assert abs(novo_vao - 100.0) < 1e-6
 
+
+def test_paleta_cqtui_exportacao_e_chamada():
+    """Valida que o botão CQT na paleta web e no AutoCAD dispara a CQTUI de forma resiliente."""
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    tracado_js = os.path.join(raiz, "mapa_cad_paleta", "web", "tracado.js")
+    index_html = os.path.join(raiz, "mapa_cad_paleta", "web", "index.html")
+    mapa_control_cs = os.path.join(raiz, "mapa_cad_paleta", "MapaControl.xaml.cs")
+    cqt_extractor_lsp = os.path.join(raiz, "cqt", "cqt_cad_extractor.lsp")
+
+    with open(tracado_js, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    # exportarParaCqt não pode bloquear com return se houver < 2 postes
+    assert "function exportarParaCqt()" in js
+    assert "action: 'exportar_cqt'" in js
+    assert "consumidores_base" in js
+    assert "temVaos" in js
+
+    with open(index_html, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    # Botões na interface web
+    assert "btnExportarCqt" in html
+    assert "⚡ CQTUI" in html
+
+    with open(mapa_control_cs, "r", encoding="utf-8") as f:
+        cs = f.read()
+
+    # C# deve suportar exportar_cqt e abrir_cqtui, chamando via CMD com py
+    assert 'case "exportar_cqt":' in cs
+    assert 'case "abrir_cqtui":' in cs
+    assert "auxcad_cqt_import.json" in cs
+    assert 'cmd.exe' in cs
+    assert 'start \\"\\" py' in cs
+
+    with open(cqt_extractor_lsp, "r", encoding="utf-8") as f:
+        lsp = f.read()
+
+    # LISP c:CQTUI e c:CQT_OSM devem ler auxcad_cqt_import.json da paleta
+    assert "(defun c:CQTUI" in lsp
+    assert "(defun c:CQT_OSM" in lsp
+    assert "auxcad_cqt_import.json" in lsp
+
