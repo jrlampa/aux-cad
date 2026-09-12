@@ -45,6 +45,9 @@ function toggleModoMedicao(mapa) {
         if (mapDiv) mapDiv.classList.remove('cursor-crosshair');
 
         removerRubberband(mapa);
+        if (window.SnapMagnetico && typeof window.SnapMagnetico.limparIndicador === 'function') {
+            window.SnapMagnetico.limparIndicador(mapa);
+        }
     }
 }
 
@@ -67,8 +70,17 @@ function inicializarCamadasMedicao(mapa) {
 function cliqueMapaMedicao(e, mapa) {
     if (!MedicaoState.ativo || !mapa) return;
 
-    const lat = e.latlng.lat;
-    const lon = e.latlng.lng;
+    let lat = e.latlng.lat;
+    let lon = e.latlng.lng;
+
+    // Aplica snap magnético aos postes se disponível
+    if (window.SnapMagnetico && typeof window.SnapMagnetico.buscarPontoSnap === 'function') {
+        const snap = window.SnapMagnetico.buscarPontoSnap(e.latlng, mapa);
+        if (snap.snapped) {
+            lat = snap.lat;
+            lon = snap.lon;
+        }
+    }
 
     // Converte para coordenadas métricas UTM
     const fuso = (window.AppState && window.AppState.fusoUtm) ? window.AppState.fusoUtm : 23;
@@ -126,8 +138,18 @@ function cliqueMapaMedicao(e, mapa) {
 function mouseMoveMapaMedicao(e, mapa) {
     if (!MedicaoState.ativo || !mapa || MedicaoState.pontos.length === 0) return;
 
-    const lat = e.latlng.lat;
-    const lon = e.latlng.lng;
+    let lat = e.latlng.lat;
+    let lon = e.latlng.lng;
+
+    // Aplica snap magnético aos postes mais próximos
+    if (window.SnapMagnetico && typeof window.SnapMagnetico.buscarPontoSnap === 'function') {
+        const snap = window.SnapMagnetico.buscarPontoSnap(e.latlng, mapa);
+        if (snap.snapped) {
+            lat = snap.lat;
+            lon = snap.lon;
+        }
+    }
+
     MedicaoState.ultimoPontoHover = { lat, lon };
 
     const ultimoPonto = MedicaoState.pontos[MedicaoState.pontos.length - 1];

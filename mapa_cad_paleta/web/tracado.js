@@ -183,6 +183,101 @@ function finalizarTrecho() {
     atualizarInfoTracado();
 }
 
+/**
+ * Exporta os trechos e postes do traçado diretamente para o módulo CQT (Queda de Tensão)
+ */
+function exportarParaCqt() {
+    if (!TracadoState.pontos || TracadoState.pontos.length < 2) {
+        if (typeof showToast === 'function') {
+            showToast('Trace pelo menos 2 postes para gerar vãos para o CQT.', 'warning');
+        } else {
+            alert('Trace pelo menos 2 postes para gerar vãos para o CQT.');
+        }
+        return;
+    }
+
+    const letras = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
+    
+    // Identifica o poste do trafo (primeiro com trafo ou o primeiro poste do traçado)
+    let posteTrafo = TracadoState.pontos.find(p => p.temTrafo || (p.potenciaTrafo && p.potenciaTrafo !== ''));
+    if (!posteTrafo) {
+        posteTrafo = TracadoState.pontos[0];
+    }
+
+    const pontoTrafoNome = posteTrafo.numero ? `P${posteTrafo.numero}` : 'P01';
+    let potTrafoStr = posteTrafo.potenciaTrafo || '45kVA';
+    potTrafoStr = potTrafoStr.replace(/[^0-9.]/g, '') || '45';
+
+    const trechosCqt = [];
+
+    for (let i = 1; i < TracadoState.pontos.length; i++) {
+        const pAnt = TracadoState.pontos[i - 1];
+        const pAtual = TracadoState.pontos[i];
+
+        // Distância euclidiana métrica UTM
+        const dx = pAtual.x - pAnt.x;
+        const dy = pAtual.y - pAnt.y;
+        const dist = Math.hypot(dx, dy);
+
+        const letra = (i - 1 < letras.length) ? letras[i - 1] : `T${i}`;
+        const montante = (i === 1) ? 'TRAFO' : letras[i - 2];
+
+        // Cabo padrão BT
+        const cabo = (i === 1) ? '3x150+70 - Al - F.P 1' : '3x35+1x54,6 - Al - F.P 1';
+
+        trechosCqt.push({
+            letra: letra,
+            de: `P${pAnt.numero}`,
+            para: `P${pAtual.numero}`,
+            montante: montante,
+            vaos: 1,
+            comprimento_m: parseFloat(dist.toFixed(1)),
+            condutor: cabo,
+            mono: pAtual.mono || 0,
+            bi: pAtual.bi || 0,
+            tri: pAtual.tri || 0,
+            esp_carga: pAtual.cargaTriKva || 0,
+            ip70: pAtual.ip70 || 0,
+            ip125: pAtual.ip125 || 0,
+            ip250: pAtual.ip250 || 0
+        });
+    }
+
+    const inputProj = document.getElementById('inputProjeto');
+    const nomeProj = (inputProj && inputProj.value.trim()) ? inputProj.value.trim() : 'PE_OSM_TRAÇADO';
+
+    const cqtPayload = {
+        projeto: nomeProj,
+        ponto_trafo: pontoTrafoNome,
+        potencia_trafo: potTrafoStr,
+        cenario: 'PROJETADO',
+        trechos: trechosCqt
+    };
+
+    // Envio para WebView2 / C# Bridge
+    if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage({
+            action: 'exportar_cqt',
+            dadosCqt: cqtPayload
+        });
+        if (typeof showToast === 'function') {
+            showToast(`⚡ ${trechosCqt.length} vãos exportados para CQT!`, 'success');
+        }
+    } else {
+        // Fallback navegador: download JSON
+        const blob = new Blob([JSON.stringify(cqtPayload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `CQT_${nomeProj}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        if (typeof showToast === 'function') {
+            showToast(`JSON CQT baixado com sucesso! (${trechosCqt.length} vãos)`, 'success');
+        }
+    }
+}
+
 // Exporta para escopo global
 window.TracadoState = TracadoState;
 window.toggleModoTracado = toggleModoTracado;
@@ -190,3 +285,4 @@ window.setTipoRedeTracado = setTipoRedeTracado;
 window.registrarPosteTracado = registrarPosteTracado;
 window.limparTracado = limparTracado;
 window.finalizarTrecho = finalizarTrecho;
+window.exportarParaCqt = exportarParaCqt;

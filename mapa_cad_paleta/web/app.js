@@ -215,13 +215,31 @@ function initMap() {
             window.cliqueMapaMedicao(e, AppState.map);
             return;
         }
-        posicionarMarcador(e.latlng.lat, e.latlng.lng);
+
+        let targetLat = e.latlng.lat;
+        let targetLon = e.latlng.lng;
+        if (window.SnapMagnetico && typeof window.SnapMagnetico.buscarPontoSnap === 'function') {
+            const snap = window.SnapMagnetico.buscarPontoSnap(e.latlng, AppState.map);
+            if (snap.snapped) {
+                targetLat = snap.lat;
+                targetLon = snap.lon;
+            }
+        }
+        posicionarMarcador(targetLat, targetLon);
     });
 
-    // Movimentação do mouse atualiza linha elástica da régua
+    // Movimentação do mouse atualiza linha elástica da régua ou indicador de snap magnético
     AppState.map.on('mousemove', function (e) {
         if (window.MedicaoState?.ativo && typeof window.mouseMoveMapaMedicao === 'function') {
             window.mouseMoveMapaMedicao(e, AppState.map);
+        } else if (window.SnapMagnetico && typeof window.SnapMagnetico.buscarPontoSnap === 'function') {
+            window.SnapMagnetico.buscarPontoSnap(e.latlng, AppState.map);
+        }
+    });
+
+    AppState.map.on('mouseout', function () {
+        if (window.SnapMagnetico && typeof window.SnapMagnetico.limparIndicador === 'function') {
+            window.SnapMagnetico.limparIndicador(AppState.map);
         }
     });
 
@@ -659,7 +677,15 @@ function inserirPosteNoCad() {
             x,
             y,
             lat: AppState.currentLat,
-            lon: AppState.currentLon
+            lon: AppState.currentLon,
+            tipoPoste,
+            temTrafo: AppState.temTrafo,
+            potenciaTrafo: AppState.potenciaTrafo,
+            mono: parseInt(document.getElementById('inputMono')?.value || '0', 10) || 0,
+            bi: parseInt(document.getElementById('inputBi')?.value || '0', 10) || 0,
+            tri: parseInt(document.getElementById('inputTri')?.value || '0', 10) || 0,
+            cargaTriKva: parseFloat(document.getElementById('inputKva')?.value || '0') || 0,
+            ip70: (document.querySelector('#equipChips .chip[data-val="IP"]')?.classList.contains('selected')) ? 1 : 0
         }, AppState.map);
     }
 

@@ -310,7 +310,45 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - Modal na interface com seleção múltipla, cópia com 1 clique e exportação para arquivo `.txt`.
 - **Inserção Direta no AutoCAD via AutoLISP (`cpfc_cad_launcher.lsp`)**:
   - Comandos **`CPFC_NOTAS`** (ou **`NOTAS_CPFC`**): insere caixa MText formatada com fonte técnica no layer `NOTAS_CPFC` na prancha do DWG.
-  - Comandos **`CPFC`** / **`CPFCUI`** / **`CPFCCAD`** / **`CPFCALERTA`**: abertura da interface gráfica e consulta rápida de regras.
+### 14. Inovações Estratégicas P1 a P4 (Ecossistema Integrado AUX CAD)
 
+#### P1. Conexão Direta Paleta OSM ➔ CQT (Queda de Tensão BT)
+- **Exportador Instantâneo de Vãos e Cargas (`tracado.js` & `MapaControl.xaml.cs`)**:
+  - Botão `⚡ Exportar para CQT` integrado diretamente no painel de traçado contínuo (`#painelTracado`).
+  - Coleta os postes traçados com cálculo analítico de vão em metros, detecção automática do poste com transformador (ou primeiro poste com 45kVA default), condutor BT padrão (`3x150+70` no 1º vão e `3x35+1x54,6` nos demais) e quantidade de consumidores Mono, Bi, Tri e Cargas Especiais Trifásicas.
+  - Grava atomicamente o arquivo de intercâmbio JSON `C:\Temp\auxcad_cqt_import.json` e dispara a interface gráfica `cqt/cqt_excel_manager.py`, preenchendo automaticamente o cenário `PROJETADO` com Live Preview imediato de queda de tensão ($QT \le 6,00\%$) sem digitação manual redundante.
 
+#### P2. Snap Magnético aos Postes e Nós da Rede (`snap_magnetico.js`)
+- **Atração Magnética em Tela (18 pixels de raio)**:
+  - Botão `🧲 Snap: ON` na barra de ferramentas superior com alternância em tempo real.
+  - Varredura de múltiplos candidatos com cálculo de distância euclidiana em pixels de tela:
+    1. Vértices do traçado contínuo ativo (`TracadoState.pontos`).
+    2. Vértices da régua métrica (`MedicaoState.pontos`).
+    3. Postes importados ou sincronizados do desenho DWG (`AppState.dwgMarkersLayer`).
+    4. Marcador principal do poste.
+  - Indicador visual com anel pulsante ciano (`.snap-magnetico-marker` com animação `@keyframes snapPulse`) e tooltip identificando o ponto de snap (`🧲 P01`).
+  - Conexão e fixação automática nos eventos de clique e arrasto no mapa e medição.
 
+#### P3. Hub Central & Launcher Unificado (`aux_cad_hub.py` & `Abrir_AUXCAD.bat`)
+- **Painel Executivo Unificado (Tema Navy/Slate `#0F172A` / `#1E293B`)**:
+  - Ponto de entrada único na raiz do projeto executável via 2 cliques no `Abrir_AUXCAD.bat`.
+  - Diagnóstico em tempo real: versão do Python, detecção de processo do AutoCAD (`acad.exe`), status de compilação da DLL .NET e branch git ativa.
+  - Cards de 1 clique para todos os 8 módulos da suíte:
+    1. ⚡ Queda de Tensão BT (CQT)
+    2. 💰 Orçamento & Materiais
+    3. 📑 Participação Financeira (CPFC REN 1.059)
+    4. 🌳 Estudo & Memorial Ambiental
+    5. 🗺️ Estúdio Web de Satélite & Postes
+    6. 📐 Paleta Cartográfica OSM no AutoCAD
+    7. 📊 Tabelas de Referência Normativas
+    8. 🧪 Central de Testes & QA (execução em background com relatório)
+  - Ações rápidas de rodapé: abertura da pasta raiz e limpeza de temporários via `clean.bat`.
+
+#### P4. Docker First & Pipeline de Integração Contínua (CI/CD)
+- **Containerização Total e Reprodutibilidade**:
+  - `Dockerfile` padronizado com `python:3.12-slim`, ambiente UTF-8, PYTHONPATH completo e execução padrão da suíte de testes com cobertura.
+  - `docker-compose.yml` orquestrando o serviço de testes (`auxcad-tests`) e o estúdio web de satélite (`auxcad-mapa` na porta 8000).
+  - `.dockerignore` otimizado descartando caches, arquivos DWG pesados e binários intermediários.
+  - `requirements.txt` com versionamento explícito das dependências essenciais (`openpyxl`, `pytest`, `pytest-cov`, `requests`, `python-docx`, `Pillow`).
+  - `.github/workflows/ci.yml` configurado com matriz Python 3.11 e 3.12, disparando testes em push/PR na branch `dev` e `main` com barreira de qualidade mínima de 80% de cobertura.
+- **Métricas de Qualidade**: 122 testes unitários passando com 100% de sucesso.

@@ -380,8 +380,15 @@ if __name__ == '__main__':
     dest_file = None
 
     if len(sys.argv) > 1:
-        template = sys.argv[1]
-    if len(sys.argv) > 2:
+        arg1 = sys.argv[1]
+        if arg1.lower().endswith(".json"):
+            cad_json = arg1
+        elif arg1 == "--json" and len(sys.argv) > 2:
+            cad_json = sys.argv[2]
+        else:
+            template = arg1
+
+    if len(sys.argv) > 2 and not cad_json:
         cad_json = sys.argv[2]
     if len(sys.argv) > 3:
         dest_file = sys.argv[3]

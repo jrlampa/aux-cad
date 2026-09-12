@@ -232,7 +232,22 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - Botão "🧹 Limpar" para resetar campos de estruturas, equipamentos e cargas com agilidade.
 - Comandos do AutoCAD: **`MAPAPALETA`** (alias: **`OSMPALETA`**), **`FECHAR_MAPAPALETA`**, **`RECARREGAR_MAPAPALETA`**.
 
-### 13. `documentos/` (Pranchas, Referências e Notas)
+### 15. Inovações P1 a P4 (Ecossistema Integrado AUX CAD v2.5.0)
+- **P1 - Conexão Direta Paleta OSM ➔ CQT (`tracado.js`, `MapaControl.xaml.cs`, `cqt_excel_manager.py`)**:
+  - Exportação instantânea de vãos e cargas do traçado contínuo via botão `⚡ Exportar para CQT`.
+  - Transfere vãos euclidianos UTM, detecção do trafo e quantidade de clientes Mono, Bi, Tri direto para `C:\Temp\auxcad_cqt_import.json`, disparando a interface gráfica CQT preenchida sem digitação manual.
+- **P2 - Snap Magnético aos Postes e Nós da Rede (`snap_magnetico.js`)**:
+  - Atração do cursor dentro de um raio de 18 pixels com suporte a postes do traçado, vértices da régua, postes importados do DWG e marcador principal.
+  - Anel visual pulsante ciano (`.snap-magnetico-marker` com `@keyframes snapPulse`) e tooltip `🧲 P01`.
+- **P3 - Hub Central & Launcher Unificado (`aux_cad_hub.py` & `Abrir_AUXCAD.bat`)**:
+  - Launcher executivo moderno em Tkinter (`#0F172A`/`#1E293B`) com 8 cards interativos de 1 clique para todos os módulos (CQT, Orçamento, CPFC, Ambiental, Estúdio Web, Paleta OSM, Tabelas, QA).
+  - Diagnóstico em tempo real (Python, AutoCAD `acad.exe`, compilação da DLL .NET e branch git).
+- **P4 - Docker First & CI/CD (`Dockerfile`, `docker-compose.yml`, `.dockerignore`, `ci.yml`, `requirements.txt`)**:
+  - Imagem Docker padronizada Python 3.12-slim para testes e execução local do servidor web.
+  - Pipeline GitHub Actions com matriz Python 3.11 e 3.12 garantindo barreira de qualidade mínima de 80% de cobertura.
+- **Validação & QA**: **122 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+
+### 16. `documentos/` (Pranchas, Referências e Notas)
 - `PRANCHA LIGHT.dwg` e `PRANCHA LIGHT.bak`: Templates de prancha oficial.
 - `PLAN_MEDIÇÃO_ELETTRICA_PROJETOS_BASE(1).xlsx` & `Árvore de Dispositivos.xlsx`: Planilhas de medição e dispositivos.
 - `anotações-2.one`: Caderno técnico de anotações.

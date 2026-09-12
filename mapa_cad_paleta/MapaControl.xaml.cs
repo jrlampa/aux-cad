@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
@@ -164,6 +165,10 @@ namespace MapaCadPaleta
                         AtualizarStatus(resUrb.Message);
                         break;
 
+                    case "exportar_cqt":
+                        ExportarParaCqt(rawJson);
+                        break;
+
                     case "status":
                         string msg = root.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
                         AtualizarStatus(msg);
@@ -263,6 +268,58 @@ namespace MapaCadPaleta
                     }
                 }
             });
+        }
+
+        private void ExportarParaCqt(string rawJson)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(rawJson);
+                if (doc.RootElement.TryGetProperty("dadosCqt", out var dadosProp))
+                {
+                    string tempDir = Path.GetTempPath();
+                    string jsonPath = Path.Combine(tempDir, "auxcad_cqt_import.json");
+                    File.WriteAllText(jsonPath, dadosProp.GetRawText(), System.Text.Encoding.UTF8);
+
+                    // Localizar script CQT subindo níveis a partir da pasta do assembly
+                    string assemblyLocation = Assembly.GetExecutingAssembly().Location;
+                    string projectRoot = Path.GetDirectoryName(assemblyLocation) ?? "";
+
+                    for (int i = 0; i < 5; i++)
+                    {
+                        if (File.Exists(Path.Combine(projectRoot, "cqt", "cqt_excel_manager.py")))
+                            break;
+
+                        var parent = Directory.GetParent(projectRoot);
+                        if (parent != null)
+                            projectRoot = parent.FullName;
+                        else
+                            break;
+                    }
+
+                    string cqtScript = Path.Combine(projectRoot, "cqt", "cqt_excel_manager.py");
+                    if (File.Exists(cqtScript))
+                    {
+                        var psi = new ProcessStartInfo
+                        {
+                            FileName = "python",
+                            Arguments = $"\"{cqtScript}\" \"{jsonPath}\"",
+                            UseShellExecute = true,
+                            CreateNoWindow = false
+                        };
+                        Process.Start(psi);
+                        AtualizarStatus($"Trecho exportado com sucesso para o CQT! ({jsonPath})");
+                    }
+                    else
+                    {
+                        AtualizarStatus($"JSON CQT salvo em: {jsonPath}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AtualizarStatus($"Erro ao exportar para CQT: {ex.Message}");
+            }
         }
     }
 }
