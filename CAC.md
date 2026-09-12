@@ -272,6 +272,14 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
     - `📍 Do Poste`: Inicia a medição exatamente a partir da coordenada do poste ativo no mapa.
     - `📍 Poste Aqui`: Move o marcador de implantação de poste exatamente para a coordenada do último ponto medido na régua.
     - `🗑️ Limpar`: Reseta a geometria da régua sem desativar a ferramenta.
+- **Renderização de Vias, Calçadas (Passeios) e Obstruções no Traçado Contínuo (`vias_obstrucoes.js`)**:
+  - Botão `🏙️ Vias: VISÍVEIS` na barra superior para alternar a exibição vetorial urbana com dados reais do OpenStreetMap (Overpass API com custo zero).
+  - **Carregamento Automático ao Lançar Postes**: Ao adicionar postes sequenciais no modo traçado contínuo, consulta automaticamente a Bounding Box em torno do novo poste (buffer métrico de 100m) com cache de quadrículas (`cacheGrid`) para nunca duplicar tráfego.
+  - **Separação Semântica das Camadas Urbanas**:
+    - **Vias e Ruas (`highway`)**: Pistas e eixos de rolamento em asfalto escuro (`#334155`) com espessura destacada e tooltip com o nome do logradouro.
+    - **Calçadas e Passeios Públicos (`footway=sidewalk`, `sidewalk`)**: Faixas em âmbar/bege (`#d97706`) delimitando o passeio público para locação correta do poste fora da pista.
+    - **Obstruções Físicas e Edificações (`building`, `barrier`)**: Polígonos de edificações em ardósia semitransparente (`#94a3b8`) e muros/barreiras em vermelho pontilhado (`#dc2626`) alertando contra colisão visual de vãos.
+  - **Desenho 2.5D Opcional no AutoCAD (`CadBridge.DesenharElementosUrbanos`)**: Lançamento das geometrias no DWG nos layers `VIAS_EIXO` (Cor 8 - Cinza escuro), `VIAS_CALCADA` (Cor 9 - Cinza claro) e `OBSTRUCOES_EDIF` (Cor 1 - Vermelho).
 - **Anti-Sobreposição Gráfica 2.5D no AutoCAD**:
   - `ptPoste`: inserção central na coordenada UTM exata $(X, Y)$ do bloco `POSTE_` (ou círculo `R=0.6m`).
   - `ptNum` (Bloco `PONTO`): deslocado analiticamente para $(X - 2.8, Y + 1.8)$, desobstruindo totalmente a simbologia física do poste e os textos descritivos.
@@ -279,9 +287,9 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
 - **Inserção do Bloco `"T"` de Transformador**:
   - Quando o equipamento `Trafo` está ativo, o CadBridge verifica se o bloco `"T"` existe na `BlockTable` do desenho ativo (`bt.Has("T")`). Se existir, insere uma `BlockReference` no ponto exato do poste (`ptPoste`).
 - **Modularização de Código & Clean Architecture**:
-  - `medicao.js` (276 linhas), `tracado.js` (188 linhas) e `ambiental_overlay.js` (179 linhas) modularizados separadamente.
-  - `app.js` em 767 linhas (perto do limite suave de 750 linhas).
-  - `CadBridge.cs` (512 linhas) e `AmbientalParser.cs` (196 linhas) mantendo alta coesão e responsabilidade única.
+  - `vias_obstrucoes.js` (218 linhas), `medicao.js` (276 linhas), `tracado.js` (193 linhas) e `ambiental_overlay.js` (179 linhas) rigorosamente desacoplados.
+  - `app.js` mantido em 777 linhas.
+  - `CadBridge.cs` (595 linhas) e `AmbientalParser.cs` (196 linhas) mantendo alta coesão e responsabilidade única.
 - **Persistência Contínua de Estado (`localStorage`)**:
   - Chave `AUXCAD_PALETA_STATE`: salva automaticamente coordenadas, centro e zoom do mapa, camada ativa, número do poste, listas de estruturas MT/BT, equipamentos e potências.
 - **Comandos do AutoCAD**:

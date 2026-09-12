@@ -159,6 +159,11 @@ namespace MapaCadPaleta
                         AbrirArquivoAmbiental();
                         break;
 
+                    case "desenhar_elementos_urbanos":
+                        var resUrb = CadBridge.DesenharElementosUrbanos(rawJson);
+                        AtualizarStatus(resUrb.Message);
+                        break;
+
                     case "status":
                         string msg = root.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
                         AtualizarStatus(msg);

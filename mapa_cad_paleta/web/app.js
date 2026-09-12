@@ -371,6 +371,11 @@ function atualizarPosicao(lat, lon) {
     if (window.auditarPontoAmbiental) {
         window.auditarPontoAmbiental(lat, lon);
     }
+
+    // Carrega contexto urbano (vias, calçadas e obstruções) em torno do ponto
+    if (window.carregarContextoUrbano) {
+        window.carregarContextoUrbano(lat, lon, 100, AppState.map);
+    }
 }
 
 // Alternância de Camadas
@@ -418,6 +423,11 @@ function setupForms() {
     // Ação: Restrições Ambientais
     document.getElementById('btnToggleAmbiental')?.addEventListener('click', () => {
         if (window.toggleCamadaAmbiental) window.toggleCamadaAmbiental(AppState.map);
+    });
+
+    // Ação: Vias e Obstruções
+    document.getElementById('btnToggleVias')?.addEventListener('click', () => {
+        if (window.toggleViasObstrucoes) window.toggleViasObstrucoes(AppState.map);
     });
 
     // Aplicar coordenadas digitadas

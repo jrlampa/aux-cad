@@ -189,7 +189,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `sisrua2/` & `Lampa/`
 
 ### 12. Validação, Debug Completo e Testes
-- **Suíte de Testes**: **117 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Suíte de Testes**: **118 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
 - **Cobertura de Código Crítica**:
   - `cpfc\cpfc_core.py`: 98%
   - `cpfc\cpfc_notas.py`: 95%
@@ -223,6 +223,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 ### 14. `mapa_cad_paleta/` (Paleta Cartográfica OSM C# .NET para AutoCAD 2018+)
 - Multi-targeting .NET SDK (`net8.0-windows` para ACAD 2025/2026 e `net48` para ACAD 2018-2024) com `Microsoft.Web.WebView2`.
 - Layout Sidebar moderno com mapa em tela cheia à esquerda e barra flutuante de ferramentas (OSM, Satélite ESRI, Google Híbrido, Ler DWG, Sincronizar) e painel lateral à direita.
+- **Renderização de Vias, Calçadas (Passeios) e Obstruções no Traçado Contínuo (`vias_obstrucoes.js`)**: Botão `🏙️ Vias: VISÍVEIS`, consulta em tempo real da API Overpass do OpenStreetMap com buffer de 100m em torno de novos postes traçados, separação em camadas de Vias (`#334155`), Calçadas (`#d97706`) e Obstruções/Edificações (`#94a3b8` e `#dc2626`), com suporte opcional a desenho 2.5D no AutoCAD (`CadBridge.DesenharElementosUrbanos`) nos layers `VIAS_EIXO`, `VIAS_CALCADA` e `OBSTRUCOES_EDIF`.
 - **Ferramenta de Medição / Régua Métrica e Geodésica (`medicao.js`)**: Botão `📏 Régua` (atalho `M`/`ESC`), cursor crosshair, linha elástica (rubberband) com medição métrica e azimute em tempo real, suporte a múltiplos segmentos com distâncias parciais e acumuladas, painel flutuante de controle e atalhos para medir a partir do poste atual ou implantar o poste na distância exata medida.
 - **P2 - Modo Traçado Contínuo de Linhas/Vãos no CAD (`tracado.js` & `CadBridge.InserirVaoCabos`)**: Conexão automática e sequencial de postes inseridos; desenho de `Line` nos layers `CABOS_BT` (Ciano) e `CABOS_MT` (Magenta) e `DBText` no layer `CABOS_TEXTO` (Amarelo) orientado ao vão sem inversão de ângulo; badges com extensão em metros no mapa.
 - **P4 - Camada de Restrições Ambientais com Auditoria em Tempo Real (`ambiental_overlay.js` & `AmbientalParser.cs`)**: Leitura direta de `.kmz`, `.kml` e `.geojson`; sobreposição vetorial sobre satélite com cores normativas (APP, UC, Exclusão, Hídrica); auditoria instantânea por Ray-Casting analítico com banner dinâmico de conformidade/alerta no topo da sidebar.

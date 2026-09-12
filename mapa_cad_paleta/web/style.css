@@ -595,6 +595,18 @@ html, body {
     font-weight: 700;
 }
 
+.btn-vias {
+    background: #475569;
+    color: #FFFFFF;
+}
+
+.btn-vias.active {
+    background: #4338CA !important;
+    border-color: #4338CA !important;
+    color: #FFFFFF !important;
+    font-weight: 700;
+}
+
 .cursor-crosshair, .cursor-crosshair .leaflet-interactive {
     cursor: crosshair !important;
 }

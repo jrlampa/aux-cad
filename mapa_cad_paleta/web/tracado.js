@@ -69,6 +69,11 @@ function registrarPosteTracado(novoPoste, mapa) {
 
     TracadoState.pontos.push(novoPoste);
 
+    // Carrega e renderiza vias, calçadas e obstruções no entorno do novo poste
+    if (typeof window.carregarContextoUrbano === 'function' && novoPoste.lat && novoPoste.lon) {
+        window.carregarContextoUrbano(novoPoste.lat, novoPoste.lon, 100, mapa);
+    }
+
     if (anterior && mapa) {
         // Cálculo analítico de distância no plano métrico UTM
         const dx = novoPoste.x - anterior.x;

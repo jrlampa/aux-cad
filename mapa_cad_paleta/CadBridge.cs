@@ -41,6 +41,9 @@ namespace MapaCadPaleta
         private const string LAYER_CABOS_BT = "CABOS_BT";
         private const string LAYER_CABOS_MT = "CABOS_MT";
         private const string LAYER_CABOS_TEXTO = "CABOS_TEXTO";
+        private const string LAYER_VIAS_EIXO = "VIAS_EIXO";
+        private const string LAYER_VIAS_CALCADA = "VIAS_CALCADA";
+        private const string LAYER_OBSTRUCOES_EDIF = "OBSTRUCOES_EDIF";
 
         /// <summary>
         /// Insere um poste georreferenciado e sua anotação técnica no DWG ativo.
@@ -200,6 +203,77 @@ namespace MapaCadPaleta
         }
 
         /// <summary>
+        /// Desenha vias, calçadas e edificações/obstruções no DWG com geometrias 2.5D.
+        /// </summary>
+        public static (bool Success, string Message) DesenharElementosUrbanos(string rawJson)
+        {
+            Document doc = acApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return (false, "Nenhum documento DWG ativo.");
+
+            Database db = doc.Database;
+            Editor ed = doc.Editor;
+
+            try
+            {
+                using var jsonDoc = JsonDocument.Parse(rawJson);
+                var root = jsonDoc.RootElement;
+
+                using (doc.LockDocument())
+                using (Transaction tr = db.TransactionManager.StartTransaction())
+                {
+                    BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
+                    GarantirLayers(db, tr);
+
+                    int total = 0;
+
+                    void DesenharListaPolilinhas(JsonElement arrayElem, string layer, bool fechada)
+                    {
+                        if (arrayElem.ValueKind != JsonValueKind.Array) return;
+                        foreach (var item in arrayElem.EnumerateArray())
+                        {
+                            if (item.TryGetProperty("pontosUtm", out var pts) && pts.ValueKind == JsonValueKind.Array)
+                            {
+                                var pontos = pts.EnumerateArray().ToList();
+                                if (pontos.Count < 2) continue;
+
+                                Polyline pl = new Polyline { Layer = layer, Closed = fechada };
+                                for (int i = 0; i < pontos.Count; i++)
+                                {
+                                    var pt = pontos[i].EnumerateArray().ToList();
+                                    if (pt.Count >= 2)
+                                    {
+                                        pl.AddVertexAt(i, new Point2d(pt[0].GetDouble(), pt[1].GetDouble()), 0, 0, 0);
+                                    }
+                                }
+
+                                btr.AppendEntity(pl);
+                                tr.AddNewlyCreatedDBObject(pl, true);
+                                total++;
+                            }
+                        }
+                    }
+
+                    if (root.TryGetProperty("vias", out var vias))
+                        DesenharListaPolilinhas(vias, LAYER_VIAS_EIXO, false);
+
+                    if (root.TryGetProperty("calcadas", out var calcadas))
+                        DesenharListaPolilinhas(calcadas, LAYER_VIAS_CALCADA, false);
+
+                    if (root.TryGetProperty("obstrucoes", out var obstrucoes))
+                        DesenharListaPolilinhas(obstrucoes, LAYER_OBSTRUCOES_EDIF, true);
+
+                    tr.Commit();
+                    ed.Regen();
+                    return (true, $"{total} elementos urbanos (vias/calçadas/obstruções) desenhados no CAD.");
+                }
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Erro ao desenhar elementos urbanos no CAD: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Captura interativamente um ponto no DWG e retorna coordenadas UTM e Lat/Lon.
         /// </summary>
         public static (bool Success, double X, double Y, double Lat, double Lon, string Error) CapturarPontoCad(int fuso = 23)
@@ -279,6 +353,9 @@ namespace MapaCadPaleta
             CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_BT, 4);    // Ciano (BT)
             CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_MT, 6);    // Magenta (MT)
             CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_TEXTO, 2); // Amarelo
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_VIAS_EIXO, 8);      // Cinza escuro (Eixo)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_VIAS_CALCADA, 9);   // Cinza claro (Passeio)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_OBSTRUCOES_EDIF, 1);// Vermelho (Edificação)
         }
 
         private static void CriarLayerSeNaoExistir(Database db, Transaction tr, LayerTable lt, string nome, short colorIndex)

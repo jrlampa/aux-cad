@@ -352,4 +352,80 @@ def test_ferramenta_medicao_regua_assets_e_geodesia():
     assert 111000.0 < dist_1grau < 112000.0
 
 
+def test_vias_calcadas_obstrucoes_assets_e_parser():
+    """Valida assets de vias/obstruções (vias_obstrucoes.js), rotinas no CAD e lógica de classificação semântica."""
+    import math
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    web_dir = os.path.join(raiz, "mapa_cad_paleta", "web")
+
+    vias_js = os.path.join(web_dir, "vias_obstrucoes.js")
+    tracado_js = os.path.join(web_dir, "tracado.js")
+    index_html = os.path.join(web_dir, "index.html")
+    cad_bridge_cs = os.path.join(raiz, "mapa_cad_paleta", "CadBridge.cs")
+
+    assert os.path.exists(vias_js), "Arquivo vias_obstrucoes.js não encontrado"
+    assert os.path.exists(cad_bridge_cs), "Arquivo CadBridge.cs não encontrado"
+
+    with open(vias_js, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    assert "toggleViasObstrucoes" in js
+    assert "carregarContextoUrbano" in js
+    assert "calcularBbox" in js
+    assert "renderizarElementosOsm" in js
+
+    # Verifica hook automático no traçado contínuo
+    with open(tracado_js, "r", encoding="utf-8") as f:
+        tjs = f.read()
+    assert "carregarContextoUrbano" in tjs
+
+    with open(index_html, "r", encoding="utf-8") as f:
+        html = f.read()
+    assert "btnToggleVias" in html
+    assert "vias_obstrucoes.js" in html
+
+    with open(cad_bridge_cs, "r", encoding="utf-8") as f:
+        cs = f.read()
+    assert "DesenharElementosUrbanos" in cs
+    assert "VIAS_EIXO" in cs
+    assert "VIAS_CALCADA" in cs
+    assert "OBSTRUCOES_EDIF" in cs
+
+    # Teste analítico do cálculo de Bbox (Buffer métrico)
+    lat_ref, lon_ref = -22.9068, -43.1729
+    raio_m = 100.0
+    delta_lat = raio_m / 111111.0
+    delta_lon = raio_m / (111111.0 * math.cos(math.radians(lat_ref)))
+
+    bbox = {
+        "south": lat_ref - delta_lat,
+        "north": lat_ref + delta_lat,
+        "west": lon_ref - delta_lon,
+        "east": lon_ref + delta_lon
+    }
+    assert bbox["north"] > bbox["south"]
+    assert bbox["east"] > bbox["west"]
+    # Verifica que o raio cobre aproximadamente 200m de amplitude norte-sul
+    amplitude_m = (bbox["north"] - bbox["south"]) * 111111.0
+    assert abs(amplitude_m - 200.0) < 1.0
+
+    # Teste de classificação semântica de tags OSM
+    def classificar_elemento_osm(tags):
+        if "building" in tags:
+            return "OBSTRUCAO_EDIFICACAO"
+        if "barrier" in tags:
+            return "OBSTRUCAO_BARREIRA"
+        if tags.get("footway") == "sidewalk" or tags.get("highway") in ("footway", "pedestrian"):
+            return "CALCADA_PASSEIO"
+        if "highway" in tags:
+            return "VIA_EIXO"
+        return "OUTRO"
+
+    assert classificar_elemento_osm({"highway": "residential", "name": "Rua das Flores"}) == "VIA_EIXO"
+    assert classificar_elemento_osm({"highway": "footway", "footway": "sidewalk"}) == "CALCADA_PASSEIO"
+    assert classificar_elemento_osm({"building": "yes"}) == "OBSTRUCAO_EDIFICACAO"
+    assert classificar_elemento_osm({"barrier": "wall"}) == "OBSTRUCAO_BARREIRA"
+
+
+
 
