@@ -176,12 +176,18 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `arvore_parser.py` (331 linhas): Motor de interpretação de caminhos elétricos (` > ` e `|`), localização da **primeira proteção a montante** (Chave Fusível, Religador, Disjuntor ou a própria Saída do Alimentador no padrão `{cod} - Saida do Alimentador - {cod}`), suporte oficial a strings de nós de 3 partes, separação de Subestação e Alimentador (`ZSL10` $\rightarrow$ `SE.: ZSL`, `ALIM.: 10`), quantificação de Clientes A/B e potência kVA, e geração das linhas formatadas para o CAD com espaçamento rigoroso `DISPOSITIVO DE PROTEÇÃO: <rotulo>`.
 - `arvore_database.py` (227 linhas): Motor de persistência e indexação local em SQLite (`unifilar/arvore_cache.sqlite3`) a partir da planilha `documentos/Árvore de Dispositivos.xlsx`, com busca indexada ultrarrápida (<10ms).
 - `arvore_client.py` (162 linhas): Cliente com suporte a consultas online à intranet (`URL_ARVORE_DISPOSITIVOS`), autenticação corporativa NTLM com credenciais do `.env` e fallback automático e resiliente para o banco local ou modo resumo manual (`consultar_resumo_manual`).
-- `unifilar_manager.py` (108 linhas): Orquestrador de linha de comando e ponte de dados JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`).
-- `unifilar_cad.lsp` (411 linhas): Rotina AutoLISP com comandos **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**):
-  - Permite digitar o Ponto Elétrico, selecionar no DWG (`entsel`) ou **colar diretamente o resumo copiado do SGT/GOMNET** no prompt (`(getstring T ...)` com reconhecimento automático de `--resumo`).
+- `dispositivos_kmz_finder.py` (267 linhas): Localizador geoespacial e analítico de chaves fusíveis, religadores e chaves nos 14 arquivos KMZ de apoio da concessionária (`kmz - Dispositivos 05-2020`). Indexa **134.082 dispositivos reais** com cache local em `dispositivos_kmz_cache.json` e busca instantânea (<5ms) por código (`CF636018`, `SG59356`, `AR010625`) ou dígitos. Conversão geodésica analítica Snyder de WGS84 para UTM SIRGAS 2000 (Fuso 23S/24S).
+- `unifilar_diagrama_builder.py` (204 linhas): Construtor vetorial 2.5D do Diagrama Unifilar Esquemático sem escala (SE $\rightarrow$ Tronco MT $\rightarrow$ Proteção $\rightarrow$ Ramal MT $\rightarrow$ Ponto do Projeto). Determinação inteligente de blocos oficiais do AutoCAD: **`"chaves_"`** para chaves fusíveis / seccionadoras e **`"REL"`** para religadores.
+- `unifilar_manager.py` (161 linhas): Orquestrador de linha de comando e ponte de dados JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`, `--fuso`, `--escala`), unificando árvore, busca KMZ e geometria do diagrama.
+- `unifilar_cad.lsp` (601 linhas): Rotina AutoLISP com comandos **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**):
+  - Permite digitar o Ponto Elétrico, selecionar no DWG (`entsel`) ou **colar diretamente o resumo copiado do SGT/GOMNET** no prompt.
   - Suporte a confirmação e ajuste rápido interativo de Clientes A/B e KVA antes da inserção gráfica.
-  - **Modo Inserir**: Desenha o título verde `DIAGRAMA  UNIFILAR` sublinhado com linha e textos técnicos alinhados à direita.
-  - **Modo Atualizar**: Seleciona textos existentes no DWG (onde há `SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO: ...`, `Clientes Grupo...`) e substitui os dados reais mantendo a prancha intacta.
+  - Opções integradas de geração:
+    - **[1] Esquema Prancha**: Desenha o título verde sublinhado, textos técnicos alinhados à direita e o Diagrama Unifilar Esquemático 2.5D sem escala com barramento SE, tronco MT, bloco oficial (`"chaves_"` ou `"REL"`) com fallback vetorial e ponto alvo com potência kVA.
+    - **[2] Ramal Geográfico DWG**: Traça no ModelSpace o ramal MT a partir da coordenada real do dispositivo no KMZ até o poste/ponto selecionado no DWG, inserindo bloco da proteção e cota métrica com extensão real do ramal.
+    - **[3] Ambos**: Executa o esquema na prancha e o traçado geográfico no DWG.
+    - **[4] Somente Texto**: Inserção dos textos técnicos clássicos.
+    - **[A]tualizar**: Seleciona textos existentes no DWG (onde há `SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO: ...`, `Clientes Grupo...`) e substitui os dados reais mantendo a prancha intacta.
 
 ### 11. `softwares/` (Instaladores e Aplicações Externas)
 - `sisRUA-Installer-1.1.0-Optimized.exe` & `sisRUA-Installer-1.1.0.zip`
@@ -189,8 +195,9 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `sisrua2/` & `Lampa/`
 
 ### 12. Validação, Debug Completo e Testes
-- **Suíte de Testes**: **118 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Suíte de Testes**: **130 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
 - **Cobertura de Código Crítica**:
+  - `unifilar\unifilar_diagrama_builder.py`: 100%
   - `cpfc\cpfc_core.py`: 98%
   - `cpfc\cpfc_notas.py`: 95%
   - `dados_tecnicos\tabelas_referencia.py`: 94%
@@ -199,10 +206,12 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `unifilar\arvore_database.py`: 92%
   - `cqt\cqt_live_calc.py`: 91%
   - `ambiental\app_buffer_generator.py`: 89%
-  - `cqt\cqt_quadros_generator.py`: 88%
   - `orcamento\orcamento_core.py`: 89%
   - `ambiental\croqui_ambiental_generator.py`: 88%
+  - `cqt\cqt_quadros_generator.py`: 88%
   - `cpfc\cpfc_excel.py`: 88%
+  - `unifilar\unifilar_manager.py`: 85%
+  - `unifilar\arvore_client.py`: 82%
   - `ambiental\cad_to_kmz_exporter.py`: 86%
   - `cqt\cqt_excel_io.py`: 88%
   - `cpfc\cpfc_gui.py`: 85%

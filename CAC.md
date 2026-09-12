@@ -217,15 +217,24 @@ aux cad/
   - Povoa a base a partir da planilha oficial `documentos/Árvore de Dispositivos.xlsx` com busca indexada em menos de 10ms.
 - `arvore_client.py` (162 linhas):
   - Cliente com suporte a requisições web à intranet (`URL_ARVORE_DISPOSITIVOS`), autenticação NTLM com credenciais do `.env` e fallback automático e transparente para a base local ou modo resumo manual (`consultar_resumo_manual`).
-- `unifilar_manager.py` (108 linhas):
-  - Orquestrador CLI e ponte de intercâmbio JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`).
-- `unifilar_cad.lsp` (411 linhas):
+- `dispositivos_kmz_finder.py` (267 linhas):
+  - Localizador geoespacial e analítico de chaves fusíveis, religadores e chaves nos arquivos KMZ de apoio da concessionária (`kmz - Dispositivos 05-2020`).
+  - Indexa **134.082 dispositivos reais** com cache local em `dispositivos_kmz_cache.json` e busca instantânea (<5ms) por código (`CF636018`, `SG59356`, `AR010625`) ou dígitos.
+  - Conversão analítica Snyder de WGS84 para UTM SIRGAS 2000 (Fuso 23S/24S).
+- `unifilar_diagrama_builder.py` (204 linhas):
+  - Construtor vetorial 2.5D do Diagrama Unifilar Esquemático sem escala (SE $\rightarrow$ Tronco MT $\rightarrow$ Proteção $\rightarrow$ Ramal MT $\rightarrow$ Ponto do Projeto).
+  - Determinação inteligente de blocos oficiais do AutoCAD: **`"chaves_"`** para chaves fusíveis / seccionadoras e **`"REL"`** para religadores.
+- `unifilar_manager.py` (161 linhas):
+  - Orquestrador CLI e ponte de intercâmbio JSON com o AutoCAD (`--ponto`, `--resumo`, `--out`, `--sincronizar`, `--fuso`, `--escala`), unificando árvore, busca KMZ e geometria do diagrama.
+- `unifilar_cad.lsp` (601 linhas):
   - Comandos do AutoCAD **`UNIFILAR`** e **`PROTECAO`** (aliases: **`ARVORE`**, **`BUSCAR_PROTECAO`**).
-  - Suporta digitação do ponto elétrico, seleção direta no DWG (`entsel`) ou **colagem direta da linha de resumo copiada do SGT/GOMNET** no prompt (`(getstring T ...)` com detecção automática de `--resumo`).
-  - Prompt opcional de confirmação/ajuste rápido para Clientes A, Clientes B e KVA antes da inserção gráfica.
-  - Dois modos de desenho:
-    - **Inserir Novo**: Desenha o título verde `DIAGRAMA  UNIFILAR` sublinhado com linha e textos técnicos alinhados à direita.
-    - **Atualizar Existente**: Seleciona textos existentes no DWG e substitui placeholders (`SE.: xxx`, `ALIM.: xx`, `DISPOSITIVO DE PROTEÇÃO: ...`, `Clientes Grupo...`) preservando a diagramação original.
+  - Suporta digitação do ponto elétrico, seleção direta no DWG (`entsel`) ou **colagem direta da linha de resumo copiada do SGT/GOMNET** no prompt.
+  - Opções integradas de geração:
+    - **[1] Esquema Prancha**: Gera o título verde sublinhado, textos técnicos alinhados à direita e o Diagrama Unifilar Esquemático 2.5D sem escala com barramento SE, tronco MT, bloco oficial (`"chaves_"` ou `"REL"`) com fallback vetorial e ponto alvo com potência kVA.
+    - **[2] Ramal Geográfico DWG**: Traça no ModelSpace o ramal MT a partir da coordenada real do dispositivo no KMZ até o poste/ponto selecionado no DWG, inserindo bloco da proteção e cota métrica com extensão real do ramal.
+    - **[3] Ambos**: Executa o esquema na prancha e o traçado geográfico no DWG.
+    - **[4] Somente Texto**: Inserção dos textos técnicos clássicos.
+    - **[A]tualizar**: Seleciona textos existentes no DWG e substitui placeholders preservando a diagramação existente.
 
 ### 10. Carregamento Universal & Auditoria de Integridade (`acaddoc.lsp`)
 O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestração do AUX CAD:
@@ -237,9 +246,9 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
 
 ### 11. Validação, Debug Completo e Testes
 - **Auditoria de Sintaxe AutoLISP**: 100% dos 28 arquivos `.lsp` do projeto validados e com balanceamento de parênteses e strings verificado (0 erros).
-- **Auditoria de Módulos Python**: 100% dos 52 arquivos `.py` compilados e validados contra regras de Clean Code e limites de linhas (<750 linhas).
-- **Suíte de Testes**: **114 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
-- **Cobertura de Código**: Cobertura crítica de 89% no módulo `unifilar`, 85% no `cqt_quadros_generator`, 83% no `mapa_servidor` e acima de 80% a 99% em todos os módulos principais.
+- **Auditoria de Módulos Python**: 100% dos arquivos `.py` compilados e validados contra regras de Clean Code e limites de linhas (<750 linhas).
+- **Suíte de Testes**: **130 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Cobertura de Código**: Cobertura crítica de 88% no módulo `unifilar` (com 100% no `unifilar_diagrama_builder`), 85% no `cqt_quadros_generator`, 83% no `mapa_servidor` e acima de 80% a 100% em todos os módulos de domínio.
 
 ### 12. `mapa_cad_paleta/` (Paleta Cartográfica OSM C# .NET para AutoCAD 2018+)
 - **Objetivo**: Alternativa direta integrada ao AutoCAD ("menos 1 tela"), permitindo visualizar mapas Leaflet (OSM, Satélite ESRI e Google Híbrido), buscar posições e inserir postes com blocos e textos MText diretamente no ModelSpace do desenho ativo sem necessidade de navegador externo ou KMZ intermediário.

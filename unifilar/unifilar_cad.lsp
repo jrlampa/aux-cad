@@ -92,6 +92,155 @@
   )
 )
 
+;; Insere círculo simples no ModelSpace via entmake
+(defun unifilar-draw-circle (pt r layer col)
+  (entmake
+    (list
+      '(0 . "CIRCLE")
+      (cons 10 pt)
+      (cons 40 r)
+      (cons 8 layer)
+      (cons 62 (if col col 256))
+    )
+  )
+)
+
+;; Insere bloco oficial ('chaves_' ou 'REL') ou gera fallback vetorial 2.5D caso não exista
+(defun unifilar-insert-block (pt blk-name rot scale layer col fallback-type / x y h)
+  (setq x (car pt))
+  (setq y (cadr pt))
+  (if (tblsearch "BLOCK" blk-name)
+    (entmake
+      (list
+        '(0 . "INSERT")
+        (cons 2 blk-name)
+        (cons 10 pt)
+        (cons 41 scale)
+        (cons 42 scale)
+        (cons 43 scale)
+        (cons 50 rot)
+        (cons 8 layer)
+      )
+    )
+    ;; Fallback vetorial 2.5D normativo
+    (cond
+      ((= fallback-type "REL")
+       ;; Símbolo de Religador: Quadrado técnico com letra 'R'
+       (setq h (* scale 1.2))
+       (unifilar-draw-line (list (- x h) (- y h) 0.0) (list (+ x h) (- y h) 0.0) layer col)
+       (unifilar-draw-line (list (+ x h) (- y h) 0.0) (list (+ x h) (+ y h) 0.0) layer col)
+       (unifilar-draw-line (list (+ x h) (+ y h) 0.0) (list (- x h) (+ y h) 0.0) layer col)
+       (unifilar-draw-line (list (- x h) (+ y h) 0.0) (list (- x h) (- y h) 0.0) layer col)
+       (unifilar-draw-text (list x (- y (* h 0.4)) 0.0) "R" (* h 1.2) layer col "CENTER")
+      )
+      ((= fallback-type "PONTO")
+       ;; Símbolo de Ponto: Círculo de nó
+       (unifilar-draw-circle pt (* scale 1.0) layer col)
+      )
+      (t
+       ;; Símbolo de Chave Fusível: Barras paralelas verticais e elo diagonal
+       (setq h (* scale 0.9))
+       (unifilar-draw-line (list (- x (* h 0.8)) (+ y h) 0.0) (list (- x (* h 0.8)) (- y h) 0.0) layer col)
+       (unifilar-draw-line (list (+ x (* h 0.8)) (+ y h) 0.0) (list (+ x (* h 0.8)) (- y h) 0.0) layer col)
+       (unifilar-draw-line (list (- x (* h 0.8)) (+ y h) 0.0) (list (+ x (* h 0.8)) (- y h) 0.0) layer 1)
+      )
+    )
+  )
+)
+
+;; Desenha o Diagrama Unifilar com esquema gráfico sem escala
+(defun unifilar-draw-esquema-grafico (pt-ins se alim prot-rot prot-tipo ponto-alvo cli-a cli-b kva bloco-nome h-txt / x y sp x-al y-cur x-diag x-se-ini x-se-fim x-tr y-se y-ch y-pt fb-tipo)
+  (unifilar-ensure-layer "UNIFILAR" 3)
+  (unifilar-ensure-layer "UNIFILAR_SE" 3)
+  (unifilar-ensure-layer "UNIFILAR_LINHA" 7)
+  (unifilar-ensure-layer "UNIFILAR_PROTECAO" 1)
+  (unifilar-ensure-layer "UNIFILAR_PONTO" 2)
+
+  (setq x (car pt-ins))
+  (setq y (cadr pt-ins))
+  (setq sp (* h-txt 1.6))
+
+  ;; 1. TÍTULO E TEXTOS TÉCNICOS À ESQUERDA
+  (unifilar-draw-text (list x y 0.0) "DIAGRAMA  UNIFILAR" (* h-txt 1.2) "UNIFILAR" 3 "LEFT")
+  (unifilar-draw-line (list x (- y (* h-txt 0.3)) 0.0) (list (+ x (* h-txt 14.0)) (- y (* h-txt 0.3)) 0.0) "UNIFILAR" 3)
+
+  (setq x-al (+ x (* h-txt 14.0)))
+  (setq y-cur (- y (* sp 1.5)))
+
+  (unifilar-draw-text (list x-al y-cur 0.0) (strcat "SE.: " se) h-txt "UNIFILAR" 7 "RIGHT")
+  (setq y-cur (- y-cur sp))
+  (unifilar-draw-text (list x-al y-cur 0.0) (strcat "ALIM.: " alim) h-txt "UNIFILAR" 7 "RIGHT")
+  (setq y-cur (- y-cur sp))
+  (unifilar-draw-text (list x-al y-cur 0.0) "FONTE DE ALIMENTAÇÃO" h-txt "UNIFILAR" 7 "RIGHT")
+  (setq y-cur (- y-cur sp))
+  (unifilar-draw-text (list x-al y-cur 0.0) (strcat "DISPOSITIVO DE PROTEÇÃO: " prot-rot) h-txt "UNIFILAR" 7 "RIGHT")
+  (setq y-cur (- y-cur sp))
+  (unifilar-draw-text (list x-al y-cur 0.0) (strcat "Clientes Grupo A: " cli-a " Clientes Grupo B: " cli-b " - KVA: " kva) h-txt "UNIFILAR" 7 "RIGHT")
+
+  ;; 2. ESQUEMA UNIFILAR SEM ESCALA À DIREITA
+  (setq x-diag (+ x (* h-txt 18.0)))
+  (setq x-se-ini x-diag)
+  (setq x-se-fim (+ x-diag (* h-txt 14.0)))
+  (setq x-tr (+ x-diag (* h-txt 7.0)))
+  (setq y-se (- y (* h-txt 1.2)))
+
+  ;; 2.1 Barramento da Subestação
+  (unifilar-draw-line (list x-se-ini y-se 0.0) (list x-se-fim y-se 0.0) "UNIFILAR_SE" 3)
+  (unifilar-draw-line (list x-se-ini (- y-se (* h-txt 0.2)) 0.0) (list x-se-fim (- y-se (* h-txt 0.2)) 0.0) "UNIFILAR_SE" 3)
+  (unifilar-draw-text (list x-tr (+ y-se (* h-txt 0.8)) 0.0) (strcat "SE " se " - ALIM " alim) (* h-txt 0.8) "UNIFILAR_SE" 3 "CENTER")
+
+  ;; 2.2 Tronco MT
+  (setq y-ch (- y-se (* h-txt 6.5)))
+  (unifilar-draw-line (list x-tr (- y-se (* h-txt 0.2)) 0.0) (list x-tr (+ y-ch (* h-txt 1.5)) 0.0) "UNIFILAR_LINHA" 7)
+  (unifilar-draw-text (list (+ x-tr (* h-txt 0.6)) (- y-se (* h-txt 3.2)) 0.0) "TRONCO MT" (* h-txt 0.7) "UNIFILAR_LINHA" 8 "LEFT")
+
+  ;; 2.3 Bloco da Proteção (chaves_ ou REL)
+  (setq fb-tipo (if (= bloco-nome "REL") "REL" "CHAVE"))
+  (unifilar-insert-block (list x-tr y-ch 0.0) bloco-nome 0.0 1.0 "UNIFILAR_PROTECAO" 1 fb-tipo)
+  (unifilar-draw-text (list (+ x-tr (* h-txt 2.2)) y-ch 0.0) prot-rot (* h-txt 0.9) "UNIFILAR_PROTECAO" 1 "LEFT")
+
+  ;; 2.4 Ramal MT
+  (setq y-pt (- y-ch (* h-txt 6.5)))
+  (unifilar-draw-line (list x-tr (- y-ch (* h-txt 1.5)) 0.0) (list x-tr (+ y-pt (* h-txt 1.2)) 0.0) "UNIFILAR_LINHA" 7)
+  (unifilar-draw-text (list (+ x-tr (* h-txt 0.6)) (- y-ch (* h-txt 3.2)) 0.0) "RAMAL MT" (* h-txt 0.7) "UNIFILAR_LINHA" 8 "LEFT")
+
+  ;; 2.5 Ponto do Projeto
+  (unifilar-insert-block (list x-tr y-pt 0.0) "PONTO" 0.0 1.0 "UNIFILAR_PONTO" 2 "PONTO")
+  (unifilar-draw-text (list (+ x-tr (* h-txt 2.2)) y-pt 0.0) (strcat ponto-alvo " (" kva " kVA)") (* h-txt 0.9) "UNIFILAR_PONTO" 2 "LEFT")
+  (princ "\n[UNIFILAR] Diagrama Unifilar com esquema gráfico gerado com sucesso!")
+)
+
+;; Traça ramal geográfico do dispositivo KMZ até o ponto do projeto
+(defun unifilar-draw-ramal-geografico (ponto-alvo x-prot y-prot rotulo bloco-nome / pt-dest dist-m fb-tipo mid-x mid-y)
+  (unifilar-ensure-layer "MT_ALIMENTADOR" 6)
+  (unifilar-ensure-layer "UNIFILAR_PROTECAO" 1)
+
+  (princ (strcat "\n[KMZ] Dispositivo " rotulo " localizado em UTM: X=" (rtos x-prot 2 2) ", Y=" (rtos y-prot 2 2)))
+  (setq pt-dest (getpoint "\nClique no poste ou ponto de destino do projeto no desenho: "))
+  (if pt-dest
+    (progn
+      ;; 1. Insere o bloco da proteção na coordenada real
+      (setq fb-tipo (if (= bloco-nome "REL") "REL" "CHAVE"))
+      (unifilar-insert-block (list x-prot y-prot 0.0) bloco-nome 0.0 1.0 "UNIFILAR_PROTECAO" 1 fb-tipo)
+      (unifilar-draw-text (list (+ x-prot 2.0) (+ y-prot 1.5) 0.0) rotulo 2.5 "UNIFILAR_PROTECAO" 1 "LEFT")
+
+      ;; 2. Traça a linha do ramal conectando a chave ao ponto
+      (unifilar-draw-line (list x-prot y-prot 0.0) pt-dest "MT_ALIMENTADOR" 6)
+
+      ;; 3. Mede a distância real
+      (setq dist-m (distance (list x-prot y-prot 0.0) pt-dest))
+
+      ;; 4. Texto no ponto médio da linha
+      (setq mid-x (/ (+ x-prot (car pt-dest)) 2.0))
+      (setq mid-y (/ (+ y-prot (cadr pt-dest)) 2.0))
+      (unifilar-draw-text (list mid-x (+ mid-y 1.0) 0.0) (strcat "RAMAL MT " (rtos dist-m 2 1) "m") 2.0 "MT_ALIMENTADOR" 6 "CENTER")
+
+      (princ (strcat "\n[UNIFILAR] Ramal MT traçado do dispositivo " rotulo " até " ponto-alvo " (Extensão: " (rtos dist-m 2 1) "m)."))
+    )
+    (princ "\n[UNIFILAR] Traçado cancelado.")
+  )
+)
+
 ;; Extrai texto de entidade selecionada (TEXT, MTEXT ou INSERT com atributos)
 (defun unifilar-extract-text-from-ent (ent / ed t-val)
   (setq ed (entget ent))
@@ -137,7 +286,8 @@
 ;; =============================================================================
 (defun c:UNIFILAR (/ *error* mod-dir py-script tmp-json tmp-log ponto sel ent t-ext cmd
                      wsh t0 fp fp-log l-err msg-err json-content sucesso se alim prot-rot
-                     cli-a cli-b kva pt-ins h-txt opc ss i ent-i txt-i cnt-upd x y sp x-al y-cur)
+                     cli-a cli-b kva pt-ins h-txt opc ss i ent-i txt-i cnt-upd x y sp x-al y-cur
+                     bloco-prot prot-tipo utm-x-str utm-y-str utm-x utm-y aj novo-cli-a novo-cli-b novo-kva)
 
   (defun *error* (msg)
     (if (and msg (not (member msg '("Function cancelled" "quit / exit abort"))))
@@ -277,6 +427,10 @@
   (setq cli-a (unifilar-json-get json-content "clientes_a"))
   (setq cli-b (unifilar-json-get json-content "clientes_b"))
   (setq kva (unifilar-json-get json-content "kva"))
+  (setq bloco-prot (unifilar-json-get json-content "bloco_protecao"))
+  (setq prot-tipo (unifilar-json-get json-content "protecao_tipo"))
+  (setq utm-x-str (unifilar-json-get json-content "utm_x"))
+  (setq utm-y-str (unifilar-json-get json-content "utm_y"))
 
   (if (not se) (setq se "---"))
   (if (not alim) (setq alim "--"))
@@ -284,13 +438,21 @@
   (if (not cli-a) (setq cli-a "0"))
   (if (not cli-b) (setq cli-b "0"))
   (if (not kva) (setq kva "0"))
+  (if (or (not bloco-prot) (= bloco-prot "")) (setq bloco-prot "chaves_"))
+  (if (not prot-tipo) (setq prot-tipo "CHAVE_FUSIVEL"))
+  (setq utm-x (if (and utm-x-str (/= utm-x-str "") (/= utm-x-str "null")) (atof utm-x-str) nil))
+  (setq utm-y (if (and utm-y-str (/= utm-y-str "") (/= utm-y-str "null")) (atof utm-y-str) nil))
 
   (princ "\n--------------------------------------------------------------")
   (princ (strcat "\n[UNIFILAR] PROTEÇÃO LOCALIZADA:"))
   (princ (strcat "\n • Subestação (SE): " se))
   (princ (strcat "\n • Alimentador:     " alim))
-  (princ (strcat "\n • Proteção:        " prot-rot))
+  (princ (strcat "\n • Proteção:        " prot-rot " [Bloco: " bloco-prot "]"))
   (princ (strcat "\n • Cargas/Potência: Clientes Grupo A: " cli-a " Clientes Grupo B: " cli-b " - KVA: " kva))
+  (if (and utm-x utm-y)
+    (princ (strcat "\n • Coordenadas KMZ: UTM X=" (rtos utm-x 2 2) ", Y=" (rtos utm-y 2 2)))
+    (princ "\n • Coordenadas KMZ: Não localizado nos KMZs de dispositivos.")
+  )
   (princ "\n--------------------------------------------------------------")
 
   ;; Pergunta se deseja ajustar Clientes / KVA antes de desenhar
@@ -307,94 +469,122 @@
     )
   )
 
-  ;; Pergunta se deseja Inserir Novo ou Atualizar Existente
-  (initget "Inserir Atualizar I A")
-  (setq opc (getkword "\nDeseja [I]nserir novo diagrama ou [A]tualizar textos no DWG? <I>: "))
-  (if (or (= opc nil) (= opc "") (= opc "I") (= opc "Inserir"))
+  ;; Menu de Opções de Geração
+  (initget "1 2 3 4 A Esquema Ramal Ambos Texto Atualizar")
+  (setq opc (getkword "\nOpções: [1] Esquema Prancha | [2] Ramal Geográfico DWG | [3] Ambos | [4] Somente Texto | [A]tualizar <1>: "))
+  (if (or (not opc) (= opc "")) (setq opc "1"))
+
+  (setq h-txt (getvar "TEXTSIZE"))
+  (if (or (<= h-txt 0.0) (> h-txt 10.0)) (setq h-txt 2.5))
+
+  (cond
     ;; -------------------------------------------------------------------------
-    ;; MODO 1: INSERIR NOVO DIAGRAMA UNIFILAR
+    ;; MODO 1 OU 3: ESQUEMA GRÁFICO NA PRANCHA (+ RAMAL SE AMBOS)
     ;; -------------------------------------------------------------------------
-    (progn
-      (setq pt-ins (getpoint "\nClique no ponto de inserção do Diagrama Unifilar: "))
-      (if pt-ins
-        (progn
-          (unifilar-ensure-layer "UNIFILAR" 3)
-          (setq h-txt (getvar "TEXTSIZE"))
-          (if (or (<= h-txt 0.0) (> h-txt 10.0)) (setq h-txt 2.5))
-
-          (setq x (car pt-ins))
-          (setq y (cadr pt-ins))
-          (setq sp (* h-txt 1.6))
-
-          ;; 1. Título Verde Sublinhado
-          (unifilar-draw-text (list x y 0.0) "DIAGRAMA  UNIFILAR" (* h-txt 1.2) "UNIFILAR" 3 "LEFT")
-          (unifilar-draw-line (list x (- y (* h-txt 0.3)) 0.0) (list (+ x (* h-txt 14.0)) (- y (* h-txt 0.3)) 0.0) "UNIFILAR" 3)
-
-          ;; 2. Textos Técnicos Alinhados à Direita
-          (setq x-al (+ x (* h-txt 14.0)))
-          (setq y-cur (- y (* sp 1.5)))
-
-          (unifilar-draw-text (list x-al y-cur 0.0) (strcat "SE.: " se) h-txt "UNIFILAR" 7 "RIGHT")
-          (setq y-cur (- y-cur sp))
-
-          (unifilar-draw-text (list x-al y-cur 0.0) (strcat "ALIM.: " alim) h-txt "UNIFILAR" 7 "RIGHT")
-          (setq y-cur (- y-cur sp))
-
-          (unifilar-draw-text (list x-al y-cur 0.0) "FONTE DE ALIMENTAÇÃO" h-txt "UNIFILAR" 7 "RIGHT")
-          (setq y-cur (- y-cur sp))
-
-          (unifilar-draw-text (list x-al y-cur 0.0) (strcat "DISPOSITIVO DE PROTEÇÃO: " prot-rot) h-txt "UNIFILAR" 7 "RIGHT")
-          (setq y-cur (- y-cur sp))
-
-          (unifilar-draw-text (list x-al y-cur 0.0) (strcat "Clientes Grupo A: " cli-a " Clientes Grupo B: " cli-b " - KVA: " kva) h-txt "UNIFILAR" 7 "RIGHT")
-
-          (princ "\n[UNIFILAR] Diagrama Unifilar inserido com sucesso!")
-        )
-      )
+    ((or (= opc "1") (= opc "Esquema") (= opc "3") (= opc "Ambos"))
+     (setq pt-ins (getpoint "\nClique no ponto de inserção do Diagrama Unifilar na Prancha: "))
+     (if pt-ins
+       (unifilar-draw-esquema-grafico pt-ins se alim prot-rot prot-tipo ponto cli-a cli-b kva bloco-prot h-txt)
+     )
+     (if (or (= opc "3") (= opc "Ambos"))
+       (if (and utm-x utm-y)
+         (unifilar-draw-ramal-geografico ponto utm-x utm-y prot-rot bloco-prot)
+         (princ "\n[UNIFILAR] Coordenadas KMZ não disponíveis para traçar o ramal no DWG.")
+       )
+     )
     )
 
     ;; -------------------------------------------------------------------------
-    ;; MODO 2: ATUALIZAR TEXTOS EXISTENTES NO DWG
+    ;; MODO 2: APENAS RAMAL GEOGRÁFICO NO DWG
     ;; -------------------------------------------------------------------------
-    (progn
-      (princ "\nSelecione os textos do Diagrama Unifilar existente para preencher...")
-      (setq ss (ssget '((0 . "TEXT,MTEXT"))))
-      (if ss
-        (progn
-          (setq i 0)
-          (setq cnt-upd 0)
-          (while (< i (sslength ss))
-            (setq ent-i (ssname ss i))
-            (setq txt-i (unifilar-extract-text-from-ent ent-i))
+    ((or (= opc "2") (= opc "Ramal"))
+     (if (and utm-x utm-y)
+       (unifilar-draw-ramal-geografico ponto utm-x utm-y prot-rot bloco-prot)
+       (princ "\n[UNIFILAR] Dispositivo de proteção não possui coordenadas KMZ mapeadas para traçar no DWG.")
+     )
+    )
 
-            (cond
-              ;; Substituição de SE.: xxx
-              ((and (vl-string-search "SE" (strcase txt-i)) (vl-string-search "X" (strcase txt-i)))
-               (unifilar-update-ent-text ent-i (strcat "SE.: " se))
-               (setq cnt-upd (1+ cnt-upd))
-              )
-              ;; Substituição de ALIM.: xx
-              ((and (vl-string-search "ALIM" (strcase txt-i)) (vl-string-search "X" (strcase txt-i)))
-               (unifilar-update-ent-text ent-i (strcat "ALIM.: " alim))
-               (setq cnt-upd (1+ cnt-upd))
-              )
-              ;; Substituição de DISPOSITIVO DE PROTEÇÃO...
-              ((vl-string-search "DISPOSITIVO DE PROTE" (strcase txt-i))
-               (unifilar-update-ent-text ent-i (strcat "DISPOSITIVO DE PROTEÇÃO: " prot-rot))
-               (setq cnt-upd (1+ cnt-upd))
-              )
-              ;; Substituição de Clientes Grupo A...
-              ((vl-string-search "CLIENTES GRUPO" (strcase txt-i))
-               (unifilar-update-ent-text ent-i (strcat "Clientes Grupo A: " cli-a " Clientes Grupo B: " cli-b " - KVA: " kva))
-               (setq cnt-upd (1+ cnt-upd))
-              )
-            )
-            (setq i (1+ i))
-          )
-          (princ (strcat "\n[UNIFILAR] " (itoa cnt-upd) " textos atualizados com sucesso no DWG!"))
-        )
-        (princ "\n[UNIFILAR] Nenhum texto selecionado.")
-      )
+    ;; -------------------------------------------------------------------------
+    ;; MODO 4: APENAS TEXTOS TÉCNICOS TRADICIONAIS
+    ;; -------------------------------------------------------------------------
+    ((or (= opc "4") (= opc "Texto"))
+     (setq pt-ins (getpoint "\nClique no ponto de inserção do Diagrama Unifilar: "))
+     (if pt-ins
+       (progn
+         (unifilar-ensure-layer "UNIFILAR" 3)
+         (setq x (car pt-ins))
+         (setq y (cadr pt-ins))
+         (setq sp (* h-txt 1.6))
+
+         ;; 1. Título Verde Sublinhado
+         (unifilar-draw-text (list x y 0.0) "DIAGRAMA  UNIFILAR" (* h-txt 1.2) "UNIFILAR" 3 "LEFT")
+         (unifilar-draw-line (list x (- y (* h-txt 0.3)) 0.0) (list (+ x (* h-txt 14.0)) (- y (* h-txt 0.3)) 0.0) "UNIFILAR" 3)
+
+         ;; 2. Textos Técnicos Alinhados à Direita
+         (setq x-al (+ x (* h-txt 14.0)))
+         (setq y-cur (- y (* sp 1.5)))
+
+         (unifilar-draw-text (list x-al y-cur 0.0) (strcat "SE.: " se) h-txt "UNIFILAR" 7 "RIGHT")
+         (setq y-cur (- y-cur sp))
+
+         (unifilar-draw-text (list x-al y-cur 0.0) (strcat "ALIM.: " alim) h-txt "UNIFILAR" 7 "RIGHT")
+         (setq y-cur (- y-cur sp))
+
+         (unifilar-draw-text (list x-al y-cur 0.0) "FONTE DE ALIMENTAÇÃO" h-txt "UNIFILAR" 7 "RIGHT")
+         (setq y-cur (- y-cur sp))
+
+         (unifilar-draw-text (list x-al y-cur 0.0) (strcat "DISPOSITIVO DE PROTEÇÃO: " prot-rot) h-txt "UNIFILAR" 7 "RIGHT")
+         (setq y-cur (- y-cur sp))
+
+         (unifilar-draw-text (list x-al y-cur 0.0) (strcat "Clientes Grupo A: " cli-a " Clientes Grupo B: " cli-b " - KVA: " kva) h-txt "UNIFILAR" 7 "RIGHT")
+
+         (princ "\n[UNIFILAR] Textos do Diagrama Unifilar inseridos com sucesso!")
+       )
+     )
+    )
+
+    ;; -------------------------------------------------------------------------
+    ;; MODO A: ATUALIZAR TEXTOS EXISTENTES NO DWG
+    ;; -------------------------------------------------------------------------
+    ((or (= opc "A") (= opc "Atualizar"))
+     (princ "\nSelecione os textos do Diagrama Unifilar existente para preencher...")
+     (setq ss (ssget '((0 . "TEXT,MTEXT"))))
+     (if ss
+       (progn
+         (setq i 0)
+         (setq cnt-upd 0)
+         (while (< i (sslength ss))
+           (setq ent-i (ssname ss i))
+           (setq txt-i (unifilar-extract-text-from-ent ent-i))
+
+           (cond
+             ;; Substituição de SE.: xxx
+             ((and (vl-string-search "SE" (strcase txt-i)) (vl-string-search "X" (strcase txt-i)))
+              (unifilar-update-ent-text ent-i (strcat "SE.: " se))
+              (setq cnt-upd (1+ cnt-upd))
+             )
+             ;; Substituição de ALIM.: xx
+             ((and (vl-string-search "ALIM" (strcase txt-i)) (vl-string-search "X" (strcase txt-i)))
+              (unifilar-update-ent-text ent-i (strcat "ALIM.: " alim))
+              (setq cnt-upd (1+ cnt-upd))
+             )
+             ;; Substituição de DISPOSITIVO DE PROTEÇÃO...
+             ((vl-string-search "DISPOSITIVO DE PROTE" (strcase txt-i))
+              (unifilar-update-ent-text ent-i (strcat "DISPOSITIVO DE PROTEÇÃO: " prot-rot))
+              (setq cnt-upd (1+ cnt-upd))
+             )
+             ;; Substituição de Clientes Grupo A...
+             ((vl-string-search "CLIENTES GRUPO" (strcase txt-i))
+              (unifilar-update-ent-text ent-i (strcat "Clientes Grupo A: " cli-a " Clientes Grupo B: " cli-b " - KVA: " kva))
+              (setq cnt-upd (1+ cnt-upd))
+             )
+           )
+           (setq i (1+ i))
+         )
+         (princ (strcat "\n[UNIFILAR] " (itoa cnt-upd) " textos atualizados com sucesso no DWG!"))
+       )
+       (princ "\n[UNIFILAR] Nenhum texto selecionado.")
+     )
     )
   )
 

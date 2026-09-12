@@ -42,6 +42,7 @@ mapa_postes/postes_rede_campo.kmz
 mapa_postes/mapa_postes_exec.lsp
 kmz_import_postes_exec.lsp
 unifilar/arvore_cache.sqlite3
+unifilar/dispositivos_kmz_cache.json
 *.sqlite3-journal
 *.sqlite3-wal
 scratch/
