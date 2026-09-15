@@ -223,3 +223,113 @@ def test_orcamento_manager_cli(tmp_path, monkeypatch):
 
     assert os.path.exists(str(arq_xlsx))
 
+
+def test_orcamento_database_consultas():
+    import orcamento_database as db
+
+    # 1. Contratos
+    contratos = db.listar_contratos()
+    assert len(contratos) >= 4
+    nomes_emp = [c["empreiteira"] for c in contratos]
+    assert "ENGELMIG" in nomes_emp
+    assert "INDICA" in nomes_emp
+
+    # 2. Material
+    mat = db.obter_material("DT11600")
+    assert mat is not None
+    assert mat["preco_unitario"] > 0
+    assert "11M" in mat["descricao"] or "600" in mat["descricao"]
+
+    # 3. Busca textual
+    postes = db.buscar_materiais("POSTE", limite=5)
+    assert len(postes) > 0
+
+    # 4. Mão de Obra
+    mo = db.obter_servico_mo("AHO110", empreiteira="ENGELMIG", territorio="A")
+    assert mo is not None
+    assert mo["custo_unitario"] > 0
+    assert mo["contrato"] == "JA10114811"
+
+
+def test_orcamento_kits_explosao():
+    import orcamento_kits as kits
+
+    # 1. Normalização
+    assert "EST.M1" in kits.normalizar_codigo_kit("M1", esforco_poste=300)
+    assert "EST.B1" in kits.normalizar_codigo_kit("B1", esforco_poste=300)
+    assert "EST.M2" in kits.normalizar_codigo_kit("M2", esforco_poste=300)
+    assert "EST.B2" in kits.normalizar_codigo_kit("B2", esforco_poste=300)
+    assert "TR-TRI-45KVA" in kits.normalizar_codigo_kit("TRAFO 45 KVA")
+    assert "ATER_EQUIP" in kits.normalizar_codigo_kit("ATERRAMENTO")
+    assert "ESTAI-7,9" in kits.normalizar_codigo_kit("ESTAI DE ANCORA")
+    assert "CXDERDAT" == kits.normalizar_codigo_kit("DAE")
+
+    # 2. Explosão de Kit de Estrutura
+    itens_m1 = kits.explodir_kit("M1", "NA", esforco_poste=300)
+    assert len(itens_m1) >= 5
+    codigos_m1 = [it.codigo_material for it in itens_m1]
+    assert any(c for c in codigos_m1 if c.isdigit())
+
+    # 3. Explosão de Trafo
+    itens_trafo = kits.explodir_kit("TRAFO 45KVA", "NA")
+    assert len(itens_trafo) >= 5
+
+    # 4. Explosão de Aterramento e Estai
+    itens_ater = kits.explodir_kit("ATERRAMENTO")
+    assert len(itens_ater) >= 1
+
+    itens_estai = kits.explodir_kit("ESTAI")
+    assert len(itens_estai) >= 1
+
+    # 5. Explosão completa de poste
+    comp = kits.explodir_poste_completo(["M1", "B1"], ["TRAFO 45KVA", "ATERRAMENTO"], "NA", 600)
+    assert len(comp) >= 12
+
+
+def test_orcamento_core_mao_de_obra_e_bdi():
+    from orcamento_core import processar_dados_orcamento
+
+    dados = {
+        "postes": [{"id": "P1", "bloco": "POSTE_11_600", "attrs": "11/600", "estruturas": ["M1"], "equipamentos": ["TRAFO 45KVA"]}],
+        "cabos": [{"id": "C1", "layer": "CABO_MT_1/0_RAVEN", "comprimento": 100.0, "vaos": 2}]
+    }
+
+    # Teste para ENGELMIG Classe A
+    res_a = processar_dados_orcamento(dados, empreiteira="ENGELMIG", territorio="A", bdi_pct=10.0)
+    assert res_a["total_materiais"] > 0
+    assert res_a["total_mao_de_obra"] > 0
+    assert res_a["total_bdi"] > 0
+    assert res_a["total_geral"] == round(res_a["total_materiais"] + res_a["total_mao_de_obra"] + res_a["total_bdi"], 2)
+    assert len(res_a["mao_de_obra"]) >= 3
+
+    # Teste para INDICA Classe B
+    res_b = processar_dados_orcamento(dados, empreiteira="INDICA", territorio="B", bdi_pct=0.0)
+    assert res_b["total_mao_de_obra"] > 0
+    assert res_b["empreiteira"] == "INDICA"
+    assert res_b["territorio"] == "B"
+
+
+def test_orcamento_excel_abas_novas(tmp_path):
+    from orcamento_core import processar_dados_orcamento
+    from orcamento_excel import exportar_planilha_orcamento
+
+    dados = {
+        "postes": [{"id": "P1", "bloco": "POSTE_11_600", "attrs": "11/600", "estruturas": ["M1"], "equipamentos": ["TRAFO 45KVA"]}],
+        "cabos": [{"id": "C1", "layer": "CABO_MT_1/0_RAVEN", "comprimento": 50.0, "vaos": 1}]
+    }
+    res = processar_dados_orcamento(dados, empreiteira="PROGEN", territorio="C")
+    out_file = os.path.join(tmp_path, "TESTE_OFICIAL_ABAS.xlsx")
+
+    caminho = exportar_planilha_orcamento(res, out_file)
+    assert os.path.exists(caminho)
+
+    wb = openpyxl.load_workbook(caminho)
+    assert "DETALHAMENTO MÃO DE OBRA" in wb.sheetnames
+    assert "FORMATO sisORÇA" in wb.sheetnames
+
+    ws_so = wb["FORMATO sisORÇA"]
+    assert ws_so["A2"].value == "P1"
+    assert ws_so["B2"].value == "DT11600"
+    assert ws_so["D2"].value == "M1"
+
+

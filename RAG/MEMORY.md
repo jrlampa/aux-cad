@@ -84,13 +84,16 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `mlrua.lsp` & `STYLE RODOVIA.mln`: Rotinas de multilinhas e eixos viários.
 - `backup/`: Cópias históricas e rotinas complementares de backup.
 
-### 6. `orcamento/` (Projeto Orçamento & Levantamento de Materiais)
+### 6. `orcamento/` (Projeto Orçamento, Levantamento de Materiais e Mão de Obra Oficial)
+- `orcamento_builder.py` (345 linhas): Extrator e construtor automatizado de banco de dados a partir dos arquivos de engenharia e orçamentação oficiais (`sisORÇA.xlsx`, `KITS E MATERIAIS REV_31.xlsx` e `Mão de Obra 31-05-2024.xlsm`).
+- `orcamento_dados.sqlite3` (9,56 MB) & `orcamento_dados.json` (5,27 MB): Base de dados indexada com 13.822 materiais cadastrados com códigos almoxarifado Enel/SAP, 28.709 composições de kits e 5.158 registros contratuais de mão de obra (Contratos: ENGELMIG `JA10114811`, INDICA `JA10110552`, DÍNAMO `52L0002297`, PROGEN `JA10083389`).
+- `orcamento_database.py` (168 linhas): Camada DAO de alta performance com queries parametrizadas (`obter_material`, `obter_itens_kit`, `obter_servico_mo`, `listar_contratos`, `listar_kits`).
+- `orcamento_kits.py` (144 linhas): Motor de explosão de kits de engenharia (`M1`, `M2`, `B1`, `B2`, `TR-MONO`, `TR-TRI`, `ATER_EQUIP`, `ESTAI-7,9`, `CXDERDAT`) em materiais almoxarifado unitários com quantitativos de projeto e de substituição/retirada.
+- `orcamento_core.py` (405 linhas): Motor analítico de regras de negócio com totalização segregada de materiais, mão de obra contratual (por empreiteira, território A/B/C e ambiente normal/salino), BDI parametrizado e consolidação de quantitativos.
+- `orcamento_excel.py` (300 linhas): Exportador profissional de planilhas Excel `.xlsx` em 6 abas estruturadas (`RESUMO ORÇAMENTO`, `DETALHAMENTO MÃO DE OBRA`, `DETALHAMENTO POSTES`, `DETALHAMENTO CABOS`, `FORMATO sisORÇA` e `BANCO DE PREÇOS`).
+- `orcamento_gui.py` (390 linhas): Interface gráfica moderna em Tkinter com seletores de Empreiteira (Engelmig, Indica, Dínamo, Progen), Território (A, B, C), Salinidade, KPIs em tempo real e alternância entre visualização de Materiais e Mão de Obra.
+- `orcamento_manager.py` (97 linhas): Orquestrador CLI/GUI atualizado com suporte a `--empreiteira`, `--territorio` e `--ambiente`.
 - `orcamento_cad_extractor.lsp`: Rotina AutoLISP com comandos **`ORCAD`** (varredura inteligente de postes, cabos e equipamentos) e **`ORCUI`** (disparo da interface gráfica).
-- `orcamento_core.py` (276 linhas): Motor analítico de regras de negócio, classificação de postes, cálculo de comprimentos com margem técnica de flecha/amarras e consolidação de quantitativos.
-- `orcamento_excel.py` (218 linhas): Exportador profissional de planilhas Excel `.xlsx` em 4 abas estruturadas (`RESUMO ORÇAMENTO`, `DETALHAMENTO POSTES`, `DETALHAMENTO CABOS` e `BANCO DE PREÇOS`).
-- `orcamento_gui.py` (271 linhas): Interface gráfica moderna em Tkinter com KPIs em tempo real, tabela por categorias, slider de margem de cabos e inserção manual.
-- `orcamento_manager.py` (79 linhas): Orquestrador principal CLI/GUI e ponte com o AutoCAD.
-- `orcamento_catalogo.json`: Catálogo base de materiais padronizados para redes aéreas.
 - `Abrir_Orcamento.bat`: Atalho local na pasta do projeto e na raiz.
 
 ### 7. `mapa_postes/` (Estúdio Web de Satélite, Coordenadas e Clientes)
@@ -196,8 +199,9 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `sisrua2/` & `Lampa/`
 
 ### 12. Validação, Debug Completo e Testes
-- **Suíte de Testes**: **149 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Suíte de Testes**: **153 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
 - **Cobertura de Código Crítica**:
+  - `orcamento\orcamento_excel.py`: 100%
   - `unifilar\unifilar_diagrama_builder.py`: 100%
   - `cpfc\cpfc_core.py`: 98%
   - `cpfc\cpfc_notas.py`: 95%
@@ -206,8 +210,10 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `unifilar\arvore_parser.py`: 92%
   - `unifilar\arvore_database.py`: 92%
   - `cqt\cqt_live_calc.py`: 91%
+  - `orcamento\orcamento_core.py`: 91%
   - `ambiental\app_buffer_generator.py`: 89%
-  - `orcamento\orcamento_core.py`: 89%
+  - `orcamento\orcamento_database.py`: 88%
+  - `orcamento\orcamento_kits.py`: 84%
   - `ambiental\croqui_ambiental_generator.py`: 88%
   - `cqt\cqt_quadros_generator.py`: 88%
   - `cpfc\cpfc_excel.py`: 88%

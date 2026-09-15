@@ -245,7 +245,35 @@ aux cad/
     - **[4] Somente Texto**: Inserção dos textos técnicos clássicos.
     - **[A]tualizar**: Seleciona textos existentes no DWG e substitui placeholders preservando a diagramação existente.
 
-### 10. Carregamento Universal & Auditoria de Integridade (`acaddoc.lsp`)
+### 10. Módulo de Orçamento e Levantamento de Materiais e Mão de Obra (`orcamento/`)
+- `orcamento_builder.py` (345 linhas): Motor de compilação e extração das bases oficiais da concessionária e empreiteiras (`sisORÇA.xlsx`, `KITS E MATERIAIS REV_31`, `Mão de Obra 31-05-2024.xlsm`), gerando a base SQLite local indexada `orcamento_dados.sqlite3` (13.822 materiais cadastrados, 28.709 kits de estruturas e 5.158 itens contratuais de mão de obra) e o cache JSON `orcamento_dados.json`.
+- `orcamento_database.py` (168 linhas): Repositório DAO de alto desempenho (<15ms) com queries parametrizadas para consulta de materiais por código SAP/E4E ou SIE, busca de componentes de kits e recuperação de tabelas de mão de obra por contrato/empreiteira e classe territorial.
+- `orcamento_kits.py` (144 linhas): Motor de normalização e explosão de kits oficiais:
+  - Mapeia estruturas MT/BT (`M1`, `M2`, `B1`, `B2`, `N1`, `N2`...), taqueamento de transformadores (`TR-MONO`, `TR-BI`, `TR-TRI`), aterramentos (`ATER_EQUIP`) e estais (`ESTAI-7,9`).
+  - Desdobra cada estrutura nos materiais reais de almoxarifado da distribuidora com quantidades normativas e ambientes Normal (`NA`) e Agressivo (`AA` / Salinidade).
+- `orcamento_core.py` (405 linhas): Motor analítico central de regras de negócio:
+  - Classificação inteligente de postes e cabos extraídos do CAD ou da Paleta OSM.
+  - Orquestração da explosão de kits e precificação real em R$.
+  - Cálculo segregado da Mão de Obra Contratual para as 4 empreiteiras:
+    - **INDICA** (Cantagalo/Pádua - Contrato `JA10110552` - Unidade Base `0010552`)
+    - **ENGELMIG** (Itaperuna/Campos - Contrato `JA10114811` - Unidade Base `0002042`)
+    - **DÍNAMO** (Lagos - Contrato `52L0002297` - Unidade Base `0002297`)
+    - **PROGEN** (Macaé - Contrato `JA10083389` - Unidade Base `0002043`)
+  - Classificação de Território em Classes **A**, **B** e **C**.
+  - Totalizadores segregados: `total_materiais`, `total_mao_de_obra`, `total_bdi` e `total_geral`.
+- `orcamento_excel.py` (300 linhas): Exportador profissional de planilhas Excel `.xlsx` em 5 abas integradas:
+  - `RESUMO ORÇAMENTO`: Metadados da obra, cards de KPI e consolidação geral.
+  - `DETALHAMENTO MÃO DE OBRA`: Relação contratual com vozes, baremos SAP e custos unitários.
+  - `DETALHAMENTO POSTES` & `DETALHAMENTO CABOS`: Dados de engenharia e geometria extraídos do DWG.
+  - `FORMATO sisORÇA`: Colunas compatíveis para colagem direta na aba `ORÇA` da planilha oficial.
+- `orcamento_gui.py` (390 linhas): Interface gráfica moderna em Tkinter (100% pt-BR) com layout executivo `#1B365D`:
+  - Seleção de Empreiteira, Classe de Território e Ambiente Salino.
+  - Painel de KPIs em tempo real (Materiais, Mão de Obra e Total Geral).
+  - Alternância de visualização entre Materiais Orçados e Mão de Obra Contratual.
+- `orcamento_manager.py` (97 linhas): Orquestrador de linha de comando (CLI) e ponte com a rotina AutoLISP `orcamento_cad_extractor.lsp` (`ORCAD` / `ORCUI`).
+- `Abrir_Orcamento.bat`: Atalho executável de 2 cliques na raiz e em `orcamento/`.
+
+### 11. Carregamento Universal & Auditoria de Integridade (`acaddoc.lsp`)
 O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestração do AUX CAD:
 1. **Compatibilidade Global**: Funções de segurança e reflexão pré-carregadas (`stringp`, `fboundp`, `vl-symbol-p`, `vl-sleep`, `vl-filename-nxname`), prevenindo erros de ambiente em qualquer versão de AutoCAD.
 2. **Resolução Dinâmica**: Localiza o caminho absoluto da pasta raiz e adiciona dinamicamente as 9 pastas dos módulos ao `SupportPath` de suporte do AutoCAD (`cqt`, `ambiental`, `mecanico`, `topografia`, `orcamento`, `mapa_postes`, `dados_tecnicos`, `cpfc`, `unifilar`).

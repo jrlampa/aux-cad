@@ -40,6 +40,9 @@ def main():
     parser.add_argument("--projeto", type=str, default="PROJETO PADRÃO", help="Identificação da obra / ordem de serviço")
     parser.add_argument("--municipio", type=str, default="RIO DE JANEIRO - RJ", help="Município da obra")
     parser.add_argument("--projetista", type=str, default="ENG. PROJETISTA", help="Nome do engenheiro/projetista")
+    parser.add_argument("--empreiteira", type=str, default="ENGELMIG", help="Nome da empreiteira contratual")
+    parser.add_argument("--territorio", type=str, default="A", choices=["A", "B", "C"], help="Classe de território (A, B ou C)")
+    parser.add_argument("--ambiente", type=str, default="NA", choices=["NA", "AA"], help="Ambiente (NA=Normal, AA=Agressivo/Salinidade)")
 
     args = parser.parse_args()
 
@@ -49,7 +52,12 @@ def main():
 
     # Modo Silencioso / CLI direta
     if args.no_gui and args.saida:
-        processados = processar_dados_orcamento(dados_cad)
+        processados = processar_dados_orcamento(
+            dados_cad,
+            empreiteira=args.empreiteira,
+            territorio=args.territorio,
+            ambiente=args.ambiente
+        )
         planilha_gerada = exportar_planilha_orcamento(
             dados_processados=processados,
             caminho_saida=args.saida,
@@ -60,6 +68,8 @@ def main():
         print(f"[SUCESSO] Planilha de orçamento gerada em: {planilha_gerada}")
         print(f"Total de Postes: {processados['qtd_postes']}")
         print(f"Extensão de Cabos: {processados['extensao_total_m']:.2f} m")
+        print(f"Total Materiais: R$ {processados['total_materiais']:,.2f}")
+        print(f"Total Mão de Obra: R$ {processados['total_mao_de_obra']:,.2f}")
         print(f"Valor Total Estimado: R$ {processados['total_geral']:,.2f}")
         return
 
@@ -71,6 +81,13 @@ def main():
         app.municipio_var.set(args.municipio)
     if args.projetista and args.projetista != "ENG. PROJETISTA":
         app.projetista_var.set(args.projetista)
+    if args.empreiteira:
+        app.empreiteira_var.set(args.empreiteira)
+    if args.territorio:
+        app.territorio_var.set(args.territorio)
+    if args.ambiente == "AA":
+        app.salinidade_var.set(True)
+    app.recalcular()
 
     app.mainloop()
 
