@@ -89,7 +89,6 @@ function inicializarCamadasUrbanas(mapa) {
  */
 function toggleViasObstrucoes(mapa) {
     ViasObstrucoesState.ativo = !ViasObstrucoesState.ativo;
-    ViasObstrucoesState.desenharNoCad = ViasObstrucoesState.ativo;
     const btn = document.getElementById('btnToggleVias');
 
     if (btn) {
@@ -97,11 +96,14 @@ function toggleViasObstrucoes(mapa) {
             btn.classList.add('active');
             btn.innerHTML = '🏙️ Vias: VISÍVEIS';
             if (typeof showToast === 'function') {
-                showToast('🏙️ Vias urbanas ativadas (mapa e CAD)', 'info');
+                showToast('🏙️ Camadas de vias ativadas no mapa', 'info');
             }
         } else {
             btn.classList.remove('active');
             btn.innerHTML = '🏙️ Vias/Passeios';
+            if (typeof showToast === 'function') {
+                showToast('🏙️ Camadas de vias ocultadas no mapa (CAD continua ativo)', 'info');
+            }
         }
     }
 
@@ -136,57 +138,76 @@ function calcularBbox(lat, lon, raioMetros) {
 }
 
 /**
+ * Executa consulta na API Overpass via POST (form-urlencoded) com fallback de endpoints
+ * Evita erro 406 Not Acceptable que ocorre em requisições GET
+ */
+async function executarConsultaOverpass(queryOverpass) {
+    const endpoints = [
+        'https://overpass-api.de/api/interpreter',
+        'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+        'https://overpass.kumi.systems/api/interpreter'
+    ];
+
+    const bodyData = 'data=' + encodeURIComponent(queryOverpass);
+
+    for (const ep of endpoints) {
+        try {
+            const res = await fetch(ep, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                },
+                body: bodyData,
+                signal: AbortSignal.timeout(10000)
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (data && data.elements && Array.isArray(data.elements)) {
+                return data;
+            }
+        } catch (err) {
+            // Tenta próximo endpoint com fallback automático
+        }
+    }
+    return null;
+}
+
+/**
  * Carrega vias, calçadas e edificações/obstruções da Overpass API
  */
-async function carregarContextoUrbano(lat, lon, raioMetros = 120, mapa = null) {
-    if (!ViasObstrucoesState.ativo) return;
+async function carregarContextoUrbano(lat, lon, raioMetros = 130, mapa = null, forcarCad = false) {
+    const querCad = forcarCad || ViasObstrucoesState.desenharNoCad;
+    if (!ViasObstrucoesState.ativo && !querCad) return;
 
-    inicializarCamadasUrbanas(mapa);
+    if (mapa && ViasObstrucoesState.ativo) {
+        inicializarCamadasUrbanas(mapa);
+    }
 
     // Chave de quadrícula (~100m) para evitar consultas redundantes
     const gridKey = `${lat.toFixed(3)}_${lon.toFixed(3)}`;
     if (ViasObstrucoesState.cacheGrid.has(gridKey)) {
         // Se já consultou e temos elementos acumulados, garante envio ao CAD
-        if (ViasObstrucoesState.desenharNoCad && window.chrome && window.chrome.webview) {
+        if (querCad && window.chrome && window.chrome.webview) {
             converterEEnviarParaCad(ViasObstrucoesState.elementosAcumulados);
         }
         return;
     }
-    ViasObstrucoesState.cacheGrid.add(gridKey);
 
     const bbox = calcularBbox(lat, lon, raioMetros);
     const bboxStr = `${bbox.south.toFixed(5)},${bbox.west.toFixed(5)},${bbox.north.toFixed(5)},${bbox.east.toFixed(5)}`;
-    const queryOverpass = `[out:json][timeout:15];(way["highway"](${bboxStr});way["building"](${bboxStr});way["barrier"](${bboxStr}););out body;>;out skel qt;`;
+    const queryOverpass = `[out:json][timeout:15];(way["highway"](${bboxStr});way["building"](${bboxStr});way["barrier"](${bboxStr}););out body geom;>;out skel qt;`;
 
-    // Endpoints com fallback para resiliência de rede
-    const endpoints = [
-        'https://overpass-api.de/api/interpreter',
-        'https://overpass.kumi.systems/api/interpreter',
-        'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
-    ];
 
     ViasObstrucoesState.carregando = true;
-    let sucesso = false;
-
-    for (const ep of endpoints) {
-        try {
-            const url = `${ep}?data=${encodeURIComponent(queryOverpass)}`;
-            const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-            if (!res.ok) continue;
-            const data = await res.json();
-            renderizarElementosOsm(data, mapa);
-            sucesso = true;
-            break;
-        } catch (err) {
-            // Tenta próximo endpoint
-        }
-    }
-
-    if (!sucesso) {
-        console.warn('[Vias/Obstruções OSM] Todos os endpoints Overpass indisponíveis temporariamente.');
-    }
-
+    const data = await executarConsultaOverpass(queryOverpass);
     ViasObstrucoesState.carregando = false;
+
+    if (data && data.elements) {
+        ViasObstrucoesState.cacheGrid.add(gridKey);
+        renderizarElementosOsm(data, ViasObstrucoesState.ativo ? mapa : null, querCad);
+    } else {
+        console.warn('[Vias/Obstruções OSM] Falha temporária nos servidores Overpass para a coordenada:', lat, lon);
+    }
 }
 
 /**
@@ -194,6 +215,11 @@ async function carregarContextoUrbano(lat, lon, raioMetros = 120, mapa = null) {
  */
 async function desenharViasNoCad(forcarReconsulta = false, mapa = null) {
     const map = mapa || (window.AppState ? window.AppState.map : null);
+    
+    if (forcarReconsulta) {
+        ViasObstrucoesState.cacheGrid.clear();
+        ViasObstrucoesState.waysProcessados.clear();
+    }
     
     // Se já temos elementos carregados e não foi forçada reconsulta completa:
     if (!forcarReconsulta && ViasObstrucoesState.elementosAcumulados.vias.length > 0) {
@@ -246,29 +272,13 @@ async function desenharViasNoCad(forcarReconsulta = false, mapa = null) {
         return;
     }
 
-    const queryOverpass = `[out:json][timeout:18];(way["highway"](${bboxStr});way["building"](${bboxStr});way["barrier"](${bboxStr}););out body;>;out skel qt;`;
-    const endpoints = [
-        'https://overpass-api.de/api/interpreter',
-        'https://overpass.kumi.systems/api/interpreter',
-        'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
-    ];
+    const queryOverpass = `[out:json][timeout:18];(way["highway"](${bboxStr});way["building"](${bboxStr});way["barrier"](${bboxStr}););out body geom;>;out skel qt;`;
 
-    let sucesso = false;
-    for (const ep of endpoints) {
-        try {
-            const url = `${ep}?data=${encodeURIComponent(queryOverpass)}`;
-            const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-            if (!res.ok) continue;
-            const data = await res.json();
-            renderizarElementosOsm(data, map);
-            sucesso = true;
-            break;
-        } catch (e) {
-            // Próximo endpoint
-        }
-    }
 
-    if (sucesso) {
+    const data = await executarConsultaOverpass(queryOverpass);
+
+    if (data && data.elements) {
+        renderizarElementosOsm(data, map, true);
         const nVias = ViasObstrucoesState.elementosAcumulados.vias.length;
         if (typeof showToast === 'function') {
             showToast(`🛣️ ${nVias} trechos de vias/passeios desenhados no CAD!`, 'success');
@@ -283,7 +293,7 @@ async function desenharViasNoCad(forcarReconsulta = false, mapa = null) {
 /**
  * Processa e renderiza os elementos do OpenStreetMap no mapa Leaflet
  */
-function renderizarElementosOsm(osmData, mapa) {
+function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
     if (!osmData || !osmData.elements) return;
 
     // Indexa nós por ID
@@ -301,14 +311,20 @@ function renderizarElementosOsm(osmData, mapa) {
     };
 
     osmData.elements.forEach(el => {
-        if (el.type !== 'way' || !el.nodes || el.nodes.length < 2) return;
+        if (el.type !== 'way') return;
 
         // Evita reprocessar o mesmo way já desenhado no CAD/Leaflet
         if (el.id && ViasObstrucoesState.waysProcessados.has(el.id)) return;
         if (el.id) ViasObstrucoesState.waysProcessados.add(el.id);
 
-        const coords = el.nodes.map(nodeId => nodes[nodeId]).filter(Boolean);
+        let coords = [];
+        if (el.geometry && Array.isArray(el.geometry)) {
+            coords = el.geometry.map(g => [g.lat, g.lon]);
+        } else if (el.nodes && Array.isArray(el.nodes)) {
+            coords = el.nodes.map(nodeId => nodes[nodeId]).filter(Boolean);
+        }
         if (coords.length < 2) return;
+
 
         const tags = el.tags || {};
 
@@ -376,8 +392,9 @@ function renderizarElementosOsm(osmData, mapa) {
     ViasObstrucoesState.elementosAcumulados.calcadas.push(...novosElementos.calcadas);
     ViasObstrucoesState.elementosAcumulados.obstrucoes.push(...novosElementos.obstrucoes);
 
-    // Se o envio ao CAD estiver ativado, notifica o C# via WebView2
-    if (ViasObstrucoesState.desenharNoCad && window.chrome && window.chrome.webview) {
+    // Se o envio ao CAD estiver ativado ou forçado pelo lançamento de poste
+    const deveEnviarCad = enviarCad || ViasObstrucoesState.desenharNoCad;
+    if (deveEnviarCad && window.chrome && window.chrome.webview) {
         converterEEnviarParaCad(novosElementos);
     }
 }
@@ -388,7 +405,11 @@ function renderizarElementosOsm(osmData, mapa) {
 function converterEEnviarParaCad(elementos) {
     if (!elementos) return;
     const fuso = (window.AppState && window.AppState.fusoUtm) ? window.AppState.fusoUtm : 23;
-    if (!window.Snyder || typeof window.Snyder.latLonToUtm !== 'function') return;
+    const snyder = window.Snyder || (typeof Snyder !== 'undefined' ? Snyder : null);
+    if (!snyder || typeof snyder.latLonToUtm !== 'function') {
+        console.warn('[Vias CAD] Snyder geodésico indisponível para conversão UTM.');
+        return;
+    }
 
     function converterLista(lista) {
         if (!lista || !Array.isArray(lista)) return [];
@@ -396,7 +417,7 @@ function converterEEnviarParaCad(elementos) {
             tipo: item.tipo,
             nome: item.nome || '',
             pontosUtm: item.coords.map(c => {
-                const utm = window.Snyder.latLonToUtm(c[0], c[1], fuso);
+                const utm = snyder.latLonToUtm(c[0], c[1], fuso);
                 return [utm.x, utm.y];
             })
         }));
@@ -406,7 +427,8 @@ function converterEEnviarParaCad(elementos) {
     const calcadasUtm = converterLista(elementos.calcadas);
     const obstrucoesUtm = converterLista(elementos.obstrucoes);
 
-    if (viasUtm.length === 0 && calcadasUtm.length === 0 && obstrucoesUtm.length === 0) return;
+    const totalElementos = viasUtm.length + calcadasUtm.length + obstrucoesUtm.length;
+    if (totalElementos === 0) return;
 
     const payload = {
         action: 'desenhar_elementos_urbanos',
@@ -418,6 +440,9 @@ function converterEEnviarParaCad(elementos) {
 
     if (window.chrome && window.chrome.webview) {
         window.chrome.webview.postMessage(payload);
+        if (typeof showToast === 'function') {
+            showToast(`🛣️ ${viasUtm.length} vias/ruas enviadas para desenho no AutoCAD!`, 'success');
+        }
     }
 }
 

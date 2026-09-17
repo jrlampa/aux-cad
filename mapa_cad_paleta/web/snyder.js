@@ -87,8 +87,14 @@ const Snyder = {
             lon: lonRad * 180.0 / Math.PI
         };
     }
-};
-
+// Exportação para navegador e ambientes de módulo
+if (typeof window !== 'undefined') {
+    window.Snyder = Snyder;
+}
+if (typeof globalThis !== 'undefined') {
+    globalThis.Snyder = Snyder;
+}
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Snyder;
 }
+

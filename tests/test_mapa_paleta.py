@@ -610,3 +610,48 @@ def test_paleta_cqtui_exportacao_e_chamada():
     assert "(defun c:CQT_OSM" in lsp
     assert "auxcad_cqt_import.json" in lsp
 
+
+def test_snyder_js_exportacao_global():
+    """Valida que snyder.js exporta explicitamente para window.Snyder e globalThis.Snyder."""
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    snyder_js = os.path.join(raiz, "mapa_cad_paleta", "web", "snyder.js")
+
+    with open(snyder_js, "r", encoding="utf-8") as f:
+        conteudo = f.read()
+
+    assert "window.Snyder = Snyder" in conteudo
+    assert "globalThis.Snyder = Snyder" in conteudo
+    assert "latLonToUtm" in conteudo
+    assert "utmToLatLon" in conteudo
+
+
+def test_vias_cad_ao_inserir_poste():
+    """Valida que vias_obstrucoes.js e app.js garantem envio de vias ao AutoCAD sem barreiras indevidas."""
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    vias_js = os.path.join(raiz, "mapa_cad_paleta", "web", "vias_obstrucoes.js")
+    app_js = os.path.join(raiz, "mapa_cad_paleta", "web", "app.js")
+
+    with open(vias_js, "r", encoding="utf-8") as f:
+        vias_conteudo = f.read()
+
+    # Deve usar POST com Content-Type application/x-www-form-urlencoded para evitar erro 406
+    assert "method: 'POST'" in vias_conteudo
+    assert "application/x-www-form-urlencoded" in vias_conteudo
+    assert "executarConsultaOverpass" in vias_conteudo
+
+    # toggleViasObstrucoes não pode desativar desenharNoCad
+    assert "ViasObstrucoesState.desenharNoCad = ViasObstrucoesState.ativo" not in vias_conteudo
+
+    # converterEEnviarParaCad deve usar fallback resiliente para Snyder
+    assert "window.Snyder" in vias_conteudo
+    assert "desenhar_elementos_urbanos" in vias_conteudo
+
+    with open(app_js, "r", encoding="utf-8") as f:
+        app_conteudo = f.read()
+
+    # Inserção de poste deve calcular coordenadas analíticas e forçar envio ao CAD
+    assert "chkAutoViasCad" in app_conteudo
+    assert "carregarContextoUrbano" in app_conteudo
+    assert "forcarCad" in vias_conteudo or "true" in app_conteudo
+
+

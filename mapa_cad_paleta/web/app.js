@@ -790,9 +790,23 @@ function inserirPosteNoCad() {
     // Gerar vias no AutoCAD automaticamente ao inserir poste se a opção estiver ativada
     const chkVias = document.getElementById('chkAutoViasCad');
     const gerarVias = chkVias ? chkVias.checked : (window.ViasObstrucoesState && window.ViasObstrucoesState.desenharNoCad);
-    if (gerarVias && typeof window.carregarContextoUrbano === 'function' && AppState.currentLat && AppState.currentLon) {
+    if (gerarVias && typeof window.carregarContextoUrbano === 'function') {
         if (window.ViasObstrucoesState) window.ViasObstrucoesState.desenharNoCad = true;
-        window.carregarContextoUrbano(AppState.currentLat, AppState.currentLon, 130, AppState.map);
+        
+        let pLat = AppState.currentLat;
+        let pLon = AppState.currentLon;
+        const snyder = window.Snyder || (typeof Snyder !== 'undefined' ? Snyder : null);
+        if (snyder && typeof snyder.utmToLatLon === 'function') {
+            const geo = snyder.utmToLatLon(x, y, fuso);
+            if (geo && !isNaN(geo.lat) && !isNaN(geo.lon)) {
+                pLat = geo.lat;
+                pLon = geo.lon;
+            }
+        }
+        
+        if (pLat && pLon) {
+            window.carregarContextoUrbano(pLat, pLon, 140, AppState.map, true);
+        }
     }
 
     // Auto-incrementar número se marcado
@@ -848,6 +862,9 @@ function setupMensagensCSharp() {
             }
             else if (data.action === 'resultado_insercao') {
                 showToast(data.message, data.success ? 'success' : 'error');
+            }
+            else if (data.action === 'status_urbanos') {
+                showToast(data.message, data.success ? 'success' : 'info');
             }
             else if (data.action === 'postes_dwg') {
                 renderizarPostesDwg(data.postes || []);

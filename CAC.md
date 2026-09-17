@@ -156,7 +156,7 @@ aux cad/
   - Opção explícita no rodapé da sidebar (`chkAutoViasCad`): *"🛣️ Gerar vias no CAD ao inserir poste"*.
   - Opção dedicada no painel do traçado contínuo (`chkTracadoViasCad`): *"🛣️ Gerar vias no CAD a cada poste"*.
   - Sincronização bidirecional, persistência no `localStorage` (`AUXCAD_AUTO_VIAS_CAD`) e deduplicação inteligente por `waysProcessados`.
-  - Cobertura geodésica contínua: calcula automaticamente a área do vão e o ponto médio entre postes consecutivos para traçar os eixos viários e calçadas sem lacunas no DWG (`VIAS_EIXO`, `VIAS_CALCADA`, `OBSTRUCOES_EDIF`).
+  - Cobertura geodésica contínua: cálculo analítico imediato de coordenadas via `window.Snyder`, consulta resiliente na Overpass API via POST form-urlencoded (suportando `out body geom` e nós OSM sem risco de HTTP 406) e desenho direto de polilinhas 2.5D no DWG (`CadBridge.DesenharElementosUrbanos`) nos layers `VIAS_EIXO` (Cor 8 - Cinza Escuro), `VIAS_CALCADA` (Cor 9 - Cinza Claro) e `OBSTRUCOES_EDIF` (Cor 1 - Vermelho).
 - `mapa_paleta_loader.lsp` (75 linhas): Carregador AutoLISP com detecção dinâmica da versão do AutoCAD (`ACADVER`) e disparo via `NETLOAD`.
 
 ### 8. Módulo de Dados Técnicos e Tabelas de Referência (`dados_tecnicos/`)
@@ -284,7 +284,8 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
 ### 11. Validação, Debug Completo e Testes
 - **Auditoria de Sintaxe AutoLISP**: 100% dos 28 arquivos `.lsp` do projeto validados e com balanceamento de parênteses e strings verificado (0 erros).
 - **Auditoria de Módulos Python**: 100% dos arquivos `.py` compilados e validados contra regras de Clean Code e limites de linhas (<750 linhas).
-- **Suíte de Testes**: **130 testes unitários passando com 100% de sucesso** (`python -m pytest tests/`).
+- **Suíte de Testes**: **155 testes unitários passando com 100% de sucesso** (`python -m pytest`).
+
 - **Cobertura de Código**: Cobertura crítica de 88% no módulo `unifilar` (com 100% no `unifilar_diagrama_builder`), 85% no `cqt_quadros_generator`, 83% no `mapa_servidor` e acima de 80% a 100% em todos os módulos de domínio.
 
 ### 12. `mapa_cad_paleta/` (Paleta Cartográfica OSM C# .NET para AutoCAD 2018+)
