@@ -42,6 +42,7 @@ namespace MapaCadPaleta
         private const string LAYER_CABOS_MT = "CABOS_MT";
         private const string LAYER_CABOS_TEXTO = "CABOS_TEXTO";
         private const string LAYER_VIAS_EIXO = "VIAS_EIXO";
+        private const string LAYER_VIAS_BORDO = "VIAS_BORDO";
         private const string LAYER_VIAS_CALCADA = "VIAS_CALCADA";
         private const string LAYER_OBSTRUCOES_EDIF = "OBSTRUCOES_EDIF";
 
@@ -226,6 +227,81 @@ namespace MapaCadPaleta
 
                     int total = 0;
 
+                    void DesenharViasComOffsets(JsonElement arrayElem, bool inserirNome = true)
+                    {
+                        if (arrayElem.ValueKind != JsonValueKind.Array) return;
+                        foreach (var item in arrayElem.EnumerateArray())
+                        {
+                            if (item.TryGetProperty("pontosUtm", out var pts) && pts.ValueKind == JsonValueKind.Array)
+                            {
+                                var rawPontos = pts.EnumerateArray().ToList();
+                                if (rawPontos.Count < 2) continue;
+
+                                var pontos2d = new List<Point2d>();
+                                Polyline plEixo = new Polyline { Layer = LAYER_VIAS_EIXO, Closed = false };
+                                for (int i = 0; i < rawPontos.Count; i++)
+                                {
+                                    var pt = rawPontos[i].EnumerateArray().ToList();
+                                    if (pt.Count >= 2)
+                                    {
+                                        var p2d = new Point2d(pt[0].GetDouble(), pt[1].GetDouble());
+                                        pontos2d.Add(p2d);
+                                        plEixo.AddVertexAt(i, p2d, 0, 0, 0);
+                                    }
+                                }
+
+                                // 1. Eixo da via (Layer VIAS_EIXO - Invisível por padrão, serve como guia)
+                                btr.AppendEntity(plEixo);
+                                tr.AddNewlyCreatedDBObject(plEixo, true);
+                                total++;
+
+                                // 2. Extrair ou calcular larguras da pista e do passeio a partir do OSM
+                                double larguraPista = 7.0;
+                                double larguraCalcada = 2.0;
+                                if (item.TryGetProperty("larguraPista", out var lpProp))
+                                    larguraPista = lpProp.GetDouble();
+                                if (item.TryGetProperty("larguraCalcada", out var lcProp))
+                                    larguraCalcada = lcProp.GetDouble();
+
+                                double halfWidth = larguraPista / 2.0;
+                                double distCalcada = halfWidth + larguraCalcada;
+
+                                // 3. Bordos da Pista / Meio-fio (Layer VIAS_BORDO)
+                                AdicionarOffsetCurvas(btr, tr, plEixo, pontos2d, halfWidth, LAYER_VIAS_BORDO);
+                                AdicionarOffsetCurvas(btr, tr, plEixo, pontos2d, -halfWidth, LAYER_VIAS_BORDO);
+                                total += 2;
+
+                                // 4. Limites do Passeio / Calçada (Layer VIAS_CALCADA)
+                                AdicionarOffsetCurvas(btr, tr, plEixo, pontos2d, distCalcada, LAYER_VIAS_CALCADA);
+                                AdicionarOffsetCurvas(btr, tr, plEixo, pontos2d, -distCalcada, LAYER_VIAS_CALCADA);
+                                total += 2;
+
+                                // 5. Nome da via visível na camada VIAS_BORDO no ponto médio
+                                if (inserirNome && item.TryGetProperty("nome", out var nomeProp))
+                                {
+                                    string nomeRua = nomeProp.GetString() ?? "";
+                                    if (!string.IsNullOrWhiteSpace(nomeRua) && !nomeRua.Equals("Via sem nome", StringComparison.OrdinalIgnoreCase) && !nomeRua.Equals("Rua", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        int midIdx = pontos2d.Count / 2;
+                                        var ptMid = pontos2d[midIdx];
+                                        DBText txt = new DBText
+                                        {
+                                            Position = new Point3d(ptMid.X, ptMid.Y, 0.0),
+                                            Height = 1.6,
+                                            TextString = nomeRua,
+                                            Layer = LAYER_VIAS_BORDO,
+                                            HorizontalMode = TextHorizontalMode.TextCenter,
+                                            VerticalMode = TextVerticalMode.TextVerticalMid,
+                                            AlignmentPoint = new Point3d(ptMid.X, ptMid.Y, 0.0)
+                                        };
+                                        btr.AppendEntity(txt);
+                                        tr.AddNewlyCreatedDBObject(txt, true);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     void DesenharListaPolilinhas(JsonElement arrayElem, string layer, bool fechada, bool inserirNome = false)
                     {
                         if (arrayElem.ValueKind != JsonValueKind.Array) return;
@@ -249,43 +325,18 @@ namespace MapaCadPaleta
                                 btr.AppendEntity(pl);
                                 tr.AddNewlyCreatedDBObject(pl, true);
                                 total++;
-
-                                if (inserirNome && item.TryGetProperty("nome", out var nomeProp))
-                                {
-                                    string nomeRua = nomeProp.GetString() ?? "";
-                                    if (!string.IsNullOrWhiteSpace(nomeRua) && !nomeRua.Equals("Via sem nome", StringComparison.OrdinalIgnoreCase) && !nomeRua.Equals("Rua", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        int midIdx = pontos.Count / 2;
-                                        var ptMid = pontos[midIdx].EnumerateArray().ToList();
-                                        if (ptMid.Count >= 2)
-                                        {
-                                            DBText txt = new DBText
-                                            {
-                                                Position = new Point3d(ptMid[0].GetDouble(), ptMid[1].GetDouble(), 0.0),
-                                                Height = 1.6,
-                                                TextString = nomeRua,
-                                                Layer = layer,
-                                                HorizontalMode = TextHorizontalMode.TextCenter,
-                                                VerticalMode = TextVerticalMode.TextVerticalMid,
-                                                AlignmentPoint = new Point3d(ptMid[0].GetDouble(), ptMid[1].GetDouble(), 0.0)
-                                            };
-                                            btr.AppendEntity(txt);
-                                            tr.AddNewlyCreatedDBObject(txt, true);
-                                        }
-                                    }
-                                }
                             }
                         }
                     }
 
                     if (root.TryGetProperty("vias", out var vias))
-                        DesenharListaPolilinhas(vias, LAYER_VIAS_EIXO, false, true);
+                        DesenharViasComOffsets(vias);
 
                     if (root.TryGetProperty("calcadas", out var calcadas))
-                        DesenharListaPolilinhas(calcadas, LAYER_VIAS_CALCADA, false, false);
+                        DesenharListaPolilinhas(calcadas, LAYER_VIAS_CALCADA, false);
 
                     if (root.TryGetProperty("obstrucoes", out var obstrucoes))
-                        DesenharListaPolilinhas(obstrucoes, LAYER_OBSTRUCOES_EDIF, true, false);
+                        DesenharListaPolilinhas(obstrucoes, LAYER_OBSTRUCOES_EDIF, true);
 
                     tr.Commit();
                     ed.Regen();
@@ -297,6 +348,96 @@ namespace MapaCadPaleta
             {
                 return (false, $"Erro ao desenhar elementos urbanos no CAD: {ex.Message}");
             }
+        }
+
+        private static void AdicionarOffsetCurvas(BlockTableRecord btr, Transaction tr, Polyline basePl, List<Point2d> pontos, double dist, string layer)
+        {
+            bool sucessoNativo = false;
+            try
+            {
+                using var curvas = basePl.GetOffsetCurves(dist);
+                if (curvas != null && curvas.Count > 0)
+                {
+                    foreach (DBObject obj in curvas)
+                    {
+                        if (obj is Entity ent)
+                        {
+                            ent.Layer = layer;
+                            btr.AppendEntity(ent);
+                            tr.AddNewlyCreatedDBObject(ent, true);
+                        }
+                    }
+                    sucessoNativo = true;
+                }
+            }
+            catch
+            {
+                sucessoNativo = false;
+            }
+
+            if (!sucessoNativo)
+            {
+                Polyline plAnalitica = OffsetPolylineAnalitico(pontos, dist, layer);
+                if (plAnalitica != null)
+                {
+                    btr.AppendEntity(plAnalitica);
+                    tr.AddNewlyCreatedDBObject(plAnalitica, true);
+                }
+            }
+        }
+
+        private static Polyline OffsetPolylineAnalitico(List<Point2d> pts, double d, string layer)
+        {
+            if (pts == null || pts.Count < 2) return null;
+            int n = pts.Count;
+            var segs = new List<Vector2d>();
+
+            for (int i = 0; i < n - 1; i++)
+            {
+                double dx = pts[i + 1].X - pts[i].X;
+                double dy = pts[i + 1].Y - pts[i].Y;
+                double len = Math.Sqrt(dx * dx + dy * dy);
+                if (len < 1e-6)
+                    segs.Add(new Vector2d(0, 0));
+                else
+                    segs.Add(new Vector2d(-dy / len, dx / len));
+            }
+
+            Polyline pl = new Polyline { Layer = layer, Closed = false };
+            for (int i = 0; i < n; i++)
+            {
+                if (i == 0)
+                {
+                    var n0 = segs[0];
+                    pl.AddVertexAt(0, new Point2d(pts[0].X + d * n0.X, pts[0].Y + d * n0.Y), 0, 0, 0);
+                }
+                else if (i == n - 1)
+                {
+                    var nLast = segs[segs.Count - 1];
+                    pl.AddVertexAt(i, new Point2d(pts[n - 1].X + d * nLast.X, pts[n - 1].Y + d * nLast.Y), 0, 0, 0);
+                }
+                else
+                {
+                    var n1 = segs[i - 1];
+                    var n2 = segs[i];
+                    double avgX = n1.X + n2.X;
+                    double avgY = n1.Y + n2.Y;
+                    double len = Math.Sqrt(avgX * avgX + avgY * avgY);
+                    if (len < 1e-6)
+                    {
+                        pl.AddVertexAt(i, new Point2d(pts[i].X + d * n1.X, pts[i].Y + d * n1.Y), 0, 0, 0);
+                    }
+                    else
+                    {
+                        double ux = avgX / len;
+                        double uy = avgY / len;
+                        double dot = ux * n1.X + uy * n1.Y;
+                        double scale = Math.Min(1.0 / Math.Max(dot, 0.2), 2.5);
+                        pl.AddVertexAt(i, new Point2d(pts[i].X + d * scale * ux, pts[i].Y + d * scale * uy), 0, 0, 0);
+                    }
+                }
+            }
+            return pl;
         }
 
         /// <summary>
@@ -373,18 +514,19 @@ namespace MapaCadPaleta
         private static void GarantirLayers(Database db, Transaction tr)
         {
             LayerTable lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_POSTES, 3);      // Verde
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_NUMERO, 4);      // Ciano
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_DESCRICAO, 2);   // Amarelo
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_BT, 2);    // Amarelo / Yellow (BT)
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_MT, 4);    // Ciano / Cyan (MT)
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_TEXTO, 7); // Branco / White (Texto)
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_VIAS_EIXO, 8);      // Cinza escuro (Eixo)
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_VIAS_CALCADA, 9);   // Cinza claro (Passeio)
-            CriarLayerSeNaoExistir(db, tr, lt, LAYER_OBSTRUCOES_EDIF, 1);// Vermelho (Edificação)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_POSTES, 3);          // Verde
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_NUMERO, 4);          // Ciano
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_DESCRICAO, 2);       // Amarelo
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_BT, 2);        // Amarelo / Yellow (BT)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_MT, 4);        // Ciano / Cyan (MT)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_CABOS_TEXTO, 7);     // Branco / White (Texto)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_VIAS_EIXO, 8, true); // Cinza escuro (Eixo Guia - Oculto por padrão)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_VIAS_BORDO, 8);      // Cinza (Bordo / Meio-fio da Pista)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_VIAS_CALCADA, 9);    // Cinza claro (Passeio / Calçada)
+            CriarLayerSeNaoExistir(db, tr, lt, LAYER_OBSTRUCOES_EDIF, 1); // Vermelho (Edificação)
         }
 
-        private static void CriarLayerSeNaoExistir(Database db, Transaction tr, LayerTable lt, string nome, short colorIndex)
+        private static void CriarLayerSeNaoExistir(Database db, Transaction tr, LayerTable lt, string nome, short colorIndex, bool isOff = false)
         {
             if (!lt.Has(nome))
             {
@@ -392,7 +534,8 @@ namespace MapaCadPaleta
                 LayerTableRecord ltr = new LayerTableRecord
                 {
                     Name = nome,
-                    Color = Color.FromColorIndex(ColorMethod.ByAci, colorIndex)
+                    Color = Color.FromColorIndex(ColorMethod.ByAci, colorIndex),
+                    IsOff = isOff
                 };
                 lt.Add(ltr);
                 tr.AddNewlyCreatedDBObject(ltr, true);
@@ -403,8 +546,15 @@ namespace MapaCadPaleta
                 {
                     ObjectId ltrId = lt[nome];
                     LayerTableRecord ltr = (LayerTableRecord)tr.GetObject(ltrId, OpenMode.ForWrite);
-                    ltr.IsOff = false;
-                    if (ltr.IsFrozen) ltr.IsFrozen = false;
+                    if (isOff)
+                    {
+                        ltr.IsOff = true;
+                    }
+                    else
+                    {
+                        ltr.IsOff = false;
+                        if (ltr.IsFrozen) ltr.IsFrozen = false;
+                    }
                 }
                 catch { }
             }

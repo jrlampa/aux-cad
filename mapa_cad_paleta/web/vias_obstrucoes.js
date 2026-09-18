@@ -459,16 +459,24 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
         // 4. Vias e Ruas (Pistas de Rolamento / Eixos)
         else if (tags.highway) {
             const nomeRua = tags.name || tags['ref'] || 'Via Pública';
+            const { larguraPista, larguraCalcada } = calcularLargurasVia(tags);
+
             if (mapa && ViasObstrucoesState.camadaVias) {
                 const viaLinha = L.polyline(coords, {
                     color: '#334155', // Asfalto escuro
-                    weight: 4.5,
+                    weight: Math.min(8, Math.max(3, larguraPista * 0.8)),
                     opacity: 0.75
-                }).bindTooltip(`<b>🛣️ ${nomeRua}</b> (${tags.highway})`, { sticky: true });
+                }).bindTooltip(`<b>🛣️ ${nomeRua}</b> (${tags.highway} - Pista: ${larguraPista.toFixed(1)}m, Passeio: ${larguraCalcada.toFixed(1)}m)`, { sticky: true });
 
                 ViasObstrucoesState.camadaVias.addLayer(viaLinha);
             }
-            novosElementos.vias.push({ tipo: 'EIXO_VIA', nome: nomeRua, coords });
+            novosElementos.vias.push({ 
+                tipo: 'EIXO_VIA', 
+                nome: nomeRua, 
+                coords, 
+                larguraPista, 
+                larguraCalcada 
+            });
         }
     });
 
@@ -482,6 +490,78 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
     if (deveEnviarCad && window.chrome && window.chrome.webview) {
         converterEEnviarParaCad(novosElementos);
     }
+}
+
+/**
+ * Calcula a largura da pista e do passeio a partir das tags do OSM
+ */
+function calcularLargurasVia(tags) {
+    let larguraPista = 7.0; // Padrão urbano residencial (DNIT / Plano Diretor)
+    let larguraCalcada = 2.0; // Padrão passeio público (ABNT NBR 9050)
+
+    if (!tags) return { larguraPista, larguraCalcada };
+
+    // 1. Tag explícita de largura da via (width / est_width / width:carriageway)
+    const rawWidth = tags.width || tags.est_width || tags['width:carriageway'];
+    if (rawWidth) {
+        const parsed = parseFloat(String(rawWidth).replace(',', '.').replace(/[^\d.]/g, ''));
+        if (!isNaN(parsed) && parsed >= 2.5 && parsed <= 40.0) {
+            larguraPista = parsed;
+        }
+    } else if (tags.lanes) {
+        const lanes = parseInt(tags.lanes, 10);
+        if (!isNaN(lanes) && lanes >= 1 && lanes <= 8) {
+            larguraPista = Math.max(5.0, lanes * 3.25);
+        }
+    } else if (tags.highway) {
+        switch (tags.highway) {
+            case 'motorway':
+            case 'trunk':
+                larguraPista = 14.0;
+                break;
+            case 'primary':
+                larguraPista = 10.5;
+                break;
+            case 'secondary':
+                larguraPista = 9.0;
+                break;
+            case 'tertiary':
+                larguraPista = 8.0;
+                break;
+            case 'residential':
+                larguraPista = 7.0;
+                break;
+            case 'unclassified':
+            case 'living_street':
+                larguraPista = 6.0;
+                break;
+            case 'service':
+                larguraPista = 4.5;
+                larguraCalcada = 1.2;
+                break;
+            case 'track':
+            case 'path':
+            case 'footway':
+            case 'pedestrian':
+                larguraPista = 3.0;
+                larguraCalcada = 1.0;
+                break;
+            default:
+                larguraPista = 7.0;
+                break;
+        }
+    }
+
+    // 2. Tag explícita de largura de calçada/passeio
+    const rawSidewalk = tags['sidewalk:width'] || tags['sidewalk:both:width'] || tags['width:sidewalk'];
+    if (rawSidewalk) {
+        const parsedSw = parseFloat(String(rawSidewalk).replace(',', '.').replace(/[^\d.]/g, ''));
+        if (!isNaN(parsedSw) && parsedSw >= 0.8 && parsedSw <= 6.0) {
+            larguraCalcada = parsedSw;
+        }
+    }
+
+    return { larguraPista, larguraCalcada };
 }
 
 /**
@@ -501,6 +581,8 @@ function converterEEnviarParaCad(elementos) {
         return lista.map(item => ({
             tipo: item.tipo,
             nome: item.nome || '',
+            larguraPista: item.larguraPista || 7.0,
+            larguraCalcada: item.larguraCalcada || 2.0,
             pontosUtm: item.coords.map(c => {
                 const utm = snyder.latLonToUtm(c[0], c[1], fuso);
                 return [utm.x, utm.y];
