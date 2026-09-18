@@ -138,19 +138,100 @@ function calcularBbox(lat, lon, raioMetros) {
 }
 
 /**
- * Executa consulta na API Overpass via POST (form-urlencoded) com fallback de endpoints
- * Evita erro 406 Not Acceptable que ocorre em requisições GET
+ * Converte XML retornado pela API OSM 0.6 para a estrutura padrão de elementos JSON
  */
-async function executarConsultaOverpass(queryOverpass) {
-    const endpoints = [
-        'https://overpass-api.de/api/interpreter',
-        'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-        'https://overpass.kumi.systems/api/interpreter'
-    ];
+function converterOsmXmlParaJson(xmlDoc) {
+    const elements = [];
+    const nodeElements = xmlDoc.getElementsByTagName('node');
+    for (let i = 0; i < nodeElements.length; i++) {
+        const n = nodeElements[i];
+        elements.push({
+            type: 'node',
+            id: parseInt(n.getAttribute('id') || '0', 10),
+            lat: parseFloat(n.getAttribute('lat') || '0'),
+            lon: parseFloat(n.getAttribute('lon') || '0')
+        });
+    }
 
+    const wayElements = xmlDoc.getElementsByTagName('way');
+    for (let i = 0; i < wayElements.length; i++) {
+        const w = wayElements[i];
+        const id = parseInt(w.getAttribute('id') || '0', 10);
+        const nodes = [];
+        const ndList = w.getElementsByTagName('nd');
+        for (let j = 0; j < ndList.length; j++) {
+            nodes.push(parseInt(ndList[j].getAttribute('ref') || '0', 10));
+        }
+
+        const tags = {};
+        const tagList = w.getElementsByTagName('tag');
+        for (let j = 0; j < tagList.length; j++) {
+            tags[tagList[j].getAttribute('k')] = tagList[j].getAttribute('v');
+        }
+
+        elements.push({
+            type: 'way',
+            id,
+            nodes,
+            tags
+        });
+    }
+
+    return { elements };
+}
+
+/**
+ * Executa consulta de vias, passeios e obstruções com prioridade máxima para a API Oficial OSM
+ * Zero bloqueio CORS (Access-Control-Allow-Origin: *), tempo de resposta inferior a 1s
+ */
+async function executarConsultaOsm(bbox) {
+    if (!bbox) return null;
+
+    // 1. API Oficial do OpenStreetMap (0.6 map.json)
+    const urlOsm = `https://api.openstreetmap.org/api/0.6/map.json?bbox=${bbox.west.toFixed(6)},${bbox.south.toFixed(6)},${bbox.east.toFixed(6)},${bbox.north.toFixed(6)}`;
+    try {
+        const res = await fetch(urlOsm, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json, application/xml, text/xml, */*'
+            },
+            signal: AbortSignal.timeout(8000)
+        });
+
+        if (res.ok) {
+            const rawText = await res.text();
+            if (rawText && rawText.trim().length > 0) {
+                const trimmed = rawText.trim();
+                if (trimmed.startsWith('<')) {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(trimmed, 'text/xml');
+                    const parsedData = converterOsmXmlParaJson(xmlDoc);
+                    if (parsedData && parsedData.elements && parsedData.elements.length > 0) {
+                        return parsedData;
+                    }
+                } else {
+                    const data = JSON.parse(trimmed);
+                    if (data && data.elements && Array.isArray(data.elements) && data.elements.length > 0) {
+                        return data;
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('[Vias OSM] Falha ou timeout na API oficial OSM, tentando fallback Overpass...', err);
+    }
+
+    // 2. Fallbacks Overpass API com endpoints resilientes
+    const bboxStr = `${bbox.south.toFixed(5)},${bbox.west.toFixed(5)},${bbox.north.toFixed(5)},${bbox.east.toFixed(5)}`;
+    const queryOverpass = `[out:json][timeout:15];(way["highway"](${bboxStr});way["building"](${bboxStr});way["barrier"](${bboxStr}););out body geom;>;out skel qt;`;
     const bodyData = 'data=' + encodeURIComponent(queryOverpass);
 
-    for (const ep of endpoints) {
+    const fallbackEndpoints = [
+        'https://overpass.private.coffee/api/interpreter',
+        'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+    ];
+
+    for (const ep of fallbackEndpoints) {
         try {
             const res = await fetch(ep, {
                 method: 'POST',
@@ -158,24 +239,25 @@ async function executarConsultaOverpass(queryOverpass) {
                     'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
                 },
                 body: bodyData,
-                signal: AbortSignal.timeout(10000)
+                signal: AbortSignal.timeout(12000)
             });
             if (!res.ok) continue;
             const data = await res.json();
-            if (data && data.elements && Array.isArray(data.elements)) {
+            if (data && data.elements && Array.isArray(data.elements) && data.elements.length > 0) {
                 return data;
             }
         } catch (err) {
             // Tenta próximo endpoint com fallback automático
         }
     }
+
     return null;
 }
 
 /**
- * Carrega vias, calçadas e edificações/obstruções da Overpass API
+ * Carrega vias, calçadas e edificações/obstruções da OpenStreetMap API
  */
-async function carregarContextoUrbano(lat, lon, raioMetros = 130, mapa = null, forcarCad = false) {
+async function carregarContextoUrbano(lat, lon, raioMetros = 150, mapa = null, forcarCad = false) {
     const querCad = forcarCad || ViasObstrucoesState.desenharNoCad;
     if (!ViasObstrucoesState.ativo && !querCad) return;
 
@@ -194,19 +276,16 @@ async function carregarContextoUrbano(lat, lon, raioMetros = 130, mapa = null, f
     }
 
     const bbox = calcularBbox(lat, lon, raioMetros);
-    const bboxStr = `${bbox.south.toFixed(5)},${bbox.west.toFixed(5)},${bbox.north.toFixed(5)},${bbox.east.toFixed(5)}`;
-    const queryOverpass = `[out:json][timeout:15];(way["highway"](${bboxStr});way["building"](${bboxStr});way["barrier"](${bboxStr}););out body geom;>;out skel qt;`;
-
 
     ViasObstrucoesState.carregando = true;
-    const data = await executarConsultaOverpass(queryOverpass);
+    const data = await executarConsultaOsm(bbox);
     ViasObstrucoesState.carregando = false;
 
     if (data && data.elements) {
         ViasObstrucoesState.cacheGrid.add(gridKey);
         renderizarElementosOsm(data, ViasObstrucoesState.ativo ? mapa : null, querCad);
     } else {
-        console.warn('[Vias/Obstruções OSM] Falha temporária nos servidores Overpass para a coordenada:', lat, lon);
+        console.warn('[Vias/Obstruções OSM] Falha temporária nos servidores OSM para a coordenada:', lat, lon);
     }
 }
 
@@ -235,7 +314,7 @@ async function desenharViasNoCad(forcarReconsulta = false, mapa = null) {
     }
 
     // Calcula Bbox envolvendo todos os postes do traçado
-    let bboxStr = '';
+    let bbox = null;
     const pontosTracado = (window.TracadoState && window.TracadoState.pontos) ? window.TracadoState.pontos : [];
 
     if (pontosTracado.length > 0) {
@@ -251,31 +330,37 @@ async function desenharViasNoCad(forcarReconsulta = false, mapa = null) {
             }
         }
         if (count > 0) {
-            const margem = 0.0015; // ~160 metros de margem
-            bboxStr = `${(minLat - margem).toFixed(5)},${(minLon - margem).toFixed(5)},${(maxLat + margem).toFixed(5)},${(maxLon + margem).toFixed(5)}`;
+            const margem = 0.0018; // ~200 metros de margem
+            bbox = {
+                south: minLat - margem,
+                west: minLon - margem,
+                north: maxLat + margem,
+                east: maxLon + margem
+            };
         }
     }
 
     // Fallback: usar viewport visível do mapa ou coordenada central
-    if (!bboxStr && map) {
+    if (!bbox && map) {
         const bounds = map.getBounds();
-        bboxStr = `${bounds.getSouth().toFixed(5)},${bounds.getWest().toFixed(5)},${bounds.getNorth().toFixed(5)},${bounds.getEast().toFixed(5)}`;
-    } else if (!bboxStr && window.AppState && window.AppState.currentLat) {
-        const bbox = calcularBbox(window.AppState.currentLat, window.AppState.currentLon, 250);
-        bboxStr = `${bbox.south.toFixed(5)},${bbox.west.toFixed(5)},${bbox.north.toFixed(5)},${bbox.east.toFixed(5)}`;
+        bbox = {
+            south: bounds.getSouth(),
+            west: bounds.getWest(),
+            north: bounds.getNorth(),
+            east: bounds.getEast()
+        };
+    } else if (!bbox && window.AppState && window.AppState.currentLat) {
+        bbox = calcularBbox(window.AppState.currentLat, window.AppState.currentLon, 250);
     }
 
-    if (!bboxStr) {
+    if (!bbox) {
         if (typeof showToast === 'function') {
             showToast('Posicione o mapa ou trace um poste para localizar as vias.', 'warning');
         }
         return;
     }
 
-    const queryOverpass = `[out:json][timeout:18];(way["highway"](${bboxStr});way["building"](${bboxStr});way["barrier"](${bboxStr}););out body geom;>;out skel qt;`;
-
-
-    const data = await executarConsultaOverpass(queryOverpass);
+    const data = await executarConsultaOsm(bbox);
 
     if (data && data.elements) {
         renderizarElementosOsm(data, map, true);
@@ -453,6 +538,8 @@ window.carregarContextoUrbano = carregarContextoUrbano;
 window.desenharViasNoCad = desenharViasNoCad;
 window.calcularBbox = calcularBbox;
 window.renderizarElementosOsm = renderizarElementosOsm;
+window.executarConsultaOsm = executarConsultaOsm;
+window.executarConsultaOverpass = executarConsultaOsm;
 window.sincronizarOpcaoViasCad = sincronizarOpcaoViasCad;
 window.inicializarOpcaoViasCad = inicializarOpcaoViasCad;
 

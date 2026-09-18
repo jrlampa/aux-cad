@@ -226,7 +226,7 @@ namespace MapaCadPaleta
 
                     int total = 0;
 
-                    void DesenharListaPolilinhas(JsonElement arrayElem, string layer, bool fechada)
+                    void DesenharListaPolilinhas(JsonElement arrayElem, string layer, bool fechada, bool inserirNome = false)
                     {
                         if (arrayElem.ValueKind != JsonValueKind.Array) return;
                         foreach (var item in arrayElem.EnumerateArray())
@@ -249,21 +249,47 @@ namespace MapaCadPaleta
                                 btr.AppendEntity(pl);
                                 tr.AddNewlyCreatedDBObject(pl, true);
                                 total++;
+
+                                if (inserirNome && item.TryGetProperty("nome", out var nomeProp))
+                                {
+                                    string nomeRua = nomeProp.GetString() ?? "";
+                                    if (!string.IsNullOrWhiteSpace(nomeRua) && !nomeRua.Equals("Via sem nome", StringComparison.OrdinalIgnoreCase) && !nomeRua.Equals("Rua", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        int midIdx = pontos.Count / 2;
+                                        var ptMid = pontos[midIdx].EnumerateArray().ToList();
+                                        if (ptMid.Count >= 2)
+                                        {
+                                            DBText txt = new DBText
+                                            {
+                                                Position = new Point3d(ptMid[0].GetDouble(), ptMid[1].GetDouble(), 0.0),
+                                                Height = 1.6,
+                                                TextString = nomeRua,
+                                                Layer = layer,
+                                                HorizontalMode = TextHorizontalMode.TextCenter,
+                                                VerticalMode = TextVerticalMode.TextVerticalMid,
+                                                AlignmentPoint = new Point3d(ptMid[0].GetDouble(), ptMid[1].GetDouble(), 0.0)
+                                            };
+                                            btr.AppendEntity(txt);
+                                            tr.AddNewlyCreatedDBObject(txt, true);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
 
                     if (root.TryGetProperty("vias", out var vias))
-                        DesenharListaPolilinhas(vias, LAYER_VIAS_EIXO, false);
+                        DesenharListaPolilinhas(vias, LAYER_VIAS_EIXO, false, true);
 
                     if (root.TryGetProperty("calcadas", out var calcadas))
-                        DesenharListaPolilinhas(calcadas, LAYER_VIAS_CALCADA, false);
+                        DesenharListaPolilinhas(calcadas, LAYER_VIAS_CALCADA, false, false);
 
                     if (root.TryGetProperty("obstrucoes", out var obstrucoes))
-                        DesenharListaPolilinhas(obstrucoes, LAYER_OBSTRUCOES_EDIF, true);
+                        DesenharListaPolilinhas(obstrucoes, LAYER_OBSTRUCOES_EDIF, true, false);
 
                     tr.Commit();
                     ed.Regen();
+                    ed.WriteMessage($"\n[MAPA AUX CAD] {total} elementos urbanos (vias/calçadas/obstruções) desenhados no CAD.");
                     return (true, $"{total} elementos urbanos (vias/calçadas/obstruções) desenhados no CAD.");
                 }
             }
@@ -370,6 +396,17 @@ namespace MapaCadPaleta
                 };
                 lt.Add(ltr);
                 tr.AddNewlyCreatedDBObject(ltr, true);
+            }
+            else
+            {
+                try
+                {
+                    ObjectId ltrId = lt[nome];
+                    LayerTableRecord ltr = (LayerTableRecord)tr.GetObject(ltrId, OpenMode.ForWrite);
+                    ltr.IsOff = false;
+                    if (ltr.IsFrozen) ltr.IsFrozen = false;
+                }
+                catch { }
             }
         }
 

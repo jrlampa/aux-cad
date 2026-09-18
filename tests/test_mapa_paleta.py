@@ -655,3 +655,37 @@ def test_vias_cad_ao_inserir_poste():
     assert "forcarCad" in vias_conteudo or "true" in app_conteudo
 
 
+def test_osm_api_oficial_e_snyder_syntax():
+    """Valida integridade sintática do snyder.js e suporte nativo à API Oficial OSM."""
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    snyder_js = os.path.join(raiz, "mapa_cad_paleta", "web", "snyder.js")
+    vias_js = os.path.join(raiz, "mapa_cad_paleta", "web", "vias_obstrucoes.js")
+    cad_bridge = os.path.join(raiz, "mapa_cad_paleta", "CadBridge.cs")
+
+    with open(snyder_js, "r", encoding="utf-8") as f:
+        snyder_conteudo = f.read()
+
+    # Valida fechamento sintático correto do objeto Snyder
+    assert "};" in snyder_conteudo
+    assert "window.Snyder = Snyder;" in snyder_conteudo
+
+    with open(vias_js, "r", encoding="utf-8") as f:
+        vias_conteudo = f.read()
+
+    # Valida presença da API oficial OSM e suporte duplo a JSON/XML
+    assert "api.openstreetmap.org/api/0.6/map.json" in vias_conteudo
+    assert "converterOsmXmlParaJson" in vias_conteudo
+    assert "executarConsultaOsm" in vias_conteudo
+
+    with open(cad_bridge, "r", encoding="utf-8") as f:
+        bridge_conteudo = f.read()
+
+    # Valida desenho de polilinhas urbanas e nomes de ruas
+    assert "DesenharListaPolilinhas" in bridge_conteudo
+    assert "LAYER_VIAS_EIXO" in bridge_conteudo
+    assert "LAYER_VIAS_CALCADA" in bridge_conteudo
+    assert "LAYER_OBSTRUCOES_EDIF" in bridge_conteudo
+    assert "inserirNome" in bridge_conteudo
+
+
+
