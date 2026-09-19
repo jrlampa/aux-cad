@@ -8,7 +8,7 @@ gestão segura de diretórios e operações com arquivos DWG locais.
 from pathlib import Path
 import re
 import shutil
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 
 class SobValidationError(ValueError):
@@ -57,6 +57,9 @@ def normalizar_sob(sob_raw: str) -> str:
 # Matriz Oficial de Nomenclatura (Seção 0-A)
 NOME_PASTA_CROQUI = "CROQUI"
 NOME_ARQUIVO_BASE_DWG = "BASE_SOB_DESENHO.dwg"
+CAMINHO_BASE_TEMPLATE_PADRAO = (
+    Path(__file__).resolve().parent.parent / "modelos" / "prancha.dwg"
+)
 
 
 def obter_sob_id(sob_raw: str) -> str:
@@ -89,7 +92,11 @@ def extrair_codigo_sob(sob_raw: str) -> str:
     return obter_sob_id(sob_raw)
 
 
-def derivar_caminhos_sob(sob_raw: str, destination_root: Union[str, Path]) -> dict:
+def derivar_caminhos_sob(
+    sob_raw: str,
+    destination_root: Union[str, Path],
+    base_template: Optional[Union[str, Path]] = None,
+) -> dict:
     """
     Constrói de forma centralizada e canônica a cadeia completa de caminhos (Seção 0-A):
     SOB_ID -> SOB_NAME -> DESTINATION_ROOT -> SOB_ROOT -> CROQUI_DIR -> BASE_DWG
@@ -99,6 +106,7 @@ def derivar_caminhos_sob(sob_raw: str, destination_root: Union[str, Path]) -> di
     dest_root = Path(destination_root).resolve()
     sob_root = dest_root / sob_name
     croqui_dir = sob_root / NOME_PASTA_CROQUI
+    base_template_path = Path(base_template).resolve() if base_template else CAMINHO_BASE_TEMPLATE_PADRAO
     base_dwg = sob_root / NOME_ARQUIVO_BASE_DWG
 
     return {
@@ -107,6 +115,7 @@ def derivar_caminhos_sob(sob_raw: str, destination_root: Union[str, Path]) -> di
         "DESTINATION_ROOT": dest_root,
         "SOB_ROOT": sob_root,
         "CROQUI_DIR": croqui_dir,
+        "BASE_TEMPLATE": base_template_path,
         "BASE_DWG": base_dwg,
     }
 
