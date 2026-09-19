@@ -18,7 +18,7 @@ import logging
 import os
 from pathlib import Path
 import re
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import quote, urljoin
 
 from bs4 import BeautifulSoup
@@ -307,3 +307,65 @@ class GomnetClient:
             self.session.close()
         except Exception:
             pass
+
+
+def baixar_anexos_gomnet_fase_b(
+    anexos_gomnet: List[GomnetAnexo],
+    gom_client: GomnetClient,
+    croqui_dir: Path,
+    rollback_ctx: Optional[Any] = None,
+    callback_progresso: Optional[Any] = None,
+    checar_cancelamento_fn: Optional[Any] = None,
+    logger: Optional[Any] = None,
+) -> Tuple[List[str], List[Dict[str, Any]]]:
+    """
+    Realiza o download idempotente e atômico dos anexos identificados no GOMNET para CROQUI\\ANEXOS.
+    """
+    from sob_idempotencia import verificar_arquivo_download_idempotente
+    from sob_core import SobIntegrityError
+
+    anexos_dir = croqui_dir / "ANEXOS"
+    anexos_dir_preexistia = anexos_dir.exists()
+    anexos_dir.mkdir(parents=True, exist_ok=True)
+    if not anexos_dir_preexistia and rollback_ctx:
+        rollback_ctx.registrar_criacao("ANEXOS_DIR", anexos_dir, tipo="dir")
+
+    created_files: List[str] = []
+    attachments_info: List[Dict[str, Any]] = []
+
+    for idx, anexo in enumerate(anexos_gomnet):
+        if checar_cancelamento_fn:
+            checar_cancelamento_fn()
+
+        dest_anexo = anexos_dir / anexo.nome_arquivo
+        st_idemp = verificar_arquivo_download_idempotente(dest_anexo)
+        if st_idemp == "IDENTICO":
+            if logger:
+                logger.info(f"[OK] Anexo GOMNET já existente e compatível: {anexo.nome_arquivo}")
+        elif st_idemp == "DIVERGENTE":
+            raise SobIntegrityError(
+                f"[BLOQUEADO] Anexo GOMNET existente com conteúdo divergente: {anexo.nome_arquivo}"
+            )
+        else:
+            gom_client.baixar_anexo_atomico(anexo, dest_anexo)
+            if rollback_ctx:
+                rollback_ctx.registrar_gomnet_arquivo(dest_anexo)
+            created_files.append(str(dest_anexo))
+
+        attachments_info.append({
+            "nome": anexo.nome_arquivo,
+            "origem": "GOMNET",
+            "referencia": anexo.id_arquivo,
+            "destino": str(dest_anexo),
+        })
+
+        if callback_progresso and hasattr(callback_progresso, "notificar"):
+            perc_g = ((idx + 1) / len(anexos_gomnet)) * 100
+            callback_progresso.notificar(
+                etapa="DOWNLOAD_GOMNET",
+                descricao=f"Anexo GOMNET: {anexo.nome_arquivo}",
+                etapa_num=10,
+                percentual=perc_g,
+            )
+
+    return created_files, attachments_info

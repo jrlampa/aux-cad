@@ -16,6 +16,20 @@ class SobValidationError(ValueError):
     pass
 
 
+class SobCancellationRequestedError(SobValidationError):
+    """Exceção levantada quando o usuário solicita o cancelamento da operação."""
+    pass
+
+
+class SobConflictError(SobValidationError):
+    """Exceção levantada quando são encontradas múltiplas ocorrências ambíguas da SOB."""
+
+    def __init__(self, message: str, ocorrencias: Optional[list] = None, url_busca: str = ""):
+        super().__init__(message)
+        self.ocorrencias = ocorrencias or []
+        self.url_busca = url_busca
+
+
 class SobDirectoryExistsError(FileExistsError):
     """Exceção levantada quando a pasta da SOB já existe no destino selecionado."""
     pass

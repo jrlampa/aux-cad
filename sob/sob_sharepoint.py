@@ -55,9 +55,7 @@ class SobNotFoundError(SobSharepointError):
     pass
 
 
-class SobConflictError(SobSharepointError):
-    """Múltiplas pastas encontradas para a mesma SOB sem critério de desempate."""
-    pass
+from sob_core import SobConflictError
 
 
 class SobDownloadError(SobSharepointError):
@@ -403,12 +401,17 @@ class SharePointClient:
                     pastas_correspondentes.append(item)
 
             if len(pastas_correspondentes) > 1:
-                # Compara se há ambiguidades de diferentes SOBs
-                nomes = {p["texto"].split("\n")[0] for p in pastas_correspondentes}
-                if len(nomes) > 1:
-                    raise SobConflictError(
-                        "[FALHA] Foram encontradas múltiplas correspondências ambíguas."
-                    )
+                try:
+                    from sob.sob_fallback_manual import gerar_url_busca_sharepoint
+                except ModuleNotFoundError:
+                    from sob_fallback_manual import gerar_url_busca_sharepoint
+
+                url_b = gerar_url_busca_sharepoint(codigo_busca, self.url)
+                raise SobConflictError(
+                    "[FALHA] Foram encontradas múltiplas correspondências ambíguas.",
+                    ocorrencias=pastas_correspondentes,
+                    url_busca=url_b,
+                )
 
             return pastas_correspondentes[0]
 

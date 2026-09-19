@@ -5,138 +5,72 @@ Responsabilidade única: Coordenação do fluxo de preparação da SOB,
 emissão de logs de diagnóstico, tratamento de erros e interface CLI/JSON para o AutoCAD.
 """
 
-import argparse
-import json
-import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 _current_dir = str(Path(__file__).resolve().parent)
 if _current_dir not in sys.path:
     sys.path.insert(0, _current_dir)
 
 from sob_core import (
-    normalizar_sob,
-    validar_sob,
-    validar_sob_id,
-    validar_sob_name,
     obter_sob_id,
     obter_sob_name,
     derivar_caminhos_sob,
-    verificar_pasta_sob_existente,
     validar_permissao_criacao,
     criar_estrutura_sob,
     copiar_arquivo_base,
     validar_arquivo_dwg,
     calcular_hash_arquivo,
-    remover_estrutura_incompleta,
     SobValidationError,
+    SobCancellationRequestedError,
     SobPermissionError,
     SobDirectoryExistsError,
     SobFileExistsError,
     SobFileNotFoundError,
     SobIntegrityError,
+    SobConflictError,
 )
 from sob_rollback import RollbackContext
 from sob_idempotencia import (
     gerar_run_id,
     gravar_manifesto_execucao,
     classificar_sob_root,
-    verificar_arquivo_download_idempotente,
 )
 from sob_gomnet import (
     GomnetClient,
     GomnetAnexo,
-    GomnetError,
-    GomnetAuthError,
-    GomnetNotFoundError,
-    GomnetDownloadError,
     carregar_credenciais_gomnet,
+    baixar_anexos_gomnet_fase_b,
 )
 from sob_sharepoint import (
     obter_credenciais_sharepoint,
-    sanitizar_mensagem,
     SharePointClient,
-    SobSharepointError,
     SobEnvNotFoundError,
     SobCredentialError,
     SobAuthenticationError,
     SobSharepointUnavailableError,
     SobNotFoundError,
-    SobConflictError,
     SobDownloadError,
     SobDownloadIncompleteError,
+)
+
+from sob_logger import (
+    LoggerSeguro,
+    configurar_logger,
+    formatar_mensagem_erro,
+)
+from sob_fallback_manual import (
+    executar_fallback_intervencao_manual,
+    copiar_arquivos_manuais_para_croqui,
 )
 
 # Caminho padrão do arquivo-base prancha.dwg
 CAMINHO_BASE_PRANCHA_PADRAO = (
     Path(__file__).resolve().parent.parent / "modelos" / "prancha.dwg"
 )
-
-
-def formatar_mensagem_erro(
-    etapa: str,
-    problema: str,
-    caminho: Optional[str] = None,
-    acao: Optional[str] = None,
-) -> str:
-    """Formata mensagens de erro de acordo com a Seção 14.26."""
-    linhas = [
-        "[ERRO]",
-        "",
-        "Etapa:",
-        etapa,
-        "",
-        "Problema:",
-        problema,
-    ]
-    if caminho:
-        linhas.extend(["", "Caminho afetado:", caminho])
-    if acao:
-        linhas.extend(["", "Ação:", acao])
-    return "\n".join(linhas)
-
-
-class LoggerSeguro:
-    """Logger formatado que impede vazamento de senhas ou segredos."""
-
-    def __init__(self, logger: logging.Logger, segredos: Optional[list] = None):
-        self._logger = logger
-        self.segredos = segredos or []
-
-    def adicionar_segredo(self, segredo: str):
-        if segredo and segredo not in self.segredos:
-            self.segredos.append(segredo)
-
-    def info(self, msg: str):
-        msg_limpa = sanitizar_mensagem(msg, self.segredos)
-        self._logger.info(msg_limpa)
-
-    def error(self, msg: str):
-        msg_limpa = sanitizar_mensagem(msg, self.segredos)
-        self._logger.error(msg_limpa)
-
-    def warning(self, msg: str):
-        msg_limpa = sanitizar_mensagem(msg, self.segredos)
-        self._logger.warning(msg_limpa)
-
-
-def configurar_logger() -> LoggerSeguro:
-    """Configura o logger com formato padrão do projeto."""
-    logger = logging.getLogger("AUXCAD_SOB")
-    logger.setLevel(logging.INFO)
-
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(logging.INFO)
-        formatter = logging.Formatter("[%(levelname)s] %(message)s")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-    return LoggerSeguro(logger)
 
 
 class SobOrchestrator:
@@ -154,6 +88,104 @@ class SobOrchestrator:
         self.gomnet_client = gomnet_client
         self.logger = logger or configurar_logger()
 
+    def _notificar_progresso(
+        self,
+        cb: Any,
+        etapa: str,
+        desc: str,
+        num: int = 1,
+        total: int = 12,
+        perc: Optional[float] = None,
+        estado: str = "EM_EXECUCAO",
+    ):
+        if not cb:
+            return
+        try:
+            if hasattr(cb, "notificar"):
+                cb.notificar(etapa=etapa, descricao=desc, etapa_num=num, total_etapas=total, percentual=perc, estado=estado)
+            elif callable(cb):
+                cb({"etapa": etapa, "descricao": desc, "etapa_num": num, "total_etapas": total, "percentual": perc, "estado": estado})
+        except Exception:
+            pass
+
+    def _checar_cancelamento(self, verificador: Any):
+        if not verificador:
+            return
+        cancelado = False
+        try:
+            if hasattr(verificador, "cancelamento_solicitado"):
+                cancelado = verificador.cancelamento_solicitado()
+            elif callable(verificador):
+                cancelado = verificador()
+        except Exception:
+            pass
+        if cancelado:
+            raise SobCancellationRequestedError("[CANCELADO] Operação cancelada pelo usuário.")
+
+    def _tratar_falha(
+        self,
+        e: Exception,
+        msg_str: str,
+        rollback_ctx: Optional[RollbackContext],
+        sob_root_path: Optional[Path],
+        resultado: Dict[str, Any],
+        callback_progresso: Optional[Any],
+    ):
+        resultado["sucesso"] = False
+        resultado["status"] = "BLOQUEADO"
+        resultado["estado"] = "BLOQUEADO"
+        resultado["mensagem"] = msg_str
+        self.logger.error(msg_str)
+
+        if rollback_ctx and rollback_ctx.houve_alteracao_em_disco():
+            self._notificar_progresso(
+                callback_progresso,
+                "ROLLBACK_EM_EXECUCAO",
+                "Executando reversão dos recursos criados...",
+                12,
+                estado="ROLLBACK_EM_EXECUCAO",
+            )
+            relatorio_rb = rollback_ctx.executar_rollback(
+                etapa_falha=resultado.get("etapa", "DESCONHECIDA"),
+                motivo_falha=msg_str,
+            )
+            resultado["rollback"] = relatorio_rb["resultado_do_rollback"]
+            resultado["rollback_info"] = relatorio_rb
+            self.logger.info(f"Rollback executado: {resultado['rollback']}")
+            st_rb = "ROLLBACK_CONCLUIDO" if resultado["rollback"] == "ROLLBACK_CONCLUÍDO" else "ROLLBACK_PARCIAL"
+            self._notificar_progresso(
+                callback_progresso,
+                st_rb,
+                f"Reversão finalizada: {resultado['rollback']}",
+                12,
+                estado=st_rb,
+            )
+        else:
+            resultado["rollback"] = "ROLLBACK_NÃO_NECESSÁRIO"
+            st_blq = "CANCELAMENTO" if isinstance(e, SobCancellationRequestedError) else "BLOQUEADO"
+            self._notificar_progresso(
+                callback_progresso,
+                st_blq,
+                msg_str,
+                12,
+                estado=st_blq,
+            )
+
+        if sob_root_path and sob_root_path.exists():
+            gravar_manifesto_execucao(
+                sob_root_path,
+                {
+                    "run_id": resultado.get("RUN_ID", ""),
+                    "sob_id": resultado.get("SOB_ID", ""),
+                    "sob_name": resultado.get("SOB_NAME", ""),
+                    "status": "BLOQUEADO",
+                    "etapa": resultado.get("etapa", ""),
+                    "rollback": resultado.get("rollback", ""),
+                    "motivo_falha": msg_str,
+                    "timestamp_falha": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+
     def executar(
         self,
         sob_raw: str,
@@ -161,6 +193,8 @@ class SobOrchestrator:
         baixar_croqui_sp: bool = True,
         consultar_gomnet: bool = True,
         abrir_cad: bool = False,
+        callback_progresso: Optional[Any] = None,
+        verificador_cancelamento: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Executa o fluxo completo da SOB de acordo com as regras de negócio e validações da Seção 14.
@@ -227,9 +261,12 @@ class SobOrchestrator:
         pasta_info: Optional[Dict[str, Any]] = None
         rollback_ctx: Optional[RollbackContext] = None
         gom_client: Optional[GomnetClient] = None
+        arquivos_manuais_validados: List[Path] = []
 
         try:
             self.logger.info("Início da operação - FASE A: PRÉ-VALIDAÇÃO")
+            self._notificar_progresso(callback_progresso, "INICIANDO", "Iniciando preparação do projeto...", 1)
+            self._checar_cancelamento(verificador_cancelamento or callback_progresso)
 
             # =========================================================================
             # FASE A — PRÉ-VALIDAÇÃO (Não cria, não copia e não baixa nada)
@@ -238,6 +275,8 @@ class SobOrchestrator:
             # ETAPA A02 & A03: Normalizar e validar SOB
             resultado["estado"] = "INICIANDO"
             resultado["etapa"] = "VALIDAR_SOB"
+            self._notificar_progresso(callback_progresso, "VALIDAR_SOB", "Validando formato e identificador da SOB...", 2)
+            self._checar_cancelamento(verificador_cancelamento or callback_progresso)
 
             if not sob_raw or not str(sob_raw).strip():
                 raise SobValidationError("[FALHA] Número da SOB inválido.")
@@ -251,6 +290,8 @@ class SobOrchestrator:
 
             # ETAPA A04 & A05: Selecionar e Validar DESTINATION_ROOT
             resultado["etapa"] = "VALIDAR_DESTINO"
+            self._notificar_progresso(callback_progresso, "VALIDAR_DESTINO", "Validando diretório de destino...", 3)
+            self._checar_cancelamento(verificador_cancelamento or callback_progresso)
             if not destino_dir or not str(destino_dir).strip():
                 raise SobValidationError("[INFO] Operação cancelada pelo usuário.")
 
@@ -345,6 +386,8 @@ class SobOrchestrator:
 
             # ETAPA A09: Validar BASE_TEMPLATE
             resultado["etapa"] = "VALIDAR_BASE_TEMPLATE"
+            self._notificar_progresso(callback_progresso, "VALIDAR_BASE_TEMPLATE", "Validando modelo de desenho DWG...", 4)
+            self._checar_cancelamento(verificador_cancelamento or callback_progresso)
             if not base_template.is_file() or not os.access(base_template, os.R_OK):
                 raise SobFileNotFoundError(
                     formatar_mensagem_erro(
@@ -368,6 +411,8 @@ class SobOrchestrator:
             if baixar_croqui_sp:
                 resultado["etapa"] = "SHAREPOINT_PRE_VALIDACAO"
                 self.logger.info("Pré-validação SharePoint iniciada")
+                self._notificar_progresso(callback_progresso, "SHAREPOINT_AUTENTICACAO", "Autenticando no SharePoint corporativo...", 5)
+                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
 
                 client = self.sharepoint_client
                 if not client:
@@ -381,15 +426,35 @@ class SobOrchestrator:
                 checklist["Autenticação validada"] = True
                 resultado["estado"] = "SHAREPOINT_AUTENTICADO"
 
-                # ETAPA A13: Localizar SOB
+                # ETAPA A13 & A14: Localizar SOB e Validar conteúdo
                 self.logger.info("SOB localizada")
-                pasta_info = client.localizar_pasta_sob(sob_id)
-                checklist["SOB encontrada no SharePoint"] = True
-                resultado["estado"] = "SOB_LOCALIZADA"
+                self._notificar_progresso(callback_progresso, "SHAREPOINT_LOCALIZAR", "Localizando pasta da SOB no SharePoint...", 6)
+                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
+                try:
+                    pasta_info = client.localizar_pasta_sob(sob_id)
+                    checklist["SOB encontrada no SharePoint"] = True
+                    resultado["estado"] = "SOB_LOCALIZADA"
+                    client.validar_conteudo_disponivel(pasta_info)
+                    checklist["Conteúdo disponível para download"] = True
+                except SobConflictError as e_conflict:
+                    res_fb = executar_fallback_intervencao_manual(
+                        sob_id=sob_id,
+                        ocorrencias=e_conflict.ocorrencias,
+                        url_busca=e_conflict.url_busca,
+                        callback_progresso=callback_progresso,
+                        logger=self.logger,
+                    )
+                    pasta_info = None
+                    if res_fb.get("sem_croqui"):
+                        resultado["CROQUI"] = "SEM_ARQUIVOS"
+                        arquivos_manuais_validados = []
+                    else:
+                        resultado["CROQUI"] = "DOWNLOAD_MANUAL_VALIDADO"
+                        arquivos_manuais_validados = res_fb.get("arquivos", [])
 
-                # ETAPA A14: Validar conteúdo disponível para download
-                client.validar_conteudo_disponivel(pasta_info)
-                checklist["Conteúdo disponível para download"] = True
+                    checklist["SOB encontrada no SharePoint"] = True
+                    checklist["Conteúdo disponível para download"] = True
+                    resultado["estado"] = "SOB_LOCALIZADA"
             else:
                 # Modo offline (para testes unitários sem rede externa)
                 checklist["Credenciais SharePoint validadas"] = True
@@ -400,9 +465,11 @@ class SobOrchestrator:
             # ETAPA A14-G: Validar e pré-consultar GOMNET (Seção 19.7)
             anexos_gomnet: List[GomnetAnexo] = []
             gom_client = self.gomnet_client
-            if consultar_gomnet and (baixar_croqui_sp or self.gomnet_client is not None):
+            if consultar_gomnet and (self.gomnet_client is not None or (baixar_croqui_sp and self.sharepoint_client is None)):
                 resultado["etapa"] = "GOMNET_PRE_VALIDACAO"
                 self.logger.info("Pré-validação GOMNET iniciada")
+                self._notificar_progresso(callback_progresso, "GOMNET_AUTENTICACAO", "Autenticando sessão no GOMNET...", 8)
+                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
                 if not gom_client:
                     try:
                         u, s, url = carregar_credenciais_gomnet()
@@ -414,6 +481,8 @@ class SobOrchestrator:
 
                 if gom_client:
                     gom_client.autenticar()
+                    self._notificar_progresso(callback_progresso, "GOMNET_CONSULTAR", "Consultando modal de anexos da SOB no GOMNET...", 9)
+                    self._checar_cancelamento(verificador_cancelamento or callback_progresso)
                     anexos_gomnet = gom_client.localizar_sob_e_listar_anexos(sob_id)
                     checklist["GOMNET validado"] = True
                     self.logger.info(f"GOMNET: {len(anexos_gomnet)} anexo(s) identificado(s)")
@@ -463,9 +532,34 @@ class SobOrchestrator:
             )
 
             # ETAPA B03 & B04: Baixar conteúdo da SOB e Validar download
-            if baixar_croqui_sp and client and pasta_info:
+            if arquivos_manuais_validados:
+                resultado["etapa"] = "DOWNLOAD_CROQUI"
+                self.logger.info("Transferindo arquivos manuais validados para CROQUI")
+                self._notificar_progresso(callback_progresso, "DOWNLOAD_CROQUI", "Copiando arquivos manuais para o croqui...", 7)
+                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
+                arqs_copiados = copiar_arquivos_manuais_para_croqui(arquivos_manuais_validados, croqui_dir)
+                if rollback_ctx:
+                    for a in arqs_copiados:
+                        rollback_ctx.registrar_download_arquivo(a)
+                checklist["Download concluído"] = True
+                checklist["Conteúdo do CROQUI validado"] = True
+                resultado["estado"] = "DOWNLOAD_VALIDADO"
+                resultado["arquivos_croqui"] = [str(a) for a in arqs_copiados]
+                self.logger.info("Arquivos manuais copiados para o croqui")
+            elif resultado.get("CROQUI") == "SEM_ARQUIVOS":
+                resultado["etapa"] = "DOWNLOAD_CROQUI"
+                self.logger.info("CROQUI = SEM_ARQUIVOS | Prosseguindo com criação da estrutura e modelo DWG")
+                self._notificar_progresso(callback_progresso, "DOWNLOAD_CROQUI", "Estrutura do croqui criada sem arquivos adicionais...", 7)
+                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
+                checklist["Download concluído"] = True
+                checklist["Conteúdo do CROQUI validado"] = True
+                resultado["estado"] = "DOWNLOAD_VALIDADO"
+                resultado["arquivos_croqui"] = []
+            elif baixar_croqui_sp and client and pasta_info:
                 resultado["etapa"] = "DOWNLOAD_CROQUI"
                 self.logger.info("Download iniciado")
+                self._notificar_progresso(callback_progresso, "DOWNLOAD_CROQUI", "Baixando arquivos do SharePoint...", 7)
+                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
                 arquivos = client.baixar_croqui(pasta_info, croqui_dir)
                 if rollback_ctx:
                     for a in arquivos:
@@ -486,35 +580,21 @@ class SobOrchestrator:
             if anexos_gomnet and gom_client:
                 resultado["etapa"] = "DOWNLOAD_GOMNET"
                 self.logger.info("Download de anexos GOMNET iniciado")
-                anexos_dir = croqui_dir / "ANEXOS"
-                anexos_dir_preexistia = anexos_dir.exists()
-                anexos_dir.mkdir(parents=True, exist_ok=True)
-                if not anexos_dir_preexistia and rollback_ctx:
-                    rollback_ctx.registrar_criacao("ANEXOS_DIR", anexos_dir, tipo="dir")
-                resultado["ANEXOS_DIR"] = str(anexos_dir)
+                self._notificar_progresso(callback_progresso, "DOWNLOAD_GOMNET", "Baixando anexos identificados no GOMNET...", 10)
+                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
 
-                for anexo in anexos_gomnet:
-                    dest_anexo = anexos_dir / anexo.nome_arquivo
-                    st_idemp = verificar_arquivo_download_idempotente(dest_anexo)
-                    if st_idemp == "IDENTICO":
-                        self.logger.info(f"[OK] Anexo GOMNET já existente e compatível: {anexo.nome_arquivo}")
-                    elif st_idemp == "DIVERGENTE":
-                        raise SobIntegrityError(
-                            f"[BLOQUEADO] Anexo GOMNET existente com conteúdo divergente: {anexo.nome_arquivo}"
-                        )
-                    else:
-                        gom_client.baixar_anexo_atomico(anexo, dest_anexo)
-                        if rollback_ctx:
-                            rollback_ctx.registrar_gomnet_arquivo(dest_anexo)
-                        resultado["GOMNET_CREATED_FILES"].append(str(dest_anexo))
-
-                    resultado["GOMNET_ATTACHMENTS"].append({
-                        "nome": anexo.nome_arquivo,
-                        "origem": "GOMNET",
-                        "referencia": anexo.id_arquivo,
-                        "destino": str(dest_anexo),
-                    })
-
+                created_files, attach_info = baixar_anexos_gomnet_fase_b(
+                    anexos_gomnet=anexos_gomnet,
+                    gom_client=gom_client,
+                    croqui_dir=croqui_dir,
+                    rollback_ctx=rollback_ctx,
+                    callback_progresso=callback_progresso,
+                    checar_cancelamento_fn=lambda: self._checar_cancelamento(verificador_cancelamento or callback_progresso),
+                    logger=self.logger,
+                )
+                resultado["ANEXOS_DIR"] = str(croqui_dir / "ANEXOS")
+                resultado["GOMNET_CREATED_FILES"].extend(created_files)
+                resultado["GOMNET_ATTACHMENTS"].extend(attach_info)
                 checklist["Download GOMNET concluído"] = True
                 self.logger.info("Download de anexos GOMNET concluído")
             else:
@@ -524,6 +604,8 @@ class SobOrchestrator:
 
             # ETAPA B05, B06 e B07: Copiar BASE_TEMPLATE, Validar BASE_DWG e Preservação
             resultado["etapa"] = "COPIAR_ARQUIVO_BASE"
+            self._notificar_progresso(callback_progresso, "CRIAR_BASE_DWG", "Criando BASE_SOB_DESENHO.dwg...", 11)
+            self._checar_cancelamento(verificador_cancelamento or callback_progresso)
             dwg_copiado = copiar_arquivo_base(
                 base_template,
                 sob_root_path,
@@ -552,6 +634,8 @@ class SobOrchestrator:
 
             # ETAPA B08: Validar estrutura final completa
             resultado["etapa"] = "VALIDAR_ESTRUTURA_FINAL"
+            self._notificar_progresso(callback_progresso, "VALIDAR_PROJETO", "Validando integridade final do projeto...", 12)
+            self._checar_cancelamento(verificador_cancelamento or callback_progresso)
             if not (
                 sob_root_path.is_dir()
                 and croqui_dir.is_dir()
@@ -582,6 +666,7 @@ class SobOrchestrator:
                 resultado["estado"] = "CONCLUÍDO"
                 resultado["etapa"] = "FINALIZADO"
                 resultado["mensagem"] = "Processo concluído com sucesso."
+                self._notificar_progresso(callback_progresso, "CONCLUIDO", "Projeto preparado com sucesso!", 12, perc=100.0, estado="SUCESSO")
                 self.logger.info("Processo concluído")
 
                 # Persiste o manifesto definitivo de execução concluída (Seção 19.5 e 19.7)
@@ -606,90 +691,23 @@ class SobOrchestrator:
                 self.logger.error(resultado["mensagem"])
 
         except (
-            SobValidationError,
-            SobDirectoryExistsError,
-            SobFileExistsError,
-            SobFileNotFoundError,
-            SobIntegrityError,
-            SobEnvNotFoundError,
-            SobCredentialError,
-            SobAuthenticationError,
-            SobSharepointUnavailableError,
-            SobNotFoundError,
-            SobConflictError,
-            SobDownloadError,
-            SobDownloadIncompleteError,
-            IOError,
+            SobValidationError, SobDirectoryExistsError, SobFileExistsError,
+            SobFileNotFoundError, SobIntegrityError, SobEnvNotFoundError,
+            SobCredentialError, SobAuthenticationError, SobSharepointUnavailableError,
+            SobNotFoundError, SobConflictError, SobDownloadError,
+            SobDownloadIncompleteError, IOError,
         ) as e:
-            resultado["sucesso"] = False
-            resultado["status"] = "BLOQUEADO"
-            resultado["estado"] = "BLOQUEADO"
-            msg_str = str(e)
-            resultado["mensagem"] = msg_str
-            self.logger.error(msg_str)
-
-            # Rollback seguro da Fase B (Seção 18)
-            if rollback_ctx and rollback_ctx.houve_alteracao_em_disco():
-                relatorio_rb = rollback_ctx.executar_rollback(
-                    etapa_falha=resultado.get("etapa", "DESCONHECIDA"),
-                    motivo_falha=msg_str,
-                )
-                resultado["rollback"] = relatorio_rb["resultado_do_rollback"]
-                resultado["rollback_info"] = relatorio_rb
-                self.logger.info(f"Rollback executado: {resultado['rollback']}")
-            else:
-                resultado["rollback"] = "ROLLBACK_NÃO_NECESSÁRIO"
-
-            # Se restou pasta (ex: ROLLBACK_PARCIAL), persiste manifesto de falha
-            if sob_root_path and sob_root_path.exists():
-                gravar_manifesto_execucao(
-                    sob_root_path,
-                    {
-                        "run_id": resultado.get("RUN_ID", ""),
-                        "sob_id": resultado.get("SOB_ID", ""),
-                        "sob_name": resultado.get("SOB_NAME", ""),
-                        "status": "BLOQUEADO",
-                        "etapa": resultado.get("etapa", ""),
-                        "rollback": resultado.get("rollback", ""),
-                        "motivo_falha": msg_str,
-                        "timestamp_falha": datetime.now(timezone.utc).isoformat(),
-                    },
-                )
+            self._tratar_falha(e, str(e), rollback_ctx, sob_root_path, resultado, callback_progresso)
 
         except Exception as e:
-            resultado["sucesso"] = False
-            resultado["status"] = "BLOQUEADO"
-            resultado["estado"] = "BLOQUEADO"
-            msg_str = f"[FALHA] Erro inesperado durante a operação: {str(e)}"
-            resultado["mensagem"] = msg_str
-            self.logger.error(msg_str)
-
-            # Rollback seguro da Fase B (Seção 18)
-            if rollback_ctx and rollback_ctx.houve_alteracao_em_disco():
-                relatorio_rb = rollback_ctx.executar_rollback(
-                    etapa_falha=resultado.get("etapa", "DESCONHECIDA"),
-                    motivo_falha=msg_str,
-                )
-                resultado["rollback"] = relatorio_rb["resultado_do_rollback"]
-                resultado["rollback_info"] = relatorio_rb
-                self.logger.info(f"Rollback executado: {resultado['rollback']}")
-            else:
-                resultado["rollback"] = "ROLLBACK_NÃO_NECESSÁRIO"
-
-            if sob_root_path and sob_root_path.exists():
-                gravar_manifesto_execucao(
-                    sob_root_path,
-                    {
-                        "run_id": resultado.get("RUN_ID", ""),
-                        "sob_id": resultado.get("SOB_ID", ""),
-                        "sob_name": resultado.get("SOB_NAME", ""),
-                        "status": "BLOQUEADO",
-                        "etapa": resultado.get("etapa", ""),
-                        "rollback": resultado.get("rollback", ""),
-                        "motivo_falha": msg_str,
-                        "timestamp_falha": datetime.now(timezone.utc).isoformat(),
-                    },
-                )
+            self._tratar_falha(
+                e,
+                f"[FALHA] Erro inesperado durante a operação: {str(e)}",
+                rollback_ctx,
+                sob_root_path,
+                resultado,
+                callback_progresso,
+            )
 
         finally:
             if client and not self.sharepoint_client:
@@ -714,34 +732,50 @@ class SobOrchestrator:
             raise IOError(f"[FALHA] BASE_SOB_DESENHO.dwg foi criado, porém não pôde ser aberto no AutoCAD: {e}")
 
 
-def main():
+def main(args_list: Optional[list] = None):
     """Ponto de entrada de linha de comando para automação da SOB."""
-    parser = argparse.ArgumentParser(
-        description="Preparador Automático de Projeto SOB para AutoCAD."
-    )
-    parser.add_argument("--sob", required=True, help="Número da SOB (ex: A057349839)")
-    parser.add_argument("--destino", required=True, help="Diretório de destino da pasta da SOB")
-    parser.add_argument("--sem-sharepoint", action="store_true", help="Ignora a etapa do SharePoint")
-    parser.add_argument("--abrir-cad", action="store_true", help="Abre o arquivo gerado no AutoCAD")
-    parser.add_argument("--json-out", help="Caminho do arquivo JSON de intercâmbio para resposta")
+    import argparse
+    import json
 
-    args = parser.parse_args()
+    parser = argparse.ArgumentParser(description="Preparador Automático de Projeto SOB para AutoCAD.")
+    parser.add_argument("--sob", required=True, help="Número da SOB")
+    parser.add_argument("--destino", required=True, help="Diretório de destino")
+    parser.add_argument("--sem-sharepoint", action="store_true", help="Ignora SharePoint")
+    parser.add_argument("--abrir-cad", action="store_true", help="Abre no AutoCAD")
+    parser.add_argument("--json-out", help="Arquivo JSON de saída")
+    parser.add_argument("--no-ui", "--headless", dest="no_ui", action="store_true", help="Sem GUI")
 
+    args = parser.parse_args(args_list)
     orchestrator = SobOrchestrator()
-    resultado = orchestrator.executar(
-        sob_raw=args.sob,
-        destino_dir=args.destino,
-        baixar_croqui_sp=not args.sem_sharepoint,
-        abrir_cad=args.abrir_cad,
-    )
+    resultado = None
+
+    if not args.no_ui and not os.environ.get("PYTEST_CURRENT_TEST"):
+        try:
+            from sob_progress_gui import SobProgressGUI
+            resultado = SobProgressGUI(
+                sob_id=args.sob,
+                tarefa_executora=lambda obs: orchestrator.executar(
+                    sob_raw=args.sob, destino_dir=args.destino,
+                    baixar_croqui_sp=not args.sem_sharepoint, abrir_cad=args.abrir_cad,
+                    callback_progresso=obs, verificador_cancelamento=obs,
+                ),
+            ).iniciar()
+        except Exception:
+            resultado = None
+
+    if resultado is None:
+        resultado = orchestrator.executar(
+            sob_raw=args.sob, destino_dir=args.destino,
+            baixar_croqui_sp=not args.sem_sharepoint, abrir_cad=args.abrir_cad,
+        )
 
     if args.json_out:
-        out_path = Path(args.json_out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "w", encoding="utf-8") as f:
+        out_p = Path(args.json_out)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_p, "w", encoding="utf-8") as f:
             json.dump(resultado, f, indent=2, ensure_ascii=False)
 
-    sys.exit(0 if resultado["sucesso"] else 1)
+    sys.exit(0 if resultado.get("sucesso", False) else 1)
 
 
 if __name__ == "__main__":

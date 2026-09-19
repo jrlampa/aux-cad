@@ -342,20 +342,32 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - **Não Confundir Existência com Conclusão (19.6)**: Presença de arquivos físicos isolada não atesta conclusão; exige validação do manifesto `.sob_state.json` e integridade física.
   - **Downloads e Cópia de Base Idempotentes (19.11 e 19.12)**: Comparação de hash/tamanho; arquivos idênticos são reutilizados/validados, divergências geram bloqueio imediato; templates originais permanecem intocados.
   - **Rastreabilidade por RUN_ID (19.14)**: Identificador técnico único por execução (`RUN_YYYYMMDD_HHMMSS_<hex>`) para rastrear etapas sem alterar caminhos canônicos em disco.
-- `sob_core.py` (465 linhas):
+- `sob_core.py` (477 linhas):
   - Normalização e validação robusta da SOB (`obter_sob_id`, `obter_sob_name`, `validar_sob_name`, `derivar_caminhos_sob`).
   - Checagem não-destrutiva de permissão de escrita em diretórios (`validar_permissao_criacao` e `SobPermissionError`).
-  - Proteção incondicional contra sobrescrita (`SobDirectoryExistsError` e `SobFileExistsError`).
+  - Hierarquia canônica unificada de exceções do domínio SOB (`SobConflictError`, `SobCancellationRequestedError`, `SobIntegrityError`, etc.).
   - Criação da estrutura canônica de diretórios (`SOB_ROOT` e subpasta `CROQUI`).
   - Cópia segura com conferência de hash SHA-256 e validação de cabeçalho DWG `AC10`.
-  - Função utilitária `sanitizar_mensagem` para mascaramento de senhas e tokens.
   - Limpeza não-destrutiva em ordem inversa em `remover_estrutura_incompleta` sem uso de `rmtree` genérico.
-- `sob_gomnet.py` (305 linhas):
-  - Conector HTTP dedicado para o sistema corporativo GOMNET.
-  - Autenticação com sessão mantida (`requests.Session` com `ASP.NET_SessionId`).
+- `sob_fallback_manual.py` (303 linhas):
+  - Geração de URLs de busca contextualizada no SharePoint (`gerar_url_busca_sharepoint`).
+  - Abertura no navegador e cópia atômica para área de transferência via `clip` (`abrir_busca_sharepoint_navegador`).
+  - Validação estrita de downloads manuais (`validar_arquivos_manuais`), rejeitando 0 bytes, erros HTML e temporários.
+  - Orquestração de intervenção manual (`executar_fallback_intervencao_manual`) com suporte a continuidade com arquivos manuais, continuidade sem croqui (`CROQUI = SEM_ARQUIVOS`) e cancelamento seguro.
+- `sob_progress_gui.py` (637 linhas):
+  - Interface gráfica Tkinter TTK com feedback em tempo real e barra de progresso (determinada/indeterminada).
+  - Comunicação multithread desacoplada via `ProgressoObserver` impedindo congelamentos da UI.
+  - Painel interativo de intervenção com botões `[ 🌐 Abrir SharePoint ]`, `[ 📁 Selecionar Pasta... ]`, `[ Continuar ]`, `[ Continuar sem Croqui ]` e `[ Cancelar ]`.
+  - Botão de cancelamento responsivo disparando rollback seguro na Fase B.
+- `sob_logger.py` (58 linhas):
+  - Utilitários isolados de logging seguro (`LoggerSeguro`) com sanitização de segredos e formatação padrão de erros (`formatar_mensagem_erro`).
+- `sob_cli.py` (78 linhas):
+  - Ponto de entrada CLI desacoplado com suporte a flags `--no-ui` / `--headless` e emissão de arquivo JSON para intercâmbio com o AutoCAD.
+- `sob_gomnet.py` (374 linhas):
+  - Conector HTTP dedicado para o sistema corporativo GOMNET com sessão mantida (`ASP.NET_SessionId`).
   - Consulta ao modal de anexos via `Upload.aspx?numsob={SOB_ID}` e extração de metadados em `gridviewUploads`.
   - Descarte seguro do ícone de interface `/imagens/anexarArquivo.gif`.
-  - Download atômico via `DownloadArquivo.aspx` para a subpasta canônica `CROQUI\ANEXOS` utilizando extensão temporária `.download` e validação de integridade (tamanho > 0, ausência de páginas de erro HTML).
+  - Download em lote atômico e idempotente para `CROQUI\ANEXOS` (`baixar_anexos_gomnet_fase_b`).
 - `sob_idempotencia.py` (173 linhas):
   - Gestão de estado e integridade para repetição segura.
   - Funções: `gerar_run_id`, `gravar_manifesto_execucao`, `ler_manifesto_execucao`, `classificar_sob_root`, `verificar_arquivo_download_idempotente`.
@@ -363,27 +375,23 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Classes `RecursoRastreado`, `RecursoRemanescente` e `RollbackContext`.
   - Rastreamento fino de recursos SharePoint, GOMNET (`gomnet_created_files`), pasta `ANEXOS_DIR` e DWG aberto no CAD.
   - Execução sequencial reversa, validação pós-rollback e relatório de integridade.
-- `sob_sharepoint.py` (551 linhas):
+- `sob_sharepoint.py` (554 linhas):
   - Carregamento seguro e isolado de credenciais do `.env` (`SHAREPOINT_ID` e `SHAREPOINT_SENHA`) com `dotenv_values` e parser resiliente sem vazamento para `os.environ`.
-  - Zero exposição de senhas: sanitização rigorosa de logs, exceções e saídas do AutoCAD (`sanitizar_mensagem`).
   - Navegação e autenticação Microsoft Online com Edge/Chrome headless via Selenium (`SharePointClient`).
-  - Localização precisa da SOB na biblioteca `Documentos Compartilhados` utilizando o `SOB_ID` puro, resolução de ambiguidades (`SobConflictError`) e tratamento de SOB inexistente (`SobNotFoundError`).
-  - Método `validar_conteudo_disponivel` para conferência prévia na Fase A antes de qualquer alteração no disco.
-  - Download validado para a pasta `CROQUI` via integração CDP (`Page.setDownloadBehavior`) e menu de contexto, com verificação de integridade e ausência de temporários (`.crdownload`, `.tmp`) ou arquivos vazios.
-- `sob_manager.py` (748 linhas):
-  - Orquestrador desacoplado com execução rigorosamente dividida em Fase A (Pré-Validação Não-Destrutiva) e Fase B (Criação e Execução).
-  - Integração nativa de SharePoint, GOMNET, `RollbackContext`, rastreamento por `RUN_ID`, verificação idempotente em A07 e persistência atômica de `.sob_state.json`.
-  - Download validado de todos os anexos do GOMNET para `CROQUI\ANEXOS` sem sobrescrever arquivos preexistentes.
-  - Checklist operacional com 23 critérios para determinar `CONCLUÍDO` vs `BLOQUEADO`.
-  - CLI com suporte a `--sob`, `--destino`, `--sem-sharepoint`, `--abrir-cad` e `--json-out`.
+  - Localização precisa da SOB e detecção de ambiguidade com levantamento de `SobConflictError` acompanhado da lista de ocorrências e URL de busca.
+  - Download validado para a pasta `CROQUI` via integração CDP com verificação de integridade física.
+- `sob_manager.py` (742 linhas - estritamente abaixo do soft limit de 750 linhas):
+  - Orquestrador com execução dividida em Fase A (Pré-Validação Não-Destrutiva) e Fase B (Criação e Execução).
+  - Integração do fallback manual de múltiplas ocorrências: paralisação antes da criação de `SOB_ROOT` e condução da intervenção.
+  - **Regra Fundamental de Estrutura Independente do Croqui**:
+    A criação da estrutura local e a obtenção do croqui são operações distintas. Seja por download automático, manual ou dispensa (`CROQUI = SEM_ARQUIVOS`), a Fase B obrigatoriamente cria `SOB_ROOT\CROQUI\`, copia `BASE_TEMPLATE` para `BASE_SOB_DESENHO.dwg`, valida o DWG e abre no AutoCAD.
+  - Checklist operacional completo para determinar `CONCLUÍDO` vs `BLOQUEADO`.
 - `sob_cad_launcher.lsp` (362 linhas):
   - Rotina AutoLISP com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`** e **`RECARREGAR_SOB`**.
   - Função operacional `(sob-executar-fluxo sobInput destPath abrirCad)` com verificação estrita de abertura de DWG (`CURRENT_AUTOCAD_DWG == BASE_DWG`).
   - Apresentação no console e em diálogo do status de rollback e idempotência.
-  - Mensagens canônicas oficiais e tratamento nativo de cancelamento pelo usuário sem falso erro.
 - **Cobertura & Testes**:
-  - `tests/test_sob_gomnet.py` (11 testes específicos do GOMNET), `tests/test_sob_idempotencia.py` (7 testes específicos `IDEMP-01` a `IDEMP-07`), `tests/test_sob_rollback.py` (8 testes específicos de rollback), `tests/test_sob_core.py` (17 testes), `tests/test_sob_sharepoint.py` (19 testes) e `tests/test_sob_manager.py` (15 testes).
-  - **77 testes unitários específicos no módulo `sob` com 80% de cobertura global do pacote (90% no `sob_manager.py`, 85% no `sob_gomnet.py`, 82% no `sob_rollback.py`, 81% no `sob_idempotencia.py`)**.
-  - **Suíte global de não-regressão**: **233 testes unitários passando com 100% de sucesso** (`python -m pytest`).
+  - **107 testes unitários específicos do módulo SOB com 81% de cobertura global** (88% em `sob_manager.py`, 85% em `sob_progress_gui.py`, 83% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_fallback_manual.py`, 81% em `sob_idempotencia.py`, 100% em `sob_logger.py`).
+  - **Suíte global de não-regressão**: 100% dos testes passando sem falhas.
   - **Bateria de testes operacionais no AutoCAD 2026 Core Console**: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
 
