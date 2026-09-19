@@ -434,19 +434,28 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - `unifilar_cad.lsp`: Comandos **`UNIFILAR`** e **`PROTECAO`** gerando esquema em prancha, ramal geográfico interativo no ModelSpace a partir da coordenada real do KMZ ou atualização in-place dos textos técnicos da prancha.
 
 ### 17. Módulo Preparação de Projeto SOB (`sob/`)
+- **Padronização Canônica Obrigatória (Seção 0-A)**:
+  - `SOB_ID`: Número puro informado pelo usuário (`A057349839`), utilizado para busca no SharePoint, logs e identificação interna.
+  - `SOB_NAME`: Nome padronizado da pasta local (`"SOB_" + SOB_ID`, ex: `SOB_A057349839`).
+  - `DESTINATION_ROOT`: Diretório escolhido pelo usuário no seletor Windows.
+  - `SOB_ROOT`: Diretório raiz do projeto (`DESTINATION_ROOT\SOB_NAME`).
+  - `CROQUI_DIR`: Subpasta do conteúdo baixado (`SOB_ROOT\CROQUI`).
+  - `BASE_TEMPLATE`: Arquivo-modelo original mantido intacto (`modelos/prancha.dwg`).
+  - `BASE_DWG`: Arquivo de trabalho criado na raiz da SOB (`SOB_ROOT\BASE_SOB_DESENHO.dwg`).
+  - Derivação centralizada e obrigatória: `SOB_ID -> SOB_NAME -> DESTINATION_ROOT -> SOB_ROOT -> CROQUI_DIR -> BASE_DWG`.
 - **Objetivo & Regra de Negócio**: Automatização completa da preparação inicial do projeto a partir de uma SOB informada pelo usuário no AutoCAD:
-  1. Solicitação e normalização do número da SOB (ex: `A057349839` $\rightarrow$ `SOB_A057349839`), evitando duplicações como `SOB_SOB_...`.
-  2. Seleção de diretório via diálogo nativo do Windows.
-  3. Proteção rigorosa contra SOB já existente (interrompe sem sobrescrever, sem apagar e sem misturar).
-  4. Criação da estrutura de pastas: `SOB_ROOT` e subpasta `CROQUI`.
-  5. Conexão autenticada ao SharePoint da HBT Enel RJ Sul com credenciais estritamente protegidas no `.env` (sem vazamento em logs ou mensagens).
-  6. Localização precisa da SOB na biblioteca documental e download dos croquis de campo para `SOB_ROOT\CROQUI\`.
-  7. Cópia segura do arquivo-base `modelos/prancha.dwg` para `SOB_ROOT\BASE_SOB_DESENHO.dwg`, mantendo o modelo original 100% intacto.
-  8. Abertura imediata do arquivo gerado no AutoCAD via ActiveX `(vla-open ...)`.
+  1. Solicitação do número da SOB e derivação canônica de `SOB_ID` e `SOB_NAME`.
+  2. Seleção de `DESTINATION_ROOT` via diálogo nativo do Windows.
+  3. Proteção rigorosa contra `SOB_ROOT` já existente (interrompe sem sobrescrever, sem apagar e sem misturar).
+  4. Criação da estrutura canônica de pastas: `SOB_ROOT` e subpasta `CROQUI_DIR`.
+  5. Conexão autenticada ao SharePoint com credenciais estritamente protegidas no `.env`.
+  6. Localização da SOB via `SOB_ID` puro e download dos croquis de campo para `CROQUI_DIR`.
+  7. Cópia segura de `BASE_TEMPLATE` para `BASE_DWG`, mantendo o modelo original 100% intacto.
+  8. Abertura imediata de `BASE_DWG` no AutoCAD via ActiveX `(vla-open ...)`.
 - **Arquitetura & Componentes**:
-  - `sob_core.py` (183 linhas): Lógica de domínio, normalização, verificação de diretórios e validação de arquivos DWG (`AC10`).
+  - `sob_core.py` (223 linhas): Lógica de domínio, normalização, validação, verificação de diretórios e função centralizada `derivar_caminhos_sob`.
   - `sob_sharepoint.py` (553 linhas): Driver Selenium headless, autenticação Microsoft Online e download seguro via CDP / menu de contexto.
-  - `sob_manager.py` (301 linhas): Orquestrador de máquina de estados, logs estruturados e CLI para o AutoCAD.
-  - `sob_cad_launcher.lsp` (239 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`** e **`RECARREGAR_SOB`**.
-- **Cobertura de Testes**: 40 testes unitários específicos e suíte de não-regressão com **196 testes unitários passando com 100% de sucesso**.
+  - `sob_manager.py` (335 linhas): Orquestrador de máquina de estados, logs estruturados canônicos (`[INFO] SOB: ...`, `[INFO] SOB_ROOT: ...`, `[INFO] CROQUI_DIR: ...`, `[INFO] BASE_DWG: ...`) e CLI.
+  - `sob_cad_launcher.lsp` (270 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`** e rotina programática `(sob-executar-fluxo ...)`.
+- **Cobertura de Testes**: 41 testes unitários específicos e suíte de não-regressão com **197 testes unitários passando com 100% de sucesso**. Bateria de testes operacionais no AutoCAD: 12/12 **PASS**.
 
