@@ -301,13 +301,13 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Criação da estrutura padronizada de diretórios (`SOB_ROOT` e subpasta `CROQUI`).
   - Cópia segura do template oficial `modelos/prancha.dwg` para `SOB_ROOT/BASE_SOB_DESENHO.dwg`, mantendo o modelo original 100% intacto.
   - Validação de integridade de arquivos DWG (`validar_arquivo_dwg` com verificação de cabeçalho `AC10`).
-- `sob_sharepoint.py` (490 linhas):
+- `sob_sharepoint.py` (553 linhas):
   - Carregamento seguro e isolado de credenciais do `.env` (`SHAREPOINT_ID` e `SHAREPOINT_SENHA`) com `dotenv_values` e parser resiliente sem vazamento para `os.environ`.
   - Zero exposição de senhas: sanitização rigorosa de logs, exceções e saídas do AutoCAD (`sanitizar_mensagem`).
   - Navegação e autenticação Microsoft Online com Edge/Chrome headless via Selenium (`SharePointClient`).
   - Localização precisa da SOB na biblioteca `Documentos Compartilhados` com resolução de ambiguidades (`SobConflictError`) e tratamento de SOB inexistente (`SobNotFoundError`).
-  - Download validado para a pasta `CROQUI` com verificação de ausência de arquivos temporários (`.crdownload`, `.tmp`) ou corrompidos de zero bytes.
-- `sob_manager.py` (295 linhas):
+  - Download validado para a pasta `CROQUI` via integração CDP (`Page.setDownloadBehavior`) e acionamento de menu de contexto, com verificação de integridade e ausência de arquivos temporários (`.crdownload`, `.tmp`) ou corrompidos de zero bytes.
+- `sob_manager.py` (301 linhas):
   - Orquestrador de fluxo com máquina de estados e logging passo a passo formatado (`[INFO] ...`).
   - CLI com suporte a `--sob`, `--destino`, `--sem-sharepoint`, `--abrir-cad` e `--json-out`.
   - Tratamento de todos os 16 cenários de erro do fluxo com mensagens claras em pt-BR.

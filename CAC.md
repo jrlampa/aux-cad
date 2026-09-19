@@ -445,8 +445,8 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   8. Abertura imediata do arquivo gerado no AutoCAD via ActiveX `(vla-open ...)`.
 - **Arquitetura & Componentes**:
   - `sob_core.py` (183 linhas): Lógica de domínio, normalização, verificação de diretórios e validação de arquivos DWG (`AC10`).
-  - `sob_sharepoint.py` (490 linhas): Driver Selenium headless, autenticação Microsoft Online e download seguro.
-  - `sob_manager.py` (295 linhas): Orquestrador de máquina de estados, logs estruturados e CLI para o AutoCAD.
+  - `sob_sharepoint.py` (553 linhas): Driver Selenium headless, autenticação Microsoft Online e download seguro via CDP / menu de contexto.
+  - `sob_manager.py` (301 linhas): Orquestrador de máquina de estados, logs estruturados e CLI para o AutoCAD.
   - `sob_cad_launcher.lsp` (239 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`** e **`RECARREGAR_SOB`**.
 - **Cobertura de Testes**: 40 testes unitários específicos e suíte de não-regressão com **196 testes unitários passando com 100% de sucesso**.
 
