@@ -14,8 +14,10 @@ from typing import Optional
 
 
 def main(args_list: Optional[list] = None):
-    """Ponto de entrada de linha de comando para automação da SOB."""
-    from sob_manager import SobOrchestrator
+    try:
+        from sob.sob_manager import SobOrchestrator
+    except ImportError:
+        from sob_manager import SobOrchestrator
 
     parser = argparse.ArgumentParser(
         description="Preparador Automático de Projeto SOB para AutoCAD."

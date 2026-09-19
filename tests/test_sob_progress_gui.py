@@ -89,15 +89,26 @@ class TestProgressoObserver:
         assert ev["resultado"]["sucesso"] is True
 
 
+_SHARED_TK_ROOT = None
+
+
 @pytest.fixture
 def tk_root():
-    """Fornece instância Tk compartilhada para testes visuais rápidos."""
+    """Fornece instância Tk/Toplevel isolada e estável para testes visuais rápidos."""
     import tkinter as tk
-    root = tk.Tk()
-    root.withdraw()
-    yield root
+    global _SHARED_TK_ROOT
+    if _SHARED_TK_ROOT is None:
+        try:
+            _SHARED_TK_ROOT = tk.Tk()
+            _SHARED_TK_ROOT.withdraw()
+        except Exception:
+            pytest.skip("Ambiente gráfico Tkinter não disponível")
+
+    top = tk.Toplevel(_SHARED_TK_ROOT)
+    top.withdraw()
+    yield top
     try:
-        root.destroy()
+        top.destroy()
     except Exception:
         pass
 
@@ -290,10 +301,11 @@ class TestMainHeadlessFlag:
 class TestSobProgressGUIIntervencao:
     """Testa os métodos e componentes visuais de intervenção manual da SobProgressGUI."""
 
-    def test_acoes_botoes_intervencao(self, temp_workspace):
+    def test_acoes_botoes_intervencao(self, temp_workspace, tk_root):
         gui = SobProgressGUI(
             sob_id="A057349839",
             tarefa_executora=lambda obs: {"sucesso": True},
+            root=tk_root,
         )
         try:
             # 1. Abrir SharePoint

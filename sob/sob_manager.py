@@ -734,48 +734,9 @@ class SobOrchestrator:
 
 def main(args_list: Optional[list] = None):
     """Ponto de entrada de linha de comando para automação da SOB."""
-    import argparse
-    import json
+    from sob_cli import main as cli_main
 
-    parser = argparse.ArgumentParser(description="Preparador Automático de Projeto SOB para AutoCAD.")
-    parser.add_argument("--sob", required=True, help="Número da SOB")
-    parser.add_argument("--destino", required=True, help="Diretório de destino")
-    parser.add_argument("--sem-sharepoint", action="store_true", help="Ignora SharePoint")
-    parser.add_argument("--abrir-cad", action="store_true", help="Abre no AutoCAD")
-    parser.add_argument("--json-out", help="Arquivo JSON de saída")
-    parser.add_argument("--no-ui", "--headless", dest="no_ui", action="store_true", help="Sem GUI")
-
-    args = parser.parse_args(args_list)
-    orchestrator = SobOrchestrator()
-    resultado = None
-
-    if not args.no_ui and not os.environ.get("PYTEST_CURRENT_TEST"):
-        try:
-            from sob_progress_gui import SobProgressGUI
-            resultado = SobProgressGUI(
-                sob_id=args.sob,
-                tarefa_executora=lambda obs: orchestrator.executar(
-                    sob_raw=args.sob, destino_dir=args.destino,
-                    baixar_croqui_sp=not args.sem_sharepoint, abrir_cad=args.abrir_cad,
-                    callback_progresso=obs, verificador_cancelamento=obs,
-                ),
-            ).iniciar()
-        except Exception:
-            resultado = None
-
-    if resultado is None:
-        resultado = orchestrator.executar(
-            sob_raw=args.sob, destino_dir=args.destino,
-            baixar_croqui_sp=not args.sem_sharepoint, abrir_cad=args.abrir_cad,
-        )
-
-    if args.json_out:
-        out_p = Path(args.json_out)
-        out_p.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_p, "w", encoding="utf-8") as f:
-            json.dump(resultado, f, indent=2, ensure_ascii=False)
-
-    sys.exit(0 if resultado.get("sucesso", False) else 1)
+    cli_main(args_list)
 
 
 if __name__ == "__main__":
