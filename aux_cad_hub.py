@@ -163,6 +163,14 @@ class AuxCadHubApp:
 
         cards = [
             {
+                "icone": "📁",
+                "titulo": "Preparação de Projeto SOB",
+                "descricao": "Criação de pastas, download automático de croquis do SharePoint da HBT/Enel e cópia da BASE_SOB_DESENHO.dwg.",
+                "acao_texto": "Guia / Comando SOB",
+                "comando": self._abrir_guia_sob,
+                "cor_borda": "#3B82F6"
+            },
+            {
                 "icone": "⚡",
                 "titulo": "Diagrama Unifilar & Proteção",
                 "descricao": "Localização da proteção a montante (SG/CF/REL), árvore de dispositivos e inserção do unifilar 2.5D no DWG.",
@@ -353,6 +361,20 @@ class AuxCadHubApp:
                 "  ✓ Transformadores: bloco 'TRAFO1'"
             )
             messagebox.showinfo("Diagrama Unifilar", msg)
+
+    def _abrir_guia_sob(self):
+        msg = (
+            "📁 PREPARAÇÃO AUTOMÁTICA DE PROJETO SOB\n\n"
+            "Fluxo integrado diretamente ao AutoCAD:\n"
+            "  1. Digite SOB (ou NOVASOB / PREPARAR_SOB) no console do AutoCAD\n"
+            "  2. Informe o número da SOB (ex: A057349839)\n"
+            "  3. Escolha a pasta de destino no diálogo nativo do Windows\n"
+            "  4. O sistema cria SOB_... e subpasta CROQUI com proteção contra sobrescrita\n"
+            "  5. Conecta ao SharePoint da HBT e baixa os croquis de campo\n"
+            "  6. Copia prancha.dwg para BASE_SOB_DESENHO.dwg\n"
+            "  7. Abre o desenho automaticamente no AutoCAD!"
+        )
+        messagebox.showinfo("Preparação de Projeto SOB", msg)
 
     def _abrir_autoprancha(self):
         bat = os.path.join(BASE_DIR, "Abrir_AutoPrancha.bat")

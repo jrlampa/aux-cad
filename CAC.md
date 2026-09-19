@@ -433,3 +433,20 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
     - **Transformadores**: bloco **`TRAFO1`** (com prioridade configurável e seleção interativa no DWG via `[L]` lista, `[S]` clique na tela ou `[ENTER]`).
   - `unifilar_cad.lsp`: Comandos **`UNIFILAR`** e **`PROTECAO`** gerando esquema em prancha, ramal geográfico interativo no ModelSpace a partir da coordenada real do KMZ ou atualização in-place dos textos técnicos da prancha.
 
+### 17. Módulo Preparação de Projeto SOB (`sob/`)
+- **Objetivo & Regra de Negócio**: Automatização completa da preparação inicial do projeto a partir de uma SOB informada pelo usuário no AutoCAD:
+  1. Solicitação e normalização do número da SOB (ex: `A057349839` $\rightarrow$ `SOB_A057349839`), evitando duplicações como `SOB_SOB_...`.
+  2. Seleção de diretório via diálogo nativo do Windows.
+  3. Proteção rigorosa contra SOB já existente (interrompe sem sobrescrever, sem apagar e sem misturar).
+  4. Criação da estrutura de pastas: `SOB_ROOT` e subpasta `CROQUI`.
+  5. Conexão autenticada ao SharePoint da HBT Enel RJ Sul com credenciais estritamente protegidas no `.env` (sem vazamento em logs ou mensagens).
+  6. Localização precisa da SOB na biblioteca documental e download dos croquis de campo para `SOB_ROOT\CROQUI\`.
+  7. Cópia segura do arquivo-base `modelos/prancha.dwg` para `SOB_ROOT\BASE_SOB_DESENHO.dwg`, mantendo o modelo original 100% intacto.
+  8. Abertura imediata do arquivo gerado no AutoCAD via ActiveX `(vla-open ...)`.
+- **Arquitetura & Componentes**:
+  - `sob_core.py` (183 linhas): Lógica de domínio, normalização, verificação de diretórios e validação de arquivos DWG (`AC10`).
+  - `sob_sharepoint.py` (490 linhas): Driver Selenium headless, autenticação Microsoft Online e download seguro.
+  - `sob_manager.py` (295 linhas): Orquestrador de máquina de estados, logs estruturados e CLI para o AutoCAD.
+  - `sob_cad_launcher.lsp` (239 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`** e **`RECARREGAR_SOB`**.
+- **Cobertura de Testes**: 40 testes unitários específicos e suíte de não-regressão com **196 testes unitários passando com 100% de sucesso**.
+

@@ -29,6 +29,9 @@
           ;; 0. Botão de Ajuda e Lista de Comandos
           (vla-AddToolbarItem tb (vla-get-Count tb) "❓ Guia de Comandos (COMANDOS)" "Exibe a lista de todos os comandos das rotinas" "^C^CCOMANDOS ")
 
+          ;; 0.0 Botão Nova SOB (Preparação de Projeto e Download do Croqui)
+          (vla-AddToolbarItem tb (vla-get-Count tb) "📁 Nova SOB (SOB)" "Prepara pasta da SOB, baixa croquis do SharePoint e abre desenho" "^C^CSOB ")
+
           ;; 0.1 Botão AutoPrancha (Enquadramento Inteligente no ModelSpace - Padrão Enel/HBT)
           (vla-AddToolbarItem tb (vla-get-Count tb) "📐 AutoPrancha (AUTOPRANCHA)" "Calcula formato e escala e insere prancha no ModelSpace (Padrão Enel/HBT)" "^C^CAUTOPRANCHA ")
 

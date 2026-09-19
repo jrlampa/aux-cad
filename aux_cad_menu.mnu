@@ -10,6 +10,8 @@
 **TB_AUXCAD
 ID_TbAuxCad [_Toolbar("AUX CAD - Engenharia", _Top, _Show, 100, 100, 1)]
 ID_Ajuda     [_Button("Guia de Comandos (COMANDOS)", "ICON_HELP", "ICON_HELP")]^C^CCOMANDOS
+ID_Separator00 [_Separator]
+ID_Sob       [_Button("Preparar Projeto SOB", "ICON_SOB", "ICON_SOB")]^C^CSOB
 ID_Separator0 [_Separator]
 ID_Prancha   [_Button("AutoPrancha Enquadramento ModelSpace", "ICON_PRANCHA", "ICON_PRANCHA")]^C^CAUTOPRANCHA
 ID_Separator01 [_Separator]
@@ -47,7 +49,9 @@ ID_Reload    [_Button("Recarregar Todas as Rotinas", "ICON_RELOAD", "ICON_RELOAD
 ID_MnAuxCad  [&AUX CAD]
 ID_MnAjuda     [&0. Guia Rápido de Comandos (COMANDOS)]^C^CCOMANDOS
 [--]
-ID_MnPrancha   [&1. AutoPrancha Enquadramento ModelSpace (AUTOPRANCHA)]^C^CAUTOPRANCHA
+ID_MnSob       [&1. Preparar Projeto SOB (SOB)]^C^CSOB
+[--]
+ID_MnPrancha   [&2. AutoPrancha Enquadramento ModelSpace (AUTOPRANCHA)]^C^CAUTOPRANCHA
 [--]
 ID_MnUnifilar  [&2. Diagrama Unifilar e Proteção (UNIFILAR)]^C^CUNIFILAR
 [--]

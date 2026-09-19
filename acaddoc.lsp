@@ -70,6 +70,7 @@
 (add-support-path (strcat *aux-cad-root* "unifilar"))
 (add-support-path (strcat *aux-cad-root* "mapa_cad_paleta"))
 (add-support-path (strcat *aux-cad-root* "prancha"))
+(add-support-path (strcat *aux-cad-root* "sob"))
 
 (defun load-aux-safe (subpath / fullpath res)
   (setq fullpath (strcat *aux-cad-root* subpath))
@@ -140,6 +141,9 @@
 ;; 12. Módulo AutoPrancha Enel / HBT (Enquadramento Inteligente no ModelSpace)
 (load-aux-safe "prancha\\autoprancha.lsp")
 
+;; 13. Módulo Preparação de Projeto SOB (Pastas, SharePoint, Base DWG)
+(load-aux-safe "sob\\sob_cad_launcher.lsp")
+
 
 ;; =============================================================================
 ;;  COMANDO GERAL DE RECARREGAMENTO (RECARREGAR_TUDO / RELOAD_AUXCAD)
@@ -169,7 +173,11 @@
   (princ "\n               GUIA RÁPIDO DE COMANDOS - AUX CAD              ")
   (princ "\n==============================================================")
   (princ "\n")
-  (princ "\n  [DIAGRAMA UNIFILAR & PROTEÇÃO]")
+  (princ "\n  [PREPARAÇÃO DE PROJETO SOB]
+   - SOB ou NOVASOB ou PREPARAR_SOB : Prepara pasta, baixa croqui do SharePoint e abre BASE_SOB_DESENHO.dwg
+   - RECARREGAR_SOB : Recarrega rotinas de preparação da SOB
+
+  [DIAGRAMA UNIFILAR & PROTEÇÃO]")
   (princ "\n   - UNIFILAR ou PROTECAO : Localiza proteção a montante (SG) e insere/atualiza no DWG")
   (princ "\n")
   (princ "\n  [QUEDA DE TENSÃO BT - CQT]")
@@ -226,6 +234,7 @@
   ;; Exibe também caixa de diálogo visual na tela
   (setq msg (strcat
     "=== GUIA DE COMANDOS AUX CAD ===\n\n"
+    "• PREPARAÇÃO DE SOB: Digite SOB (ou NOVASOB / PREPARAR_SOB)\n"
     "• ENQUADRAMENTO / PRANCHA: Digite AUTOPRANCHA (ou PRANCHA)\n"
     "• DIAGRAMA UNIFILAR: Digite UNIFILAR (ou PROTECAO)\n"
     "• QUEDA DE TENSÃO BT: Digite CQT (ou CQTQUADROS / CQTEXCEL)\n"

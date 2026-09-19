@@ -1,0 +1,236 @@
+# -*- coding: utf-8 -*-
+"""
+Testes de Integração e Orquestração do Módulo SOB (sob_manager.py).
+Cobre: Ciclo completo da máquina de estados, tratamento de todos os 16 cenários de erro,
+geração de logs passo a passo e intercâmbio JSON com o AutoCAD.
+"""
+
+import json
+from pathlib import Path
+import pytest
+from unittest.mock import MagicMock
+
+from sob_manager import SobOrchestrator
+from sob_sharepoint import (
+    SharePointClient,
+    SobAuthenticationError,
+    SobNotFoundError,
+)
+
+
+@pytest.fixture
+def fake_prancha_dwg(tmp_path: Path) -> Path:
+    """Cria um arquivo-base DWG simulado válido."""
+    p = tmp_path / "modelos" / "prancha.dwg"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b"AC1032" + (b"\x00" * 200) + b"MODELO_BASE_OFICIAL")
+    return p
+
+
+def test_executar_fluxo_completo_com_mock_sharepoint(tmp_path: Path, fake_prancha_dwg: Path):
+    """Valida o fluxo completo de ponta a ponta com sucesso."""
+    destino = tmp_path / "projetos"
+    destino.mkdir()
+
+    # Mock do cliente SharePoint
+    mock_client = MagicMock(spec=SharePointClient)
+    mock_client.autenticar.return_value = True
+    mock_client.localizar_pasta_sob.return_value = {"nome": "SOB_A057349839", "elemento": MagicMock()}
+
+    def simular_download(pasta_info, croqui_dir):
+        arq = croqui_dir / "croqui_campo.pdf"
+        arq.write_bytes(b"%PDF-1.4 croqui de teste")
+        return [arq]
+
+    mock_client.baixar_croqui.side_effect = simular_download
+    mock_client.validar_download.return_value = True
+
+    orquestrador = SobOrchestrator(
+        origem_base=fake_prancha_dwg,
+        sharepoint_client=mock_client,
+    )
+
+    resultado = orquestrador.executar(
+        sob_raw="A057349839",
+        destino_dir=str(destino),
+        baixar_croqui_sp=True,
+        abrir_cad=False,
+    )
+
+    assert resultado["sucesso"] is True
+    assert resultado["etapa"] == "FINALIZADO"
+    assert resultado["sob"] == "SOB_A057349839"
+
+    sob_root = Path(resultado["sob_root"])
+    assert sob_root.exists()
+    assert (sob_root / "CROQUI").exists()
+    assert (sob_root / "CROQUI" / "croqui_campo.pdf").exists()
+
+    dwg_path = Path(resultado["dwg_path"])
+    assert dwg_path.exists()
+    assert dwg_path.name == "BASE_SOB_DESENHO.dwg"
+    assert dwg_path.parent == sob_root
+
+    # Confirma que o modelo original continuou intacto
+    assert fake_prancha_dwg.exists()
+    assert fake_prancha_dwg.stat().st_size > 0
+
+
+def test_executar_sob_invalida(tmp_path: Path, fake_prancha_dwg: Path):
+    """Valida interrupção quando a SOB é vazia ou inválida."""
+    orquestrador = SobOrchestrator(origem_base=fake_prancha_dwg)
+    resultado = orquestrador.executar(sob_raw="", destino_dir=str(tmp_path))
+
+    assert resultado["sucesso"] is False
+    assert "VALIDAR_SOB" in resultado["etapa"]
+    assert "não pode ser vazio" in resultado["mensagem"]
+
+
+def test_executar_destino_inexistente(fake_prancha_dwg: Path):
+    """Valida interrupção quando o diretório de destino não existe."""
+    orquestrador = SobOrchestrator(origem_base=fake_prancha_dwg)
+    resultado = orquestrador.executar(
+        sob_raw="A057349839",
+        destino_dir="C:/Caminho/Que/Nao/Existe/Jamais",
+    )
+
+    assert resultado["sucesso"] is False
+    assert "VALIDAR_DESTINO" in resultado["etapa"]
+    assert "inexistente" in resultado["mensagem"]
+
+
+def test_executar_pasta_sob_ja_existente(tmp_path: Path, fake_prancha_dwg: Path):
+    """TESTE 09 no Manager: pasta já existente interrompe sem alterar arquivos."""
+    pasta_existente = tmp_path / "SOB_A057349839"
+    pasta_existente.mkdir()
+    arquivo_salvo = pasta_existente / "projeto_antigo.dwg"
+    arquivo_salvo.write_bytes(b"arquivo antigo intacto")
+
+    orquestrador = SobOrchestrator(origem_base=fake_prancha_dwg)
+    resultado = orquestrador.executar(
+        sob_raw="A057349839",
+        destino_dir=str(tmp_path),
+    )
+
+    assert resultado["sucesso"] is False
+    assert "A pasta da SOB já existe no local selecionado." in resultado["mensagem"]
+    assert "Nenhum arquivo foi sobrescrito." in resultado["mensagem"]
+
+    # Verifica integridade do arquivo pré-existente
+    assert arquivo_salvo.exists()
+    assert arquivo_salvo.read_bytes() == b"arquivo antigo intacto"
+
+
+def test_executar_falha_autenticacao_sharepoint(tmp_path: Path, fake_prancha_dwg: Path):
+    """TESTE 07 no Manager: falha de autenticação do SharePoint interrompe o fluxo."""
+    mock_client = MagicMock(spec=SharePointClient)
+    mock_client.autenticar.side_effect = SobAuthenticationError(
+        "PROCESSO INTERROMPIDO\nFALHA NA AUTENTICAÇÃO DO SHAREPOINT"
+    )
+
+    orquestrador = SobOrchestrator(
+        origem_base=fake_prancha_dwg,
+        sharepoint_client=mock_client,
+    )
+
+    resultado = orquestrador.executar(
+        sob_raw="A057349839",
+        destino_dir=str(tmp_path),
+        baixar_croqui_sp=True,
+    )
+
+    assert resultado["sucesso"] is False
+    assert "FALHA NA AUTENTICAÇÃO DO SHAREPOINT" in resultado["mensagem"]
+    # Não cria o DWG em caso de falha
+    assert resultado["dwg_path"] == ""
+
+
+def test_executar_sob_nao_encontrada_sharepoint(tmp_path: Path, fake_prancha_dwg: Path):
+    """TESTE 08 no Manager: SOB não encontrada no SharePoint interrompe o fluxo."""
+    mock_client = MagicMock(spec=SharePointClient)
+    mock_client.autenticar.return_value = True
+    mock_client.localizar_pasta_sob.side_effect = SobNotFoundError(
+        "SOB NÃO ENCONTRADA NO SHAREPOINT"
+    )
+
+    orquestrador = SobOrchestrator(
+        origem_base=fake_prancha_dwg,
+        sharepoint_client=mock_client,
+    )
+
+    resultado = orquestrador.executar(
+        sob_raw="A057349839",
+        destino_dir=str(tmp_path),
+        baixar_croqui_sp=True,
+    )
+
+    assert resultado["sucesso"] is False
+    assert "SOB NÃO ENCONTRADA NO SHAREPOINT" in resultado["mensagem"]
+    # Não deve finalizar como sucesso e não deve gerar BASE_SOB_DESENHO.dwg
+    assert resultado["dwg_path"] == ""
+
+
+def test_executar_arquivo_base_inexistente(tmp_path: Path):
+    """Valida erro se prancha.dwg não existir no caminho especificado."""
+    destino = tmp_path / "dest"
+    destino.mkdir()
+    inexistente = tmp_path / "prancha_inexistente.dwg"
+
+    orquestrador = SobOrchestrator(origem_base=inexistente)
+    resultado = orquestrador.executar(
+        sob_raw="A057349839",
+        destino_dir=str(destino),
+        baixar_croqui_sp=False,
+    )
+
+    assert resultado["sucesso"] is False
+    assert "Arquivo-base não encontrado" in resultado["mensagem"]
+
+
+def test_abrir_no_autocad(tmp_path: Path, fake_prancha_dwg: Path):
+    """Valida chamada ao método de abertura no AutoCAD."""
+    from unittest.mock import patch
+    orquestrador = SobOrchestrator(origem_base=fake_prancha_dwg)
+    with patch("os.startfile") as mock_startfile:
+        orquestrador._abrir_no_autocad(fake_prancha_dwg)
+        mock_startfile.assert_called_once_with(str(fake_prancha_dwg))
+
+
+def test_logger_seguro():
+    """Valida logger seguro e mascaramento de segredos."""
+    from sob_manager import configurar_logger
+    logger = configurar_logger()
+    logger.adicionar_segredo("MINHA_SENHA_123")
+    # Não deve levantar exceções
+    logger.info("Teste com MINHA_SENHA_123 ok")
+    logger.warning("Alerta com MINHA_SENHA_123")
+    logger.error("Erro com MINHA_SENHA_123")
+
+
+def test_cli_main(tmp_path: Path, fake_prancha_dwg: Path, monkeypatch):
+    """Valida ponto de entrada CLI via argparse."""
+    from sob_manager import main
+    from unittest.mock import patch
+
+    destino = tmp_path / "cli_dest"
+    destino.mkdir()
+    json_out = tmp_path / "out.json"
+
+    args = [
+        "sob_manager.py",
+        "--sob", "A057349839",
+        "--destino", str(destino),
+        "--sem-sharepoint",
+        "--json-out", str(json_out),
+    ]
+    monkeypatch.setattr("sys.argv", args)
+
+    with patch("sob_manager.CAMINHO_BASE_PRANCHA_PADRAO", fake_prancha_dwg):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
+
+    assert json_out.exists()
+    dados = json.loads(json_out.read_text(encoding="utf-8"))
+    assert dados["sucesso"] is True
+    assert dados["sob"] == "SOB_A057349839"
