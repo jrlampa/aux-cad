@@ -11,12 +11,17 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `acaddoc.lsp`: Carregador automático nativo do AutoCAD que registra as subpastas no SupportPath e carrega as rotinas modulares a cada desenho aberto.
 - `aux_cad_toolbar.lsp` & `aux_cad_menu.mnu` (`.cuix`, `.mnr`): Barra de ferramentas visual (`AUXCADBAR`) e menu do AutoCAD com atalhos de 1 clique para todos os módulos.
 - `modelos/`: Templates e modelos de planilhas e documentos (`checklist_modelo.xlsx`, `cpfc_modelo.xlsx`, etc.).
-- `tests/`: Suíte completa de 74 testes unitários cobrindo todos os módulos (100% passing).
-- `pytest.ini`: Configuração com `pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos cpfc`.
+- `tests/`: Suíte completa de 281 testes unitários e de integração cobrindo todos os módulos (100% passing).
+- `pytest.ini`: Configuração com `pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos cpfc unifilar prancha sob`.
+- `Abrir_AUXCAD.bat`: Central Executiva Hub de Engenharia e Diagnóstico do Sistema.
+- `Abrir_SOB.bat`: Atalho na raiz para abrir a interface gráfica de preparação da SOB com 2 cliques.
 - `Abrir_CQT.bat`: Atalho na raiz para abrir a interface CQT com 2 cliques.
 - `Abrir_Orcamento.bat`: Atalho na raiz para abrir a interface de Orçamento com 2 cliques.
 - `Abrir_CPFC.bat`: Atalho na raiz para abrir a interface de CPFC (REN 1.059) com 2 cliques.
-- `clean.bat`: Utilitário de limpeza de arquivos temporários do Windows.
+- `Abrir_AutoPrancha.bat`: Atalho na raiz para abrir o módulo AutoPrancha com 2 cliques.
+- `Abrir_Unifilar.bat`: Atalho na raiz para abrir o módulo Diagrama Unifilar com 2 cliques.
+- `Abrir_Mapa_Postes.bat`: Atalho na raiz para abrir o Estúdio Web de Satélite com 2 cliques.
+- `clean.bat`: Utilitário de limpeza de arquivos temporários, caches e downloads incompletos do Windows.
 - `.env.example`: Modelo padronizado de variáveis de ambiente (GOMNET, GOM, URLs de consulta).
 - `CAC.md` & `RAG/MEMORY.md`: Diretrizes arquiteturais e histórico da base de conhecimento.
 
@@ -398,8 +403,12 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Derivação dinâmica de `{baseSigla}_{sobId}_DESENHO.dwg` e fallback com `(vl-directory-files sobRoot "*_DESENHO.dwg" 1)`.
   - Função operacional `(sob-executar-fluxo sobInput destPath abrirCad baseInput)` com verificação estrita de abertura de DWG (`CURRENT_AUTOCAD_DWG == BASE_DWG`).
   - Apresentação no console e em diálogo do status de rollback e idempotência.
+- `sob_launcher_gui.py` (282 linhas):
+  - Interface gráfica interativa para preparação autônoma de projetos SOB via Windows Explorer (`Abrir_SOB.bat`) ou através do Hub Central (`aux_cad_hub.py`).
+  - Seleção visual de SOB, Base técnica (combobox Enel Rio/FABAO) e pasta de destino.
 - **Cobertura & Testes**:
-  - **120 testes unitários específicos do módulo SOB com 81% de cobertura global** (89% em `sob_manager.py`, 88% em `sob_bases.py`, 85% em `sob_progress_gui.py`, 83% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_fallback_manual.py`, 81% em `sob_idempotencia.py`, 100% em `sob_logger.py`).
+  - **281 testes unitários e de integração com 100% de aprovação (PASS)** em todo o projeto.
+  - **81% de cobertura global no módulo SOB** (89% em `sob_manager.py`, 88% em `sob_bases.py`, 85% em `sob_progress_gui.py`, 83% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_fallback_manual.py`, 81% em `sob_idempotencia.py`, 100% em `sob_logger.py`).
   - **Suíte global de não-regressão**: 100% dos testes passando sem falhas.
   - **Bateria de testes operacionais no AutoCAD 2026 Core Console**: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
 

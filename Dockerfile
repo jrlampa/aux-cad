@@ -10,7 +10,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    PYTHONPATH=/app:/app/cqt:/app/ambiental:/app/orcamento:/app/topografia:/app/mapa_postes:/app/dados_tecnicos:/app/cpfc:/app/unifilar
+    PYTHONPATH=/app:/app/cqt:/app/ambiental:/app/orcamento:/app/topografia:/app/mapa_postes:/app/dados_tecnicos:/app/cpfc:/app/unifilar:/app/prancha:/app/sob
 
 # Diretório de trabalho
 WORKDIR /app

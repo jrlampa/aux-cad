@@ -165,8 +165,8 @@ class AuxCadHubApp:
             {
                 "icone": "📁",
                 "titulo": "Preparação de Projeto SOB",
-                "descricao": "Criação de pastas, download automático de croquis do SharePoint da HBT/Enel e cópia da BASE_SOB_DESENHO.dwg.",
-                "acao_texto": "Guia / Comando SOB",
+                "descricao": "Criação de pastas, download automático de croquis do SharePoint/GOMNET e cópia para {BASE}_{SOB}_DESENHO.dwg.",
+                "acao_texto": "Abrir SOB",
                 "comando": self._abrir_guia_sob,
                 "cor_borda": "#3B82F6"
             },
@@ -245,7 +245,7 @@ class AuxCadHubApp:
             {
                 "icone": "🧪",
                 "titulo": "Suíte de Testes & QA",
-                "descricao": "Executa a suíte completa de testes unitários (149 testes) e verifica a integridade de todos os módulos.",
+                "descricao": "Executa a suíte completa de testes unitários (275 testes) e verifica a integridade de todos os módulos.",
                 "acao_texto": "Executar Testes",
                 "comando": self._executar_testes,
                 "cor_borda": "#DC2626"
@@ -363,18 +363,27 @@ class AuxCadHubApp:
             messagebox.showinfo("Diagrama Unifilar", msg)
 
     def _abrir_guia_sob(self):
-        msg = (
-            "📁 PREPARAÇÃO AUTOMÁTICA DE PROJETO SOB\n\n"
-            "Fluxo integrado diretamente ao AutoCAD:\n"
-            "  1. Digite SOB (ou NOVASOB / PREPARAR_SOB) no console do AutoCAD\n"
-            "  2. Informe o número da SOB (ex: A057349839)\n"
-            "  3. Escolha a pasta de destino no diálogo nativo do Windows\n"
-            "  4. O sistema cria SOB_... e subpasta CROQUI com proteção contra sobrescrita\n"
-            "  5. Conecta ao SharePoint da HBT e baixa os croquis de campo\n"
-            "  6. Copia prancha.dwg para BASE_SOB_DESENHO.dwg\n"
-            "  7. Abre o desenho automaticamente no AutoCAD!"
-        )
-        messagebox.showinfo("Preparação de Projeto SOB", msg)
+        bat = os.path.join(BASE_DIR, "Abrir_SOB.bat")
+        if os.path.exists(bat):
+            self._lancar_subprocesso([bat], shell=True)
+        else:
+            try:
+                from sob.sob_launcher_gui import lancar_dialogo_sob
+                lancar_dialogo_sob(self.root)
+            except Exception:
+                msg = (
+                    "📁 PREPARAÇÃO AUTOMÁTICA DE PROJETO SOB\n\n"
+                    "Fluxo integrado diretamente ao AutoCAD:\n"
+                    "  1. Digite SOB (ou NOVASOB / PREPARAR_SOB) no console do AutoCAD\n"
+                    "  2. Informe o número da SOB (ex: A057349839)\n"
+                    "  3. Escolha a Base técnica (ex: PE, CF, AN, RE, NI, MA, SG, TE)\n"
+                    "  4. Escolha a pasta de destino no diálogo nativo do Windows\n"
+                    "  5. O sistema cria SOB_... e subpasta CROQUI com proteção contra sobrescrita\n"
+                    "  6. Conecta ao SharePoint/GOMNET e baixa croquis e anexos\n"
+                    "  7. Copia o modelo para {BASE}_{SOB}_DESENHO.dwg\n"
+                    "  8. Abre o desenho automaticamente no AutoCAD!"
+                )
+                messagebox.showinfo("Preparação de Projeto SOB", msg)
 
     def _abrir_autoprancha(self):
         bat = os.path.join(BASE_DIR, "Abrir_AutoPrancha.bat")

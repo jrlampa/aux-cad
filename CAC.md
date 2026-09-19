@@ -9,12 +9,17 @@ aux cad/
 ├── aux_cad_toolbar.lsp             # Barra de ferramentas global (AUXCADBAR)
 ├── aux_cad_menu.mnu / .cuix / .mnr # Menu nativo do AutoCAD (AUXCAD)
 ├── modelos/                        # Templates e modelos compartilhados (checklist, cpfc, etc.)
-├── tests/                          # Full suite de testes unitários (74 testes, 100% passing)
-├── pytest.ini                      # Resolução de paths para testes (cqt, ambiental, orcamento, cpfc...)
+├── tests/                          # Full suite de testes unitários (281 testes, 100% passing)
+├── pytest.ini                      # Resolução de paths para testes (cqt, ambiental, orcamento, cpfc, sob...)
+├── Abrir_AUXCAD.bat                # Central Unificada Hub de Engenharia e Diagnóstico
+├── Abrir_SOB.bat                   # Atalho de 2 cliques na raiz para Preparação de SOB
 ├── Abrir_CQT.bat                   # Atalho de 2 cliques na raiz para CQT
 ├── Abrir_Orcamento.bat             # Atalho de 2 cliques na raiz para Orçamento
 ├── Abrir_CPFC.bat                  # Atalho de 2 cliques na raiz para CPFC (REN 1.059)
-├── clean.bat                       # Script utilitário de limpeza de temporários
+├── Abrir_AutoPrancha.bat           # Atalho de 2 cliques na raiz para AutoPrancha
+├── Abrir_Unifilar.bat              # Atalho de 2 cliques na raiz para Diagrama Unifilar
+├── Abrir_Mapa_Postes.bat           # Atalho de 2 cliques na raiz para Estúdio Web Satélite
+├── clean.bat                       # Script utilitário de limpeza de temporários e downloads
 ├── .env.example                    # Modelo seguro de variáveis de ambiente (GOMNET, GOM, URLs)
 ├── RAG/ & CAC.md                   # Base de conhecimento e arquitetura do projeto
 │
@@ -519,7 +524,8 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - `sob_sharepoint.py` (554 linhas): Driver Selenium headless, autenticação Microsoft Online, busca unívoca, verificação prévia de conteúdo (`validar_conteudo_disponivel`) e detecção de ambiguidade (`SobConflictError`).
   - `sob_manager.py` (747 linhas - mantido estritamente abaixo do soft limit de 750 linhas): Orquestrador de máquina de estados segregada em Fase A e Fase B, suporte ao parâmetro de base, integração com fallback manual, criação obrigatória de estrutura e modelo independente do croqui, rastreamento por `RUN_ID` e checklist operacional completo.
   - `sob_cad_launcher.lsp` (211 linhas): Ponto de entrada nativo no AutoCAD com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`**, solicitação de Base com default `PE`, derivação dinâmica de `{baseSigla}_{sobId}_DESENHO.dwg`, fallback com busca de arquivo `*_DESENHO.dwg`, tratamento de status idempotente, exibição de rollback e rotina programática `(sob-executar-fluxo ...)`.
-- **Cobertura de Testes**: **120 testes unitários específicos do módulo SOB com 81% de cobertura global** (89% em `sob_manager.py`, 88% em `sob_bases.py`, 85% em `sob_progress_gui.py`, 83% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_fallback_manual.py`, 81% em `sob_idempotencia.py`, 100% em `sob_logger.py`). Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários.
+  - `sob_launcher_gui.py` (282 linhas): Interface gráfica interativa e moderna com seleção de SOB, Base técnica (combobox Enel Rio/FABAO) e pasta de destino para execução autônoma fora do AutoCAD ou via Hub Central (`Abrir_SOB.bat`).
+- **Cobertura de Testes**: **281 testes unitários e de integração com 100% de sucesso (PASS)** em todo o projeto, e **81% de cobertura global no módulo SOB** (89% em `sob_manager.py`, 88% em `sob_bases.py`, 85% em `sob_progress_gui.py`, 83% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_fallback_manual.py`, 81% em `sob_idempotencia.py`, 100% em `sob_logger.py`). Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários.
 
 
 

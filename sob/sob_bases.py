@@ -43,6 +43,22 @@ TABELA_BASES_PADRAO: Dict[str, str] = {
     "PADUA": "PA",
 }
 
+# Lista Ordenada para Menus e Caixas de Seleção Gráfica
+LISTA_BASES_PADRAO: List[Tuple[str, str]] = [
+    ("PE", "Petrópolis"),
+    ("CF", "Cabo Frio"),
+    ("AN", "Angra dos Reis"),
+    ("RE", "Resende"),
+    ("NI", "Niterói"),
+    ("MA", "Magé"),
+    ("SG", "São Gonçalo"),
+    ("TE", "Teresópolis"),
+    ("CA", "Campos"),
+    ("MC", "Macaé"),
+    ("IT", "Itaperuna"),
+    ("PA", "Santo Antônio de Pádua"),
+]
+
 # Mapeamento CECO -> Base
 TABELA_CECO_BASE: Dict[str, str] = {
     "1550": "AN",  # Angra

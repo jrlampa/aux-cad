@@ -8,7 +8,7 @@ services:
       dockerfile: Dockerfile
     container_name: auxcad_test_suite
     environment:
-      - PYTHONPATH=/app:/app/cqt:/app/ambiental:/app/orcamento:/app/topografia:/app/mapa_postes:/app/dados_tecnicos:/app/cpfc:/app/unifilar
+      - PYTHONPATH=/app:/app/cqt:/app/ambiental:/app/orcamento:/app/topografia:/app/mapa_postes:/app/dados_tecnicos:/app/cpfc:/app/unifilar:/app/prancha:/app/sob
     volumes:
       - .:/app
     command: pytest tests/ -v
@@ -22,7 +22,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - PYTHONPATH=/app:/app/cqt:/app/ambiental:/app/orcamento:/app/topografia:/app/mapa_postes:/app/dados_tecnicos:/app/cpfc:/app/unifilar
+      - PYTHONPATH=/app:/app/cqt:/app/ambiental:/app/orcamento:/app/topografia:/app/mapa_postes:/app/dados_tecnicos:/app/cpfc:/app/unifilar:/app/prancha:/app/sob
     volumes:
       - .:/app
     command: python mapa_postes/mapa_servidor.py 8000

@@ -158,12 +158,14 @@ def test_p3_aux_cad_hub_e_launcher():
     abrir_bat = os.path.join(RAIZ, "Abrir_AUXCAD.bat")
     abrir_unifilar = os.path.join(RAIZ, "Abrir_Unifilar.bat")
     abrir_prancha = os.path.join(RAIZ, "Abrir_AutoPrancha.bat")
+    abrir_sob = os.path.join(RAIZ, "Abrir_SOB.bat")
     clean_bat = os.path.join(RAIZ, "clean.bat")
 
     assert os.path.exists(hub_py)
     assert os.path.exists(abrir_bat)
     assert os.path.exists(abrir_unifilar)
     assert os.path.exists(abrir_prancha)
+    assert os.path.exists(abrir_sob)
     assert os.path.exists(clean_bat)
 
     # Verifica sintaxe e imports do script
@@ -173,6 +175,7 @@ def test_p3_aux_cad_hub_e_launcher():
     assert hasattr(aux_cad_hub, "obter_branch_git")
     assert hasattr(aux_cad_hub.AuxCadHubApp, "_abrir_unifilar")
     assert hasattr(aux_cad_hub.AuxCadHubApp, "_abrir_autoprancha")
+    assert hasattr(aux_cad_hub.AuxCadHubApp, "_abrir_guia_sob")
 
     branch = aux_cad_hub.obter_branch_git()
     assert isinstance(branch, str)

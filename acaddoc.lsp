@@ -182,7 +182,7 @@
   (princ "\n==============================================================")
   (princ "\n")
   (princ "\n  [PREPARAÇÃO DE PROJETO SOB]
-   - SOB ou NOVASOB ou PREPARAR_SOB : Prepara pasta, baixa croqui do SharePoint e abre BASE_SOB_DESENHO.dwg
+   - SOB ou NOVASOB ou PREPARAR_SOB : Prepara pasta, baixa croqui do SharePoint/GOMNET e abre {BASE}_{SOB}_DESENHO.dwg
    - RECARREGAR_SOB : Recarrega rotinas de preparação da SOB
 
   [DIAGRAMA UNIFILAR & PROTEÇÃO]")
