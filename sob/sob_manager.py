@@ -45,6 +45,16 @@ from sob_idempotencia import (
     gerar_run_id,
     gravar_manifesto_execucao,
     classificar_sob_root,
+    verificar_arquivo_download_idempotente,
+)
+from sob_gomnet import (
+    GomnetClient,
+    GomnetAnexo,
+    GomnetError,
+    GomnetAuthError,
+    GomnetNotFoundError,
+    GomnetDownloadError,
+    carregar_credenciais_gomnet,
 )
 from sob_sharepoint import (
     obter_credenciais_sharepoint,
@@ -136,10 +146,12 @@ class SobOrchestrator:
         self,
         origem_base: Optional[Path] = None,
         sharepoint_client: Optional[SharePointClient] = None,
+        gomnet_client: Optional[Any] = None,
         logger: Optional[LoggerSeguro] = None,
     ):
         self.origem_base = origem_base or CAMINHO_BASE_PRANCHA_PADRAO
         self.sharepoint_client = sharepoint_client
+        self.gomnet_client = gomnet_client
         self.logger = logger or configurar_logger()
 
     def executar(
@@ -147,6 +159,7 @@ class SobOrchestrator:
         sob_raw: str,
         destino_dir: str,
         baixar_croqui_sp: bool = True,
+        consultar_gomnet: bool = True,
         abrir_cad: bool = False,
     ) -> Dict[str, Any]:
         """
@@ -171,6 +184,9 @@ class SobOrchestrator:
             "croqui_dir": "",
             "dwg_path": "",
             "arquivos_croqui": [],
+            "GOMNET_ATTACHMENTS": [],
+            "GOMNET_CREATED_FILES": [],
+            "ANEXOS_DIR": "",
             "checklist": {},
             "rollback": "ROLLBACK_NÃO_NECESSÁRIO",
             "rollback_info": None,
@@ -191,11 +207,13 @@ class SobOrchestrator:
             "Autenticação validada": False,
             "SOB encontrada no SharePoint": False,
             "Conteúdo disponível para download": False,
+            "GOMNET validado": False,
             "Pré-validação concluída": False,
             "SOB_ROOT criado": False,
             "CROQUI_DIR criado": False,
             "Download concluído": False,
             "Conteúdo do CROQUI validado": False,
+            "Download GOMNET concluído": False,
             "BASE_DWG criado": False,
             "BASE_DWG validado": False,
             "Integridade validada": False,
@@ -208,6 +226,7 @@ class SobOrchestrator:
         client: Optional[SharePointClient] = None
         pasta_info: Optional[Dict[str, Any]] = None
         rollback_ctx: Optional[RollbackContext] = None
+        gom_client: Optional[GomnetClient] = None
 
         try:
             self.logger.info("Início da operação - FASE A: PRÉ-VALIDAÇÃO")
@@ -378,6 +397,31 @@ class SobOrchestrator:
                 checklist["SOB encontrada no SharePoint"] = True
                 checklist["Conteúdo disponível para download"] = True
 
+            # ETAPA A14-G: Validar e pré-consultar GOMNET (Seção 19.7)
+            anexos_gomnet: List[GomnetAnexo] = []
+            gom_client = self.gomnet_client
+            if consultar_gomnet and (baixar_croqui_sp or self.gomnet_client is not None):
+                resultado["etapa"] = "GOMNET_PRE_VALIDACAO"
+                self.logger.info("Pré-validação GOMNET iniciada")
+                if not gom_client:
+                    try:
+                        u, s, url = carregar_credenciais_gomnet()
+                        self.logger.adicionar_segredo(s)
+                        gom_client = GomnetClient(usuario=u, senha=s, login_url=url)
+                    except Exception as e:
+                        self.logger.warning(f"GOMNET não disponível ou credenciais ausentes: {e}")
+                        gom_client = None
+
+                if gom_client:
+                    gom_client.autenticar()
+                    anexos_gomnet = gom_client.localizar_sob_e_listar_anexos(sob_id)
+                    checklist["GOMNET validado"] = True
+                    self.logger.info(f"GOMNET: {len(anexos_gomnet)} anexo(s) identificado(s)")
+                else:
+                    checklist["GOMNET validado"] = True
+            else:
+                checklist["GOMNET validado"] = True
+
             # ETAPA A15: Encerrar pré-validação com sucesso
             checklist["Pré-validação concluída"] = True
             resultado["pre_validacao"] = "OK"
@@ -435,6 +479,46 @@ class SobOrchestrator:
                 self.logger.info("Download concluído")
             else:
                 checklist["Download concluído"] = True
+                checklist["Conteúdo do CROQUI validado"] = True
+                resultado["estado"] = "DOWNLOAD_VALIDADO"
+
+            # ETAPA B04-G: Baixar e validar anexos do GOMNET em CROQUI\ANEXOS (Seção 19.8 a 19.12)
+            if anexos_gomnet and gom_client:
+                resultado["etapa"] = "DOWNLOAD_GOMNET"
+                self.logger.info("Download de anexos GOMNET iniciado")
+                anexos_dir = croqui_dir / "ANEXOS"
+                anexos_dir_preexistia = anexos_dir.exists()
+                anexos_dir.mkdir(parents=True, exist_ok=True)
+                if not anexos_dir_preexistia and rollback_ctx:
+                    rollback_ctx.registrar_criacao("ANEXOS_DIR", anexos_dir, tipo="dir")
+                resultado["ANEXOS_DIR"] = str(anexos_dir)
+
+                for anexo in anexos_gomnet:
+                    dest_anexo = anexos_dir / anexo.nome_arquivo
+                    st_idemp = verificar_arquivo_download_idempotente(dest_anexo)
+                    if st_idemp == "IDENTICO":
+                        self.logger.info(f"[OK] Anexo GOMNET já existente e compatível: {anexo.nome_arquivo}")
+                    elif st_idemp == "DIVERGENTE":
+                        raise SobIntegrityError(
+                            f"[BLOQUEADO] Anexo GOMNET existente com conteúdo divergente: {anexo.nome_arquivo}"
+                        )
+                    else:
+                        gom_client.baixar_anexo_atomico(anexo, dest_anexo)
+                        if rollback_ctx:
+                            rollback_ctx.registrar_gomnet_arquivo(dest_anexo)
+                        resultado["GOMNET_CREATED_FILES"].append(str(dest_anexo))
+
+                    resultado["GOMNET_ATTACHMENTS"].append({
+                        "nome": anexo.nome_arquivo,
+                        "origem": "GOMNET",
+                        "referencia": anexo.id_arquivo,
+                        "destino": str(dest_anexo),
+                    })
+
+                checklist["Download GOMNET concluído"] = True
+                self.logger.info("Download de anexos GOMNET concluído")
+            else:
+                checklist["Download GOMNET concluído"] = True
                 checklist["Conteúdo do CROQUI validado"] = True
                 resultado["estado"] = "DOWNLOAD_VALIDADO"
 
@@ -611,6 +695,11 @@ class SobOrchestrator:
             if client and not self.sharepoint_client:
                 try:
                     client.fechar()
+                except Exception:
+                    pass
+            if gom_client and not self.gomnet_client:
+                try:
+                    gom_client.fechar()
                 except Exception:
                     pass
 

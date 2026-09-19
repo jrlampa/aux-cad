@@ -441,3 +441,23 @@ def remover_estrutura_incompleta(sob_root: Union[str, Path]) -> bool:
         return not p.exists()
     except Exception:
         return False
+
+
+def sanitizar_mensagem(texto: str, segredos: Optional[Union[list, Tuple]] = None) -> str:
+    """
+    Remove segredos e credenciais de mensagens ou logs.
+    Garante que senhas nunca apareçam em logs ou telas.
+    """
+    if not texto:
+        return ""
+
+    resultado = texto
+    if segredos:
+        for s in segredos:
+            if s and len(s) >= 3:
+                resultado = resultado.replace(s, "******")
+
+    # Sanitização extra de padrões comuns
+    resultado = re.sub(r'(password|senha|passwd|pwd)\s*=\s*([^\s&]+)', r'\1=******', resultado, flags=re.IGNORECASE)
+    return resultado
+

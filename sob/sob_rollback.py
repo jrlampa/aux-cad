@@ -70,6 +70,8 @@ class RollbackContext:
 
         self.recursos: Dict[str, RecursoRastreado] = {}
         self.download_created_files: List[Path] = []
+        self.anexos_dir: Path = (self.croqui_dir / "ANEXOS").resolve()
+        self.gomnet_created_files: List[Path] = []
         self.dwg_aberto_no_autocad: bool = False
 
         self.etapa_falha: Optional[str] = None
@@ -138,6 +140,14 @@ class RollbackContext:
         if p not in self.download_created_files:
             self.download_created_files.append(p)
 
+    def registrar_gomnet_arquivo(self, arquivo_path: Union[str, Path]) -> None:
+        """
+        Registra um arquivo físico criado durante o download do GOMNET (Seção 19.13).
+        """
+        p = Path(arquivo_path).resolve()
+        if p not in self.gomnet_created_files:
+            self.gomnet_created_files.append(p)
+
     def marcar_dwg_aberto(self) -> None:
         """
         Registra que o BASE_DWG foi aberto no AutoCAD (Seção 18.11).
@@ -149,7 +159,7 @@ class RollbackContext:
         Verifica se algum recurso foi efetivamente criado no disco pela execução atual.
         """
         criados = any(r.criado_nesta_execucao for r in self.recursos.values())
-        return criados or len(self.download_created_files) > 0
+        return criados or len(self.download_created_files) > 0 or len(self.gomnet_created_files) > 0
 
     def executar_rollback(
         self,
@@ -254,6 +264,59 @@ class RollbackContext:
                             acao_necessaria="Remover manualmente.",
                         )
                     )
+
+        # 3.5. PASSO 3.5: Remover arquivos baixados do GOMNET pela execução (Seção 19.15)
+        for arq_gom in reversed(self.gomnet_created_files):
+            if arq_gom.exists():
+                try:
+                    arq_gom.resolve().relative_to(self.sob_root.resolve())
+                except ValueError:
+                    self.logger.warning(f"Arquivo GOMNET fora de SOB_ROOT ignorado por segurança: {arq_gom}")
+                    self.recursos_preservados.append(str(arq_gom))
+                    continue
+
+                try:
+                    arq_gom.unlink()
+                    if not arq_gom.exists():
+                        self.recursos_removidos.append(str(arq_gom))
+                    else:
+                        self.recursos_remanescentes.append(
+                            RecursoRemanescente(
+                                caminho=str(arq_gom),
+                                motivo="Arquivo GOMNET não pôde ser removido.",
+                                acao_necessaria="Verificar permissão e remover manualmente.",
+                            )
+                        )
+                except Exception as e:
+                    self.recursos_remanescentes.append(
+                        RecursoRemanescente(
+                            caminho=str(arq_gom),
+                            motivo=f"Erro ao remover anexo GOMNET: {e}",
+                            acao_necessaria="Remover manualmente.",
+                        )
+                    )
+
+        # 3.6. PASSO 3.6: Remover ANEXOS_DIR se vazio e criado pela execução
+        rec_anexos = self.recursos.get("ANEXOS_DIR")
+        if rec_anexos and rec_anexos.criado_nesta_execucao and self.anexos_dir.exists():
+            itens_anexos = list(self.anexos_dir.iterdir())
+            if not itens_anexos:
+                try:
+                    self.anexos_dir.rmdir()
+                    if not self.anexos_dir.exists():
+                        self.recursos_removidos.append(str(self.anexos_dir))
+                        self.logger.info(f"ANEXOS_DIR vazio removido: {self.anexos_dir}")
+                except Exception as e:
+                    self.recursos_remanescentes.append(
+                        RecursoRemanescente(
+                            caminho=str(self.anexos_dir),
+                            motivo=f"Erro ao remover ANEXOS_DIR: {e}",
+                            acao_necessaria="Remover diretório manualmente.",
+                        )
+                    )
+            else:
+                self.logger.warning(f"ANEXOS_DIR contém {len(itens_anexos)} item(ns) preservado(s); mantido.")
+                self.recursos_preservados.append(str(self.anexos_dir))
 
         # 4. PASSO 4: Remover CROQUI_DIR se vazio e criado pela execução (18.5 & 18.6)
         rec_croqui = self.recursos.get("CROQUI_DIR")

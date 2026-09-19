@@ -488,14 +488,23 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
       - **Não Confundir Existência com Conclusão (19.6)**: Presença de arquivos físicos isolada não atesta conclusão; exige validação do manifesto `.sob_state.json` e integridade física.
       - **Downloads e Cópia de Base Idempotentes (19.11 e 19.12)**: Comparação de hash/tamanho; arquivos idênticos são reutilizados/validados, divergências geram bloqueio imediato; templates originais permanecem intocados.
       - **Rastreabilidade por RUN_ID (19.14)**: Identificador técnico único por execução (`RUN_YYYYMMDD_HHMMSS_<hex>`) para rastrear etapas sem alterar caminhos canônicos em disco.
+    - **Integração com GOMNET — Modal de Anexos (Seção 19 - `sob_gomnet.py`)**:
+      - **Fonte Complementar de Anexos (19.1)**: O GOMNET atua como segunda fonte oficial de arquivos associados à SOB; download direcionado para `CROQUI\ANEXOS` (`SOB_ROOT\CROQUI\ANEXOS`).
+      - **Distinção de Elementos de Interface (19.1 e 19.6)**: `/imagens/anexarArquivo.gif` é estritamente um ícone acionador da interface/modal (`Upload.aspx`) e não arquivo para download.
+      - **Sessão HTTP Autenticada (19.2 e 19.10)**: Autenticação em `login.aspx` via `requests.Session` com manutenção de cookies (`ASP.NET_SessionId`), sem abrir janelas de browser ou emulação pesada de Selenium.
+      - **Consulta Determinística ao Modal (19.3 e 19.4)**: Acesso direto e inequívoco via `Upload.aspx?numtrab=&numsob={SOB_ID}&Slns_Codigo={SOB_ID}`.
+      - **Identificação Completa dos Anexos (19.5 e 19.9)**: Varredura da tabela `gridviewUploads`, extraindo metadados (`id`, `nome`, `tipo`, `categoria`, `descricao`, `data`, `usuario`). Baixa **todos os arquivos legítimos** (`.dwg`, `.pdf`, `.zip`, `.xlsm`, `.xlsx`, etc.) sem filtros restritivos.
+      - **Download Atômico e Validação Estrita (19.11 e 19.12)**: Gravação temporária via `.download`, validação física (tamanho > 0, ausência de páginas de erro HTML) e renomeação atômica (`replace`).
+      - **Rollback Seguro e Idempotência (19.13 a 19.16)**: Rastreamento em `GOMNET_ATTACHMENTS` e `GOMNET_CREATED_FILES`; limpeza controlada apenas do que foi criado nesta execução; preservação de arquivos preexistentes; reuso de arquivos idênticos e bloqueio de divergentes.
 - **Arquitetura & Componentes**:
-  - `sob_core.py` (444 linhas): Lógica de domínio, normalização, checagem não-destrutiva de permissões (`validar_permissao_criacao`), validações de integridade SHA-256 e limpeza segura sem `rmtree` genérico.
-  - `sob_idempotencia.py` (172 linhas): Gestão de estado idempotente, `gerar_run_id`, `classificar_sob_root`, manifesto atômico `.sob_state.json` e verificação de arquivos de download.
-  - `sob_rollback.py` (362 linhas): Classes `RecursoRastreado`, `RecursoRemanescente` e `RollbackContext` para desfazimento sequencial reverso, validação pós-rollback e proteção de dados.
-  - `sob_sharepoint.py` (550 linhas): Driver Selenium headless, autenticação Microsoft Online, busca unívoca, verificação prévia de conteúdo (`validar_conteudo_disponivel`) e download seguro via CDP.
-  - `sob_manager.py` (660 linhas): Orquestrador de máquina de estados segregada em Fase A e Fase B, com integração nativa de `RollbackContext`, rastreamento por `RUN_ID`, verificação idempotente em A07 e checklist de 21 itens.
-  - `sob_cad_launcher.lsp` (362 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`**, verificação `CURRENT_AUTOCAD_DWG == BASE_DWG`, tratamento de status idempotente (`[INFO] ... já possui uma execução concluída`), exibição de rollback e rotina programática `(sob-executar-fluxo ...)`.
-- **Cobertura de Testes**: 66 testes unitários específicos do módulo SOB (80% de cobertura do pacote, 90% em `sob_manager.py`, 84% em `sob_rollback.py`, 80% em `sob_idempotencia.py`) incluindo suite completa `IDEMP-01` a `IDEMP-07`. Suíte global com **222 testes unitários passando com 100% de sucesso**. Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
+  - `sob_core.py` (465 linhas): Lógica de domínio, normalização, checagem não-destrutiva de permissões (`validar_permissao_criacao`), validações de integridade SHA-256, sanitização de logs (`sanitizar_mensagem`) e limpeza segura sem `rmtree` genérico.
+  - `sob_gomnet.py` (305 linhas): Cliente HTTP para autenticação e consumo do modal de anexos do GOMNET (`GomnetClient`, `GomnetAnexo`, `carregar_credenciais_gomnet`).
+  - `sob_idempotencia.py` (173 linhas): Gestão de estado idempotente, `gerar_run_id`, `classificar_sob_root`, manifesto atômico `.sob_state.json` e verificação de arquivos de download (`verificar_arquivo_download_idempotente`).
+  - `sob_rollback.py` (425 linhas): Classes `RecursoRastreado`, `RecursoRemanescente` e `RollbackContext` para desfazimento sequencial reverso, rollback de anexos GOMNET, validação pós-rollback e proteção de dados.
+  - `sob_sharepoint.py` (551 linhas): Driver Selenium headless, autenticação Microsoft Online, busca unívoca, verificação prévia de conteúdo (`validar_conteudo_disponivel`) e download seguro via CDP.
+  - `sob_manager.py` (748 linhas): Orquestrador de máquina de estados segregada em Fase A e Fase B, com integração nativa de SharePoint, GOMNET, `RollbackContext`, rastreamento por `RUN_ID`, verificação idempotente em A07 e checklist operacional completo.
+  - `sob_cad_launcher.lsp` (362 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`**, verificação `CURRENT_AUTOCAD_DWG == BASE_DWG`, tratamento de status idempotente, exibição de rollback e rotina programática `(sob-executar-fluxo ...)`.
+- **Cobertura de Testes**: 77 testes unitários específicos do módulo SOB (80% de cobertura do pacote, 90% em `sob_manager.py`, 85% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_idempotencia.py`). Suíte global com **233 testes unitários passando com 100% de sucesso**. Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
 
 
 
