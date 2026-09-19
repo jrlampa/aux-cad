@@ -20,6 +20,9 @@ if _current_dir not in sys.path:
 from sob_core import (
     normalizar_sob,
     validar_sob,
+    obter_sob_id,
+    obter_sob_name,
+    derivar_caminhos_sob,
     verificar_pasta_sob_existente,
     criar_estrutura_sob,
     copiar_arquivo_base,
@@ -122,6 +125,12 @@ class SobOrchestrator:
             "sucesso": False,
             "etapa": "INICIO",
             "mensagem": "",
+            "SOB_ID": "",
+            "SOB_NAME": "",
+            "DESTINATION_ROOT": "",
+            "SOB_ROOT": "",
+            "CROQUI_DIR": "",
+            "BASE_DWG": "",
             "sob": "",
             "sob_root": "",
             "croqui_dir": "",
@@ -132,7 +141,7 @@ class SobOrchestrator:
         try:
             self.logger.info("Início da operação")
 
-            # ETAPA 1: Validação e Normalização da SOB
+            # ETAPA 1: Validação da SOB
             resultado["etapa"] = "VALIDAR_SOB"
             if not sob_raw or not sob_raw.strip():
                 raise SobValidationError("O número da SOB não pode ser vazio.")
@@ -143,10 +152,6 @@ class SobOrchestrator:
                     "Use apenas caracteres alfanuméricos."
                 )
 
-            pasta_sob = normalizar_sob(sob_raw)
-            resultado["sob"] = pasta_sob
-            self.logger.info(f"SOB identificada: {pasta_sob}")
-
             # ETAPA 2: Seleção e Validação do Destino
             resultado["etapa"] = "VALIDAR_DESTINO"
             if not destino_dir or not str(destino_dir).strip():
@@ -154,25 +159,45 @@ class SobOrchestrator:
                     "Operação cancelada: nenhum diretório de destino selecionado."
                 )
 
-            destino_path = Path(destino_dir).resolve()
-            if not destino_path.is_dir():
+            destination_root = Path(destino_dir).resolve()
+            if not destination_root.is_dir():
                 raise SobFileNotFoundError(
-                    f"Diretório de destino inválido ou inexistente: {destino_path}"
+                    f"Diretório de destino inválido ou inexistente: {destination_root}"
                 )
 
-            self.logger.info(f"Diretório selecionado: {destino_path}")
+            # Derivação Canônica Centralizada (Seção 0-A)
+            caminhos = derivar_caminhos_sob(sob_raw, destination_root)
+            sob_id = caminhos["SOB_ID"]
+            sob_name = caminhos["SOB_NAME"]
+            sob_root = caminhos["SOB_ROOT"]
+            croqui_dir = caminhos["CROQUI_DIR"]
+            base_dwg = caminhos["BASE_DWG"]
+
+            resultado["SOB_ID"] = sob_id
+            resultado["SOB_NAME"] = sob_name
+            resultado["DESTINATION_ROOT"] = str(destination_root)
+            resultado["SOB_ROOT"] = str(sob_root)
+            resultado["CROQUI_DIR"] = str(croqui_dir)
+            resultado["BASE_DWG"] = str(base_dwg)
+            resultado["sob"] = sob_name
+            resultado["sob_root"] = str(sob_root)
+            resultado["croqui_dir"] = str(croqui_dir)
+
+            # Logs canônicos padronizados (Seção 9)
+            self.logger.info(f"SOB: {sob_id}")
+            self.logger.info(f"SOB_ROOT: {sob_root}")
+            self.logger.info(f"CROQUI_DIR: {croqui_dir}")
+            self.logger.info(f"BASE_DWG: {base_dwg}")
 
             # ETAPA 3 & 4: Proteção contra existência e Criação da Estrutura
             resultado["etapa"] = "CRIAR_ESTRUTURA"
-            if verificar_pasta_sob_existente(destino_path, pasta_sob):
+            if verificar_pasta_sob_existente(destination_root, sob_name):
                 raise SobDirectoryExistsError(
                     "A pasta da SOB já existe no local selecionado.\n"
                     "Nenhum arquivo foi sobrescrito."
                 )
 
-            sob_root, croqui_dir = criar_estrutura_sob(destino_path, pasta_sob)
-            resultado["sob_root"] = str(sob_root)
-            resultado["croqui_dir"] = str(croqui_dir)
+            sob_root_criado, croqui_dir_criado = criar_estrutura_sob(destination_root, sob_name)
 
             self.logger.info("Pasta da SOB criada")
             self.logger.info("Pasta CROQUI criada")
@@ -191,7 +216,8 @@ class SobOrchestrator:
                 try:
                     client.autenticar()
                     self.logger.info("SOB localizada")
-                    pasta_info = client.localizar_pasta_sob(pasta_sob)
+                    # Busca pelo SOB_ID puro no SharePoint (Seção 11)
+                    pasta_info = client.localizar_pasta_sob(sob_id)
 
                     self.logger.info("Download iniciado")
                     arquivos = client.baixar_croqui(pasta_info, croqui_dir)
@@ -211,7 +237,11 @@ class SobOrchestrator:
                 )
 
             self.logger.info("Arquivo-base localizado")
-            dwg_copiado = copiar_arquivo_base(self.origem_base, sob_root)
+            dwg_copiado = copiar_arquivo_base(
+                self.origem_base,
+                sob_root,
+                nome_destino=base_dwg.name,
+            )
             self.logger.info("Arquivo-base copiado")
 
             resultado["etapa"] = "VALIDAR_DWG"
@@ -220,6 +250,7 @@ class SobOrchestrator:
                     f"Falha na validação do arquivo DWG copiado: {dwg_copiado}"
                 )
 
+            resultado["BASE_DWG"] = str(dwg_copiado)
             resultado["dwg_path"] = str(dwg_copiado)
             self.logger.info("DWG validado")
 

@@ -11,8 +11,8 @@
   (defun stringp (x) (= (type x) 'STR))
 )
 
-;; Normalização do número da SOB no AutoLISP
-(defun sob-normalizar-str (str / s)
+;; Matriz Oficial de Nomenclatura (Seção 0-A)
+(defun sob-obter-id (str / s)
   (if (or (null str) (/= (type str) 'STR))
     ""
     (progn
@@ -20,21 +20,26 @@
       (while (and (>= (strlen s) 4) (= (substr s 1 4) "SOB_"))
         (setq s (vl-string-trim " \t\r\n" (substr s 5)))
       )
-      (if (/= s "")
-        (strcat "SOB_" s)
-        ""
-      )
+      s
     )
   )
 )
 
-;; Extrai código limpo sem SOB_
-(defun sob-extrair-codigo (str / norm)
-  (setq norm (sob-normalizar-str str))
-  (if (> (strlen norm) 4)
-    (substr norm 5)
-    norm
+(defun sob-obter-name (str / id)
+  (setq id (sob-obter-id str))
+  (if (/= id "")
+    (strcat "SOB_" id)
+    ""
   )
+)
+
+;; Normalização e compatibilidade retroativa
+(defun sob-normalizar-str (str)
+  (sob-obter-name str)
+)
+
+(defun sob-extrair-codigo (str)
+  (sob-obter-id str)
 )
 
 ;; Localiza o script Python do gerenciador SOB
@@ -63,9 +68,9 @@
   )
 )
 
-;; Executa o fluxo operacional completo da SOB
-(defun sob-executar-fluxo (sobInput destPath abrirCad / acadApp doc sobNormalizada sobRoot
-                             jsonFile logFile pyScript cmd wsh resJson f_json line_json
+;; Executa o fluxo operacional completo da SOB com nomenclatura canônica
+(defun sob-executar-fluxo (sobInput destPath abrirCad / acadApp doc sobId sobName destinationRoot sobRoot
+                             croquiDir baseDwg jsonFile logFile pyScript cmd wsh resJson f_json line_json
                              dwgTarget f_log line_log log_txt erro_msg sucesso retVal)
 
   (setq acadApp (vlax-get-acad-object))
@@ -73,20 +78,30 @@
     (setq doc (vl-catch-all-apply 'vla-get-ActiveDocument (list acadApp)))
   )
 
-  ;; 1. Normalização e Validação
-  (setq sobNormalizada (sob-normalizar-str sobInput))
-  (if (or (= sobNormalizada "") (<= (strlen sobNormalizada) 4))
+  ;; 1. Identificação da SOB (Seção 1: SOB_ID e SOB_NAME)
+  (setq sobId (sob-obter-id sobInput))
+  (setq sobName (sob-obter-name sobInput))
+
+  (if (or (= sobId "") (<= (strlen sobId) 2))
     (progn
       (princ "\n[ERRO] Número de SOB inválido. Operação interrompida.")
       (sob-alert "Número de SOB inválido. Operação interrompida.")
       (list (cons "sucesso" nil) (cons "erro" "SOB_INVALIDA"))
     )
     (progn
-      (princ (strcat "\n[INFO] SOB identificada: " sobNormalizada))
-      (princ (strcat "\n[INFO] Diretório de destino: " destPath))
+      ;; 2. Derivação canônica dos caminhos (Seções 2, 3, 4 e 5)
+      (setq destinationRoot (vl-string-right-trim "\\" (vl-string-trim " " destPath)))
+      (setq sobRoot (strcat destinationRoot "\\" sobName))
+      (setq croquiDir (strcat sobRoot "\\CROQUI"))
+      (setq baseDwg (strcat sobRoot "\\BASE_SOB_DESENHO.dwg"))
 
-      ;; 2. Proteção contra SOB Existente (NÃO SOBRESCREVER / NÃO APAGAR / NÃO MISTURAR)
-      (setq sobRoot (strcat destPath "\\" sobNormalizada))
+      ;; Logs canônicos padronizados (Seção 9)
+      (princ (strcat "\n[INFO] SOB: " sobId))
+      (princ (strcat "\n[INFO] SOB_ROOT: " sobRoot))
+      (princ (strcat "\n[INFO] CROQUI_DIR: " croquiDir))
+      (princ (strcat "\n[INFO] BASE_DWG: " baseDwg))
+
+      ;; 3. Proteção contra SOB Existente (NÃO SOBRESCREVER / NÃO APAGAR / NÃO MISTURAR)
       (if (vl-file-directory-p sobRoot)
         (progn
           (princ "\n==============================================================")
@@ -99,7 +114,7 @@
           (list (cons "sucesso" nil) (cons "erro" "PASTA_EXISTENTE") (cons "sobRoot" sobRoot))
         )
         (progn
-          ;; 3. Arquivos de Intercâmbio e Log Protegidos
+          ;; 4. Arquivos de Intercâmbio e Log Protegidos
           (setq jsonFile (vl-filename-mktemp "sob_out.json"))
           (setq logFile  (vl-filename-mktemp "sob_log.txt"))
           (setq pyScript (sob-localizar-script))
@@ -111,9 +126,9 @@
               (list (cons "sucesso" nil) (cons "erro" "SCRIPT_NAO_ENCONTRADO"))
             )
             (progn
-              ;; 4. Execução do Orquestrador Python em Segundo Plano
+              ;; 5. Execução do Orquestrador Python em Segundo Plano
               (princ "\n[INFO] Acessando SharePoint e preparando projeto...")
-              (setq cmd (strcat "py \"" pyScript "\" --sob \"" sobNormalizada "\" --destino \"" destPath "\" --json-out \"" jsonFile "\" > \"" logFile "\" 2>&1"))
+              (setq cmd (strcat "py \"" pyScript "\" --sob \"" sobId "\" --destino \"" destinationRoot "\" --json-out \"" jsonFile "\" > \"" logFile "\" 2>&1"))
 
               (setq wsh (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
               (if (and wsh (not (vl-catch-all-error-p wsh)))
@@ -127,17 +142,17 @@
                 )
               )
 
-              ;; 5. Verificação do Resultado
-              (setq dwgTarget (strcat sobRoot "\\BASE_SOB_DESENHO.dwg"))
+              ;; 6. Verificação do Resultado Canônico (BASE_DWG)
+              (setq dwgTarget baseDwg)
 
               (if (and (findfile dwgTarget) (> (vl-file-size dwgTarget) 100))
                 (progn
                   (princ "\n==============================================================")
-                  (princ (strcat "\n✔ PROJETO " sobNormalizada " PREPARADO COM SUCESSO!"))
+                  (princ (strcat "\n✔ PROJETO " sobName " PREPARADO COM SUCESSO!"))
                   (princ (strcat "\nArquivo: " dwgTarget))
                   (princ "\n==============================================================")
 
-                  ;; 6. Abertura do Arquivo no AutoCAD
+                  ;; 7. Abertura do Arquivo no AutoCAD (Seção 10: BASE_DWG)
                   (if abrirCad
                     (progn
                       (princ "\n[INFO] Abrindo BASE_SOB_DESENHO.dwg no AutoCAD...")
@@ -147,11 +162,21 @@
                     )
                   )
                   (sob-alert (strcat "Preparação de Projeto Concluída com Sucesso!\n\n"
-                                     "SOB: " sobNormalizada "\n"
-                                     "Pasta: " sobRoot "\n"
-                                     "Arquivo: BASE_SOB_DESENHO.dwg\n\n"
+                                     "SOB_ID: " sobId "\n"
+                                     "SOB_NAME: " sobName "\n"
+                                     "SOB_ROOT: " sobRoot "\n"
+                                     "BASE_DWG: BASE_SOB_DESENHO.dwg\n\n"
                                      "O desenho foi aberto no AutoCAD."))
-                  (list (cons "sucesso" t) (cons "sob" sobNormalizada) (cons "sobRoot" sobRoot) (cons "dwgTarget" dwgTarget))
+                  (list (cons "sucesso" t)
+                        (cons "SOB_ID" sobId)
+                        (cons "SOB_NAME" sobName)
+                        (cons "DESTINATION_ROOT" destinationRoot)
+                        (cons "SOB_ROOT" sobRoot)
+                        (cons "CROQUI_DIR" croquiDir)
+                        (cons "BASE_DWG" baseDwg)
+                        (cons "sob" sobName)
+                        (cons "sobRoot" sobRoot)
+                        (cons "dwgTarget" dwgTarget))
                 )
                 (progn
                   ;; Em caso de falha, lê o log para exibir mensagem exata ao usuário

@@ -54,9 +54,15 @@ def normalizar_sob(sob_raw: str) -> str:
     return f"SOB_{limpo}"
 
 
-def extrair_codigo_sob(sob_raw: str) -> str:
+# Matriz Oficial de Nomenclatura (Seção 0-A)
+NOME_PASTA_CROQUI = "CROQUI"
+NOME_ARQUIVO_BASE_DWG = "BASE_SOB_DESENHO.dwg"
+
+
+def obter_sob_id(sob_raw: str) -> str:
     """
-    Retorna apenas o código da SOB (sem o prefixo 'SOB_').
+    Retorna exclusivamente o SOB_ID (número puro informado pelo usuário, sem prefixo 'SOB_').
+    Utilizado para pesquisa no SharePoint, identificação interna, validações e logs.
     
     Exemplos:
         'A057349839'     -> 'A057349839'
@@ -64,6 +70,45 @@ def extrair_codigo_sob(sob_raw: str) -> str:
     """
     normalizada = normalizar_sob(sob_raw)
     return normalizada[4:]
+
+
+def obter_sob_name(sob_raw: str) -> str:
+    """
+    Retorna o SOB_NAME (nome padronizado da pasta local: 'SOB_' + SOB_ID).
+    Garante que nunca seja gerado 'SOB_SOB_...'.
+    
+    Exemplos:
+        'A057349839'     -> 'SOB_A057349839'
+        'SOB_A057349839' -> 'SOB_A057349839'
+    """
+    return normalizar_sob(sob_raw)
+
+
+def extrair_codigo_sob(sob_raw: str) -> str:
+    """Alias para obter_sob_id (compatibilidade retroativa)."""
+    return obter_sob_id(sob_raw)
+
+
+def derivar_caminhos_sob(sob_raw: str, destination_root: Union[str, Path]) -> dict:
+    """
+    Constrói de forma centralizada e canônica a cadeia completa de caminhos (Seção 0-A):
+    SOB_ID -> SOB_NAME -> DESTINATION_ROOT -> SOB_ROOT -> CROQUI_DIR -> BASE_DWG
+    """
+    sob_id = obter_sob_id(sob_raw)
+    sob_name = f"SOB_{sob_id}"
+    dest_root = Path(destination_root).resolve()
+    sob_root = dest_root / sob_name
+    croqui_dir = sob_root / NOME_PASTA_CROQUI
+    base_dwg = sob_root / NOME_ARQUIVO_BASE_DWG
+
+    return {
+        "SOB_ID": sob_id,
+        "SOB_NAME": sob_name,
+        "DESTINATION_ROOT": dest_root,
+        "SOB_ROOT": sob_root,
+        "CROQUI_DIR": croqui_dir,
+        "BASE_DWG": base_dwg,
+    }
 
 
 def validar_sob(sob_raw: str) -> bool:

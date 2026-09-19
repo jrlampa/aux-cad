@@ -174,3 +174,42 @@ def test_sob_package_init():
     assert hasattr(sob, "normalizar_sob")
     assert hasattr(sob, "validar_sob")
     assert hasattr(sob, "criar_estrutura_sob")
+
+
+def test_padronizacao_secao_0a_nomenclatura(tmp_path: Path):
+    """
+    Valida Matriz Oficial de Nomenclatura da Seção 0-A:
+    SOB_ID, SOB_NAME, DESTINATION_ROOT, SOB_ROOT, CROQUI_DIR, BASE_DWG.
+    """
+    from sob_core import (
+        obter_sob_id,
+        obter_sob_name,
+        derivar_caminhos_sob,
+        NOME_PASTA_CROQUI,
+        NOME_ARQUIVO_BASE_DWG,
+    )
+
+    # 1. SOB_ID: número puro, sem SOB_
+    assert obter_sob_id("A057349839") == "A057349839"
+    assert obter_sob_id("SOB_A057349839") == "A057349839"
+    assert obter_sob_id("sob_sob_A057349839") == "A057349839"
+
+    # 2. SOB_NAME: "SOB_" + SOB_ID (nunca SOB_SOB_...)
+    assert obter_sob_name("A057349839") == "SOB_A057349839"
+    assert obter_sob_name("SOB_A057349839") == "SOB_A057349839"
+
+    # 3. Derivação Canônica Centralizada
+    dest_root = tmp_path / "Projetos" / "ENEL"
+    dest_root.mkdir(parents=True)
+
+    caminhos = derivar_caminhos_sob("A057349839", dest_root)
+
+    assert caminhos["SOB_ID"] == "A057349839"
+    assert caminhos["SOB_NAME"] == "SOB_A057349839"
+    assert caminhos["DESTINATION_ROOT"] == dest_root.resolve()
+    assert caminhos["SOB_ROOT"] == (dest_root / "SOB_A057349839").resolve()
+    assert caminhos["CROQUI_DIR"] == (dest_root / "SOB_A057349839" / NOME_PASTA_CROQUI).resolve()
+    assert caminhos["BASE_DWG"] == (dest_root / "SOB_A057349839" / NOME_ARQUIVO_BASE_DWG).resolve()
+    assert caminhos["CROQUI_DIR"].name == "CROQUI"
+    assert caminhos["BASE_DWG"].name == "BASE_SOB_DESENHO.dwg"
+
