@@ -331,14 +331,28 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
     5. Remover `SOB_ROOT` se vazio e criado nesta execução.
   - **Estados Formais**: `ROLLBACK_NÃO_NECESSÁRIO`, `ROLLBACK_INICIADO`, `ROLLBACK_CONCLUÍDO`, `ROLLBACK_PARCIAL`.
   - **Registro Estruturado**: Rastreabilidade completa com `recursos_criados_pela_execucao`, `recursos_removidos`, `recursos_preservados`, `recursos_remanescentes` e orientações de ação.
-- `sob_core.py` (437 linhas):
+- **Mecanismo de Idempotência e Repetição Segura (Seção 19 - `sob_idempotencia.py`)**:
+  - **Princípio de Idempotência (19.1)**: Mesma combinação `SOB_ID + DESTINATION_ROOT` sempre produz estritamente os mesmos `SOB_NAME`, `SOB_ROOT`, `CROQUI_DIR` e `BASE_DWG`. Proibição absoluta de sufixos numéricos (`_1`, `_2`) ou timestamps (`_20260919`) para contornar conflitos.
+  - **Classificação Rigorosa de Estados (19.2 e 19.5)**: Estados possíveis ao examinar `SOB_ROOT`:
+    - `NÃO_EXISTE`: Pré-validação aprovada -> Iniciar nova execução limpa.
+    - `EXISTE_E_NÃO_É_DA_EXECUÇÃO`: Pasta preexistente sem manifesto ou criada por terceiros -> Bloquear (`STATUS = BLOQUEADO`).
+    - `EXISTE_E_ESTÁ_INCOMPLETA`: Execução anterior interrompida ou com rollback parcial -> Bloquear (`STATUS = BLOQUEADO`).
+    - `EXISTE_E_ESTÁ_CONCLUÍDA`: Execução anterior `CONCLUÍDO` com arquivos íntegros -> Bloquear criação duplicada e informar `[INFO] A SOB já possui uma execução concluída neste destino.`.
+    - `EXISTE_EM_ESTADO_INCONSISTENTE`: Divergência entre manifesto e arquivos em disco -> Bloquear (`STATUS = BLOQUEADO`).
+  - **Não Confundir Existência com Conclusão (19.6)**: Presença de arquivos físicos isolada não atesta conclusão; exige validação do manifesto `.sob_state.json` e integridade física.
+  - **Downloads e Cópia de Base Idempotentes (19.11 e 19.12)**: Comparação de hash/tamanho; arquivos idênticos são reutilizados/validados, divergências geram bloqueio imediato; templates originais permanecem intocados.
+  - **Rastreabilidade por RUN_ID (19.14)**: Identificador técnico único por execução (`RUN_YYYYMMDD_HHMMSS_<hex>`) para rastrear etapas sem alterar caminhos canônicos em disco.
+- `sob_core.py` (444 linhas):
   - Normalização e validação robusta da SOB (`obter_sob_id`, `obter_sob_name`, `validar_sob_name`, `derivar_caminhos_sob`).
   - Checagem não-destrutiva de permissão de escrita em diretórios (`validar_permissao_criacao` e `SobPermissionError`).
   - Proteção incondicional contra sobrescrita (`SobDirectoryExistsError` e `SobFileExistsError`).
   - Criação da estrutura canônica de diretórios (`SOB_ROOT` e subpasta `CROQUI`).
   - Cópia segura com conferência de hash SHA-256 e validação de cabeçalho DWG `AC10`.
   - Limpeza não-destrutiva em ordem inversa em `remover_estrutura_incompleta` sem uso de `rmtree` genérico.
-- `sob_rollback.py` (350 linhas):
+- `sob_idempotencia.py` (172 linhas):
+  - Gestão de estado e integridade para repetição segura.
+  - Funções: `gerar_run_id`, `gravar_manifesto_execucao`, `ler_manifesto_execucao`, `classificar_sob_root`, `verificar_arquivo_download_idempotente`.
+- `sob_rollback.py` (362 linhas):
   - Classes `RecursoRastreado`, `RecursoRemanescente` e `RollbackContext`.
   - Rastreamento fino de cada recurso, estado antes/depois, arquivos baixados e DWG aberto no CAD.
   - Execução sequencial reversa, validação pós-rollback e relatório de integridade.
@@ -349,20 +363,22 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Localização precisa da SOB na biblioteca `Documentos Compartilhados` utilizando o `SOB_ID` puro, resolução de ambiguidades (`SobConflictError`) e tratamento de SOB inexistente (`SobNotFoundError`).
   - Método `validar_conteudo_disponivel` para conferência prévia na Fase A antes de qualquer alteração no disco.
   - Download validado para a pasta `CROQUI` via integração CDP (`Page.setDownloadBehavior`) e menu de contexto, com verificação de integridade e ausência de temporários (`.crdownload`, `.tmp`) ou arquivos vazios.
-- `sob_manager.py` (572 linhas):
+- `sob_manager.py` (660 linhas):
   - Orquestrador desacoplado com execução rigorosamente dividida em Fase A (Pré-Validação Não-Destrutiva) e Fase B (Criação e Execução).
   - Integração nativa de `RollbackContext` durante toda a Fase B, acionando rollback atômico e populando `resultado["rollback"]` e `resultado["rollback_info"]`.
+  - Identificação única `RUN_ID`, verificação idempotente em A07 com `classificar_sob_root` e persistência atômica de `.sob_state.json`.
   - Rastreamento explícito: `pre_validacao: "OK" / "BLOQUEADA"` e `fase: "FASE_A" / "FASE_B"`.
   - Checklist completo de 21 condições para determinar `CONCLUÍDO` vs `BLOQUEADO`.
   - CLI com suporte a `--sob`, `--destino`, `--sem-sharepoint`, `--abrir-cad` e `--json-out`.
-- `sob_cad_launcher.lsp` (357 linhas):
+- `sob_cad_launcher.lsp` (362 linhas):
   - Rotina AutoLISP com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`** e **`RECARREGAR_SOB`**.
   - Função operacional `(sob-executar-fluxo sobInput destPath abrirCad)` com verificação estrita de abertura de DWG (`CURRENT_AUTOCAD_DWG == BASE_DWG`).
-  - Apresentação no console e em diálogo do status de rollback (`ROLLBACK: CONCLUÍDO` ou `PARCIAL`) em caso de interrupção na Fase B.
+  - Apresentação no console e em diálogo do status de rollback (`ROLLBACK: CONCLUÍDO` ou `PARCIAL`) e de idempotência (`[INFO] A SOB já possui uma execução concluída neste destino.`).
   - Mensagens canônicas oficiais: `[FALHA] Número da SOB inválido.`, `[FALHA] A pasta da SOB já existe.` e `[FALHA CRÍTICA] O arquivo aberto não corresponde ao BASE_DWG esperado.`.
   - Tratamento nativo de cancelamento pelo usuário sem falso erro (`[INFO] Operação cancelada pelo usuário.`).
 - **Cobertura & Testes**:
-  - `tests/test_sob_rollback.py` (8 testes específicos de rollback), `tests/test_sob_core.py` (17 testes), `tests/test_sob_sharepoint.py` (19 testes) e `tests/test_sob_manager.py` (15 testes).
-  - **59 testes unitários específicos no módulo `sob` com 81% de cobertura global do pacote (90% no `sob_manager.py` e 85% no `sob_rollback.py`)**.
-  - **Suíte global de não-regressão**: **215 testes unitários passando com 100% de sucesso** (`python -m pytest`).
+  - `tests/test_sob_idempotencia.py` (7 testes específicos `IDEMP-01` a `IDEMP-07`), `tests/test_sob_rollback.py` (8 testes específicos de rollback), `tests/test_sob_core.py` (17 testes), `tests/test_sob_sharepoint.py` (19 testes) e `tests/test_sob_manager.py` (15 testes).
+  - **66 testes unitários específicos no módulo `sob` com 80% de cobertura global do pacote (90% no `sob_manager.py`, 84% no `sob_rollback.py`, 80% no `sob_idempotencia.py`)**.
+  - **Suíte global de não-regressão**: **222 testes unitários passando com 100% de sucesso** (`python -m pytest`).
   - **Bateria de testes operacionais no AutoCAD 2026 Core Console**: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
+

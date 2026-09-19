@@ -275,8 +275,13 @@
                   )
                   (princ "\n==============================================================")
 
-                  (sob-alert (strcat "Falha na preparação da SOB:\n\n"
-                                     (if (/= log_txt "") log_txt "Consulte a janela de texto do AutoCAD (F2).")))
+                  (if (vl-string-search "já possui uma execução concluída" erro_msg)
+                    (sob-alert (strcat "Projeto Existente:\n\n"
+                                       "A SOB já possui uma execução concluída neste destino.\n\n"
+                                       "Nenhum arquivo foi sobrescrito ou duplicado."))
+                    (sob-alert (strcat "Falha na preparação da SOB:\n\n"
+                                       (if (/= log_txt "") log_txt "Consulte a janela de texto do AutoCAD (F2).")))
+                  )
                   (list (cons "sucesso" nil)
                         (cons "status" "BLOQUEADO")
                         (cons "erro" (if (/= log_txt "") log_txt erro_msg)))

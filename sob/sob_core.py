@@ -425,13 +425,19 @@ def remover_estrutura_incompleta(sob_root: Union[str, Path]) -> bool:
             except Exception:
                 pass
 
+        # Remove manifesto de estado se presente
+        for manifest_file in (p / ".sob_state.json", p / ".sob_state.json.tmp"):
+            if manifest_file.is_file():
+                try:
+                    manifest_file.unlink()
+                except Exception:
+                    pass
+
         try:
             p.rmdir()
         except Exception:
-            pass
+            return False
 
         return not p.exists()
     except Exception:
         return False
-
-

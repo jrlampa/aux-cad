@@ -477,12 +477,25 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
       5. Remover `SOB_ROOT` se vazio e criado nesta execução.
     - **Estados Formais**: `ROLLBACK_NÃO_NECESSÁRIO`, `ROLLBACK_INICIADO`, `ROLLBACK_CONCLUÍDO`, `ROLLBACK_PARCIAL`.
     - **Registro Estruturado**: Rastreabilidade completa com `recursos_criados_pela_execucao`, `recursos_removidos`, `recursos_preservados`, `recursos_remanescentes` e orientações de ação.
+    - **Mecanismo de Idempotência e Repetição Segura (Seção 19 - `sob_idempotencia.py`)**:
+      - **Princípio de Idempotência (19.1)**: Mesma combinação `SOB_ID + DESTINATION_ROOT` sempre produz estritamente os mesmos `SOB_NAME`, `SOB_ROOT`, `CROQUI_DIR` e `BASE_DWG`. Proibição absoluta de sufixos numéricos (`_1`, `_2`) ou timestamps (`_20260919`) para ocultar conflitos.
+      - **Classificação Rigorosa de Estados (19.2 e 19.5)**: Estados possíveis ao examinar `SOB_ROOT`:
+        - `NÃO_EXISTE`: Pré-validação aprovada -> Iniciar nova execução limpa.
+        - `EXISTE_E_NÃO_É_DA_EXECUÇÃO`: Pasta preexistente sem manifesto ou criada por terceiros -> Bloquear (`STATUS = BLOQUEADO`).
+        - `EXISTE_E_ESTÁ_INCOMPLETA`: Execução anterior interrompida ou com rollback parcial -> Bloquear (`STATUS = BLOQUEADO`).
+        - `EXISTE_E_ESTÁ_CONCLUÍDA`: Execução anterior `CONCLUÍDO` com arquivos íntegros -> Bloquear criação duplicada e informar `[INFO] A SOB já possui uma execução concluída neste destino.`.
+        - `EXISTE_EM_ESTADO_INCONSISTENTE`: Divergência entre manifesto e arquivos em disco -> Bloquear (`STATUS = BLOQUEADO`).
+      - **Não Confundir Existência com Conclusão (19.6)**: Presença de arquivos físicos isolada não atesta conclusão; exige validação do manifesto `.sob_state.json` e integridade física.
+      - **Downloads e Cópia de Base Idempotentes (19.11 e 19.12)**: Comparação de hash/tamanho; arquivos idênticos são reutilizados/validados, divergências geram bloqueio imediato; templates originais permanecem intocados.
+      - **Rastreabilidade por RUN_ID (19.14)**: Identificador técnico único por execução (`RUN_YYYYMMDD_HHMMSS_<hex>`) para rastrear etapas sem alterar caminhos canônicos em disco.
 - **Arquitetura & Componentes**:
-  - `sob_core.py` (437 linhas): Lógica de domínio, normalização, checagem não-destrutiva de permissões (`validar_permissao_criacao`), validações de integridade SHA-256 e limpeza segura sem `rmtree` genérico.
-  - `sob_rollback.py` (350 linhas): Classes `RecursoRastreado`, `RecursoRemanescente` e `RollbackContext` para desfazimento sequencial reverso, validação pós-rollback e proteção de dados.
+  - `sob_core.py` (444 linhas): Lógica de domínio, normalização, checagem não-destrutiva de permissões (`validar_permissao_criacao`), validações de integridade SHA-256 e limpeza segura sem `rmtree` genérico.
+  - `sob_idempotencia.py` (172 linhas): Gestão de estado idempotente, `gerar_run_id`, `classificar_sob_root`, manifesto atômico `.sob_state.json` e verificação de arquivos de download.
+  - `sob_rollback.py` (362 linhas): Classes `RecursoRastreado`, `RecursoRemanescente` e `RollbackContext` para desfazimento sequencial reverso, validação pós-rollback e proteção de dados.
   - `sob_sharepoint.py` (550 linhas): Driver Selenium headless, autenticação Microsoft Online, busca unívoca, verificação prévia de conteúdo (`validar_conteudo_disponivel`) e download seguro via CDP.
-  - `sob_manager.py` (572 linhas): Orquestrador de máquina de estados segregada em Fase A e Fase B, com integração nativa de `RollbackContext`, rastreamento de recursos criados e checklist de 21 itens.
-  - `sob_cad_launcher.lsp` (357 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`**, verificação `CURRENT_AUTOCAD_DWG == BASE_DWG`, exibição de status de rollback no console e rotina programática `(sob-executar-fluxo ...)`.
-- **Cobertura de Testes**: 59 testes unitários específicos do módulo SOB (81% de cobertura do pacote, 90% em `sob_manager.py` e 85% em `sob_rollback.py`) e suíte global com **215 testes unitários passando com 100% de sucesso**. Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
+  - `sob_manager.py` (660 linhas): Orquestrador de máquina de estados segregada em Fase A e Fase B, com integração nativa de `RollbackContext`, rastreamento por `RUN_ID`, verificação idempotente em A07 e checklist de 21 itens.
+  - `sob_cad_launcher.lsp` (362 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`**, verificação `CURRENT_AUTOCAD_DWG == BASE_DWG`, tratamento de status idempotente (`[INFO] ... já possui uma execução concluída`), exibição de rollback e rotina programática `(sob-executar-fluxo ...)`.
+- **Cobertura de Testes**: 66 testes unitários específicos do módulo SOB (80% de cobertura do pacote, 90% em `sob_manager.py`, 84% em `sob_rollback.py`, 80% em `sob_idempotencia.py`) incluindo suite completa `IDEMP-01` a `IDEMP-07`. Suíte global com **222 testes unitários passando com 100% de sucesso**. Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
+
 
 

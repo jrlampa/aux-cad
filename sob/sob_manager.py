@@ -9,6 +9,7 @@ import argparse
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 from typing import Any, Dict, Optional, Tuple
@@ -40,6 +41,11 @@ from sob_core import (
     SobIntegrityError,
 )
 from sob_rollback import RollbackContext
+from sob_idempotencia import (
+    gerar_run_id,
+    gravar_manifesto_execucao,
+    classificar_sob_root,
+)
 from sob_sharepoint import (
     obter_credenciais_sharepoint,
     sanitizar_mensagem,
@@ -168,6 +174,7 @@ class SobOrchestrator:
             "checklist": {},
             "rollback": "ROLLBACK_NÃO_NECESSÁRIO",
             "rollback_info": None,
+            "RUN_ID": gerar_run_id(),
         }
 
         checklist: Dict[str, bool] = {
@@ -278,8 +285,27 @@ class SobOrchestrator:
             self.logger.info(f"CROQUI_DIR: {croqui_dir}")
             self.logger.info(f"BASE_DWG: {base_dwg}")
 
-            # ETAPA A07: Verificar conflito de SOB_ROOT
-            if verificar_pasta_sob_existente(destination_root, sob_name):
+            # ETAPA A07: Análise de Idempotência e Conflito de SOB_ROOT (Seção 19.2 a 19.10)
+            classificacao, msg_classificacao, manifesto_previo = classificar_sob_root(
+                destination_root=destination_root,
+                sob_name=sob_name,
+                nome_dwg_base=base_dwg.name,
+            )
+
+            if classificacao == "EXISTE_E_ESTÁ_CONCLUÍDA":
+                # Seção 19.7: A SOB já possui uma execução concluída neste destino. Bloquear duplicação.
+                self.logger.info(msg_classificacao)
+                resultado["status"] = "BLOQUEADO"
+                resultado["mensagem"] = msg_classificacao
+                resultado["pre_validacao"] = "OK"
+                resultado["etapa"] = "SOB_CONCLUIDA_EXISTENTE"
+                return resultado
+
+            if classificacao in ("EXISTE_E_ESTÁ_INCOMPLETA", "EXISTE_EM_ESTADO_INCONSISTENTE"):
+                # Seção 19.9 & 19.10: Execução anterior incompleta ou inconsistente
+                raise SobDirectoryExistsError(msg_classificacao)
+
+            if classificacao == "EXISTE_E_NÃO_É_DA_EXECUÇÃO":
                 raise SobDirectoryExistsError(
                     formatar_mensagem_erro(
                         etapa="Criação da pasta da SOB",
@@ -288,6 +314,7 @@ class SobOrchestrator:
                         acao="Verifique a pasta existente ou selecione outro diretório de destino.",
                     )
                 )
+
             checklist["SOB_ROOT disponível"] = True
 
             # ETAPA A08: Validar possibilidade de criação (sem criar nada)
@@ -378,6 +405,19 @@ class SobOrchestrator:
             self.logger.info("Pasta da SOB criada")
             self.logger.info("Pasta CROQUI criada")
 
+            # Persiste manifesto inicial de execução (Seção 19.5 e 19.14)
+            gravar_manifesto_execucao(
+                sob_root_criado,
+                {
+                    "run_id": resultado["RUN_ID"],
+                    "sob_id": sob_id,
+                    "sob_name": sob_name,
+                    "status": "EM_EXECUCAO",
+                    "etapa": "ESTRUTURA_CRIADA",
+                    "timestamp_inicio": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+
             # ETAPA B03 & B04: Baixar conteúdo da SOB e Validar download
             if baixar_croqui_sp and client and pasta_info:
                 resultado["etapa"] = "DOWNLOAD_CROQUI"
@@ -459,6 +499,22 @@ class SobOrchestrator:
                 resultado["etapa"] = "FINALIZADO"
                 resultado["mensagem"] = "Processo concluído com sucesso."
                 self.logger.info("Processo concluído")
+
+                # Persiste o manifesto definitivo de execução concluída (Seção 19.5 e 19.7)
+                gravar_manifesto_execucao(
+                    sob_root_path,
+                    {
+                        "run_id": resultado["RUN_ID"],
+                        "sob_id": sob_id,
+                        "sob_name": sob_name,
+                        "status": "CONCLUÍDO",
+                        "etapa": "CONCLUÍDO",
+                        "base_dwg": str(dwg_copiado),
+                        "base_dwg_hash": calcular_hash_arquivo(dwg_copiado),
+                        "arquivos_croqui": resultado.get("arquivos_croqui", []),
+                        "timestamp_conclusao": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
             else:
                 resultado["sucesso"] = False
                 resultado["status"] = "BLOQUEADO"
@@ -500,6 +556,22 @@ class SobOrchestrator:
             else:
                 resultado["rollback"] = "ROLLBACK_NÃO_NECESSÁRIO"
 
+            # Se restou pasta (ex: ROLLBACK_PARCIAL), persiste manifesto de falha
+            if sob_root_path and sob_root_path.exists():
+                gravar_manifesto_execucao(
+                    sob_root_path,
+                    {
+                        "run_id": resultado.get("RUN_ID", ""),
+                        "sob_id": resultado.get("SOB_ID", ""),
+                        "sob_name": resultado.get("SOB_NAME", ""),
+                        "status": "BLOQUEADO",
+                        "etapa": resultado.get("etapa", ""),
+                        "rollback": resultado.get("rollback", ""),
+                        "motivo_falha": msg_str,
+                        "timestamp_falha": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+
         except Exception as e:
             resultado["sucesso"] = False
             resultado["status"] = "BLOQUEADO"
@@ -519,6 +591,21 @@ class SobOrchestrator:
                 self.logger.info(f"Rollback executado: {resultado['rollback']}")
             else:
                 resultado["rollback"] = "ROLLBACK_NÃO_NECESSÁRIO"
+
+            if sob_root_path and sob_root_path.exists():
+                gravar_manifesto_execucao(
+                    sob_root_path,
+                    {
+                        "run_id": resultado.get("RUN_ID", ""),
+                        "sob_id": resultado.get("SOB_ID", ""),
+                        "sob_name": resultado.get("SOB_NAME", ""),
+                        "status": "BLOQUEADO",
+                        "etapa": resultado.get("etapa", ""),
+                        "rollback": resultado.get("rollback", ""),
+                        "motivo_falha": msg_str,
+                        "timestamp_falha": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
 
         finally:
             if client and not self.sharepoint_client:

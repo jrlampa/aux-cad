@@ -288,8 +288,19 @@ class RollbackContext:
         # 5. PASSO 5: Remover SOB_ROOT se vazio e criado pela execução (18.4)
         rec_sob = self.recursos.get("SOB_ROOT")
         if rec_sob and rec_sob.criado_nesta_execucao and self.sob_root.exists():
-            itens_sob = list(self.sob_root.iterdir())
+            manifesto = self.sob_root / ".sob_state.json"
+            manifesto_tmp = self.sob_root / ".sob_state.json.tmp"
+            itens_sob = [item for item in self.sob_root.iterdir() if item.name not in (".sob_state.json", ".sob_state.json.tmp")]
+
             if not itens_sob:
+                # Remove arquivos de manifesto da própria execução para liberar a remoção do diretório
+                for m in (manifesto, manifesto_tmp):
+                    if m.exists():
+                        try:
+                            m.unlink()
+                            self.recursos_removidos.append(str(m))
+                        except Exception:
+                            pass
                 try:
                     self.sob_root.rmdir()
                     if not self.sob_root.exists():
