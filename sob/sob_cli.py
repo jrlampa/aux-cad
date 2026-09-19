@@ -24,6 +24,7 @@ def main(args_list: Optional[list] = None):
     )
     parser.add_argument("--sob", required=True, help="Número da SOB (ex: A057349839)")
     parser.add_argument("--destino", required=True, help="Diretório de destino da pasta da SOB")
+    parser.add_argument("--base", default="PE", help="Sigla da base técnica (ex: PE, CF, AN, RE). Padrão: PE")
     parser.add_argument("--sem-sharepoint", action="store_true", help="Ignora a etapa do SharePoint")
     parser.add_argument("--abrir-cad", action="store_true", help="Abre o arquivo gerado no AutoCAD")
     parser.add_argument("--json-out", help="Caminho do arquivo JSON de intercâmbio para resposta")
@@ -48,16 +49,18 @@ def main(args_list: Optional[list] = None):
                 from sob_progress_gui import SobProgressGUI
 
             def _tarefa(observer):
+                base_usada = getattr(observer, "base_selecionada", None) or args.base
                 return orchestrator.executar(
                     sob_raw=args.sob,
                     destino_dir=args.destino,
+                    base=base_usada,
                     baixar_croqui_sp=not args.sem_sharepoint,
                     abrir_cad=args.abrir_cad,
                     callback_progresso=observer,
                     verificador_cancelamento=observer,
                 )
 
-            gui = SobProgressGUI(sob_id=args.sob, tarefa_executora=_tarefa)
+            gui = SobProgressGUI(sob_id=args.sob, tarefa_executora=_tarefa, base_inicial=args.base)
             resultado = gui.iniciar()
         except Exception as e_gui:
             orchestrator.logger.warning(f"Interface gráfica não pôde ser inicializada ({e_gui}). Executando em modo console.")
@@ -67,6 +70,7 @@ def main(args_list: Optional[list] = None):
         resultado = orchestrator.executar(
             sob_raw=args.sob,
             destino_dir=args.destino,
+            base=args.base,
             baixar_croqui_sp=not args.sem_sharepoint,
             abrir_cad=args.abrir_cad,
         )

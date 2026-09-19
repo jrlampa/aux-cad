@@ -298,7 +298,7 @@ class TestEstruturaProjetoIndependenteDoCroqui:
 
         base_dwg = Path(res["BASE_DWG"])
         assert base_dwg.is_file()
-        assert base_dwg.name == "BASE_SOB_DESENHO.dwg"
+        assert base_dwg.name == "PE_A057349839_DESENHO.dwg"
         assert base_dwg.stat().st_size > 0
 
     def test_multiplas_ocorrencias_com_sem_croqui_cria_estrutura_obrigatoria(self, temp_workspace):
@@ -309,7 +309,7 @@ class TestEstruturaProjetoIndependenteDoCroqui:
         - Sistema registra explicitamente CROQUI = SEM_ARQUIVOS.
         - Obrigatoriamente cria SOB_ROOT.
         - Obrigatoriamente cria CROQUI (mesmo vazio).
-        - Obrigatoriamente copia BASE_TEMPLATE para BASE_SOB_DESENHO.dwg.
+        - Obrigatoriamente copia BASE_TEMPLATE para {BASE}_{SOB}_DESENHO.dwg.
         - Valida BASE_DWG e conclui com sucesso.
         """
         mock_sp = MagicMock()
@@ -356,7 +356,7 @@ class TestEstruturaProjetoIndependenteDoCroqui:
         assert croqui_dir.is_dir()
         base_dwg = Path(res["BASE_DWG"])
         assert base_dwg.is_file()
-        assert base_dwg.name == "BASE_SOB_DESENHO.dwg"
+        assert base_dwg.name == "PE_A057349839_DESENHO.dwg"
         assert base_dwg.stat().st_size == temp_workspace["modelo"].stat().st_size
 
     def test_cancelamento_durante_intervencao_nao_cria_arquivos(self, temp_workspace):

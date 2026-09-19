@@ -116,14 +116,17 @@ class SobProgressGUI:
         tarefa_executora: Callable[[ProgressoObserver], Dict[str, Any]],
         auto_fechar_sucesso: bool = False,
         segundos_auto_fechar: int = 4,
+        base_inicial: Optional[str] = "PE",
         root: Optional[tk.Tk] = None,
     ):
         self.sob_id = sob_id
         self.tarefa_executora = tarefa_executora
         self.auto_fechar_sucesso = auto_fechar_sucesso
         self.segundos_auto_fechar = segundos_auto_fechar
+        self.base_selecionada = (base_inicial or "PE").strip().upper()
 
         self.observer = ProgressoObserver()
+        self.observer.base_selecionada = self.base_selecionada
         self.resultado_final: Optional[Dict[str, Any]] = None
         self._thread_trabalho: Optional[threading.Thread] = None
         self._fechando = False
@@ -208,7 +211,7 @@ class SobProgressGUI:
 
         lbl_sob = tk.Label(
             frame_cabecalho,
-            text=f"SOB: {self.sob_id}",
+            text=f"SOB: {self.sob_id}  |  Base: {self.base_selecionada}",
             font=("Segoe UI", 11),
             bg=self.COR_NAVY,
             fg="#93C5FD",

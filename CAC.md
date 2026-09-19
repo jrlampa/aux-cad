@@ -499,20 +499,28 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
       - A criação da estrutura local do projeto e a obtenção do conteúdo do croqui são operações distintas.
       - O fato de o download automático do croqui pelo SharePoint ser interrompido, substituído por intervenção manual ou eventualmente dispensado **NÃO elimina** a necessidade de criação da estrutura local do projeto.
       - `IF pre_validacao == OK THEN criar estrutura do projeto + copiar modelo + validar BASE_DWG + continuar fluxo`.
-      - **Cenário sem arquivos de croqui**: Registra formalmente `CROQUI = SEM_ARQUIVOS`, cria `SOB_ROOT\CROQUI\` (vazio), copia `BASE_TEMPLATE` para `BASE_SOB_DESENHO.dwg`, valida o DWG e abre no AutoCAD.
+    - **Regra Fundamental — Nomenclatura Canônica Dinâmica {BASE}_{SOB}_DESENHO.dwg**:
+       - O modelo canônico de nome do desenho DWG segue a máscara `{BASE}_{SOB}_DESENHO.dwg`, substituindo:
+         - **BASE**: Sigla técnica oficial de 2 letras mapeada da base da concessionária/FABAO (`C:\Users\jonat\OneDrive\Área de Trabalho\FABAO\Controle\gomnet_18-08-2022.xlsm`), ex.: `PE` (Petrópolis), `CF` (Cabo Frio), `AN` (Angra dos Reis), `RE` (Resende), `NI` (Niterói), `MA` (Magé), `SG` (São Gonçalo), `TE` (Teresópolis).
+         - **SOB**: Número puro da SOB informado pelo usuário (`A057350816`).
+         - **_DESENHO**: Sufixo obrigatório canônico (`_DESENHO.dwg`).
+       - Exemplo canônico gerado: `PE_A057350816_DESENHO.dwg`.
+       - O arquivo-modelo original `modelos/prancha.dwg` permanece absolutamente intacto (imutabilidade de template) e é copiado para `SOB_ROOT` com este nome exato.
 - **Arquitetura & Componentes**:
-  - `sob_core.py` (477 linhas): Lógica de domínio, normalização, checagem não-destrutiva de permissões (`validar_permissao_criacao`), validações de integridade SHA-256 e hierarquia unificada de exceções com `SobConflictError`.
+  - `sob_bases.py` (147 linhas): Mapeamento, normalização e resolução de siglas técnicas Enel Rio / FABAO (`normalizar_sigla_base`, `gerar_nome_dwg_sob`, `carregar_bases_fabao`).
+  - `sob_core.py` (487 linhas): Lógica de domínio, normalização, checagem não-destrutiva de permissões (`validar_permissao_criacao`), geração de caminhos centralizados com `BASE_SIGLA` e `NOME_BASE_DWG`, validações de integridade SHA-256 e hierarquia unificada de exceções com `SobConflictError`.
   - `sob_fallback_manual.py` (303 linhas): Geração de URLs de busca, cópia para clipboard, validação física de downloads manuais e orquestração de intervenção (`executar_fallback_intervencao_manual`).
-  - `sob_progress_gui.py` (637 linhas): Interface Tkinter TTK com feedback em tempo real, painel de intervenção manual (`[ Abrir SharePoint ]`, `[ Selecionar Pasta ]`, `[ Continuar ]`, `[ Continuar sem Croqui ]`, `[ Cancelar ]`).
+  - `sob_progress_gui.py` (633 linhas): Interface Tkinter TTK com feedback em tempo real, exibição de SOB e Base no cabeçalho executivo, elevação e foco garantidos sobre o AutoCAD (`deiconify`, `lift`, `-topmost`), painel de intervenção manual (`[ Abrir SharePoint ]`, `[ Selecionar Pasta ]`, `[ Continuar ]`, `[ Continuar sem Croqui ]`, `[ Cancelar ]`).
   - `sob_logger.py` (58 linhas): Utilitários isolados de logging seguro (`LoggerSeguro`) com sanitização de segredos e formatação padrão de erros (`formatar_mensagem_erro`).
-  - `sob_cli.py` (78 linhas): Ponto de entrada CLI desacoplado com geração de arquivo JSON de intercâmbio e flags `--no-ui` / `--headless`.
+  - `sob_cli.py` (88 linhas): Ponto de entrada CLI desacoplado com parâmetro `--base`, geração de arquivo JSON de intercâmbio e flags `--no-ui` / `--headless`.
   - `sob_gomnet.py` (374 linhas): Cliente HTTP para autenticação e consumo do modal de anexos do GOMNET e download em lote na Fase B (`baixar_anexos_gomnet_fase_b`).
   - `sob_idempotencia.py` (173 linhas): Gestão de estado idempotente, `gerar_run_id`, `classificar_sob_root`, manifesto atômico `.sob_state.json` e verificação de arquivos de download (`verificar_arquivo_download_idempotente`).
   - `sob_rollback.py` (425 linhas): Classes `RecursoRastreado`, `RecursoRemanescente` e `RollbackContext` para desfazimento sequencial reverso, rollback de anexos GOMNET, validação pós-rollback e proteção de dados.
   - `sob_sharepoint.py` (554 linhas): Driver Selenium headless, autenticação Microsoft Online, busca unívoca, verificação prévia de conteúdo (`validar_conteudo_disponivel`) e detecção de ambiguidade (`SobConflictError`).
-  - `sob_manager.py` (742 linhas - mantido estritamente abaixo do soft limit de 750 linhas): Orquestrador de máquina de estados segregada em Fase A e Fase B, integração com fallback manual, criação obrigatória de estrutura e modelo independente do croqui, rastreamento por `RUN_ID` e checklist operacional completo.
-  - `sob_cad_launcher.lsp` (362 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`**, verificação `CURRENT_AUTOCAD_DWG == BASE_DWG`, tratamento de status idempotente, exibição de rollback e rotina programática `(sob-executar-fluxo ...)`.
-- **Cobertura de Testes**: **107 testes unitários específicos do módulo SOB com 81% de cobertura global** (88% em `sob_manager.py`, 85% em `sob_progress_gui.py`, 83% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_fallback_manual.py`, 81% em `sob_idempotencia.py`, 100% em `sob_logger.py`). Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários.
+  - `sob_manager.py` (747 linhas - mantido estritamente abaixo do soft limit de 750 linhas): Orquestrador de máquina de estados segregada em Fase A e Fase B, suporte ao parâmetro de base, integração com fallback manual, criação obrigatória de estrutura e modelo independente do croqui, rastreamento por `RUN_ID` e checklist operacional completo.
+  - `sob_cad_launcher.lsp` (211 linhas): Ponto de entrada nativo no AutoCAD com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`**, solicitação de Base com default `PE`, derivação dinâmica de `{baseSigla}_{sobId}_DESENHO.dwg`, fallback com busca de arquivo `*_DESENHO.dwg`, tratamento de status idempotente, exibição de rollback e rotina programática `(sob-executar-fluxo ...)`.
+- **Cobertura de Testes**: **120 testes unitários específicos do módulo SOB com 81% de cobertura global** (89% em `sob_manager.py`, 88% em `sob_bases.py`, 85% em `sob_progress_gui.py`, 83% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_fallback_manual.py`, 81% em `sob_idempotencia.py`, 100% em `sob_logger.py`). Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários.
+
 
 
 

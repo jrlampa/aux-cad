@@ -358,11 +358,16 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Interface gráfica Tkinter TTK com feedback em tempo real e barra de progresso (determinada/indeterminada).
   - Comunicação multithread desacoplada via `ProgressoObserver` impedindo congelamentos da UI.
   - Painel interativo de intervenção com botões `[ 🌐 Abrir SharePoint ]`, `[ 📁 Selecionar Pasta... ]`, `[ Continuar ]`, `[ Continuar sem Croqui ]` e `[ Cancelar ]`.
+  - Exibição em tempo real da SOB e da Base no cabeçalho executivo (`SOB: {sob_id} | Base: {base}`).
+  - Elevação e foco garantidos sobre o AutoCAD (`deiconify`, `lift`, `-topmost`), evitando congelamento da interface.
   - Botão de cancelamento responsivo disparando rollback seguro na Fase B.
+- `sob_bases.py` (147 linhas):
+  - Mapeamento, leitura dinâmica do FABAO (`C:\Users\jonat\OneDrive\Área de Trabalho\FABAO\Controle\gomnet_18-08-2022.xlsm`) e tabela de fallback com CECOs e polos Enel Rio (`PE`, `CF`, `AN`, `RE`, `NI`, `MA`, `SG`, `TE`).
+  - Normalização de siglas e geração de nome canônico `{BASE}_{SOB}_DESENHO.dwg` (ex.: `PE_A057350816_DESENHO.dwg`).
 - `sob_logger.py` (58 linhas):
   - Utilitários isolados de logging seguro (`LoggerSeguro`) com sanitização de segredos e formatação padrão de erros (`formatar_mensagem_erro`).
-- `sob_cli.py` (78 linhas):
-  - Ponto de entrada CLI desacoplado com suporte a flags `--no-ui` / `--headless` e emissão de arquivo JSON para intercâmbio com o AutoCAD.
+- `sob_cli.py` (88 linhas):
+  - Ponto de entrada CLI desacoplado com parâmetro `--base` (default `"PE"`), suporte a flags `--no-ui` / `--headless` e emissão de arquivo JSON para intercâmbio com o AutoCAD.
 - `sob_gomnet.py` (374 linhas):
   - Conector HTTP dedicado para o sistema corporativo GOMNET com sessão mantida (`ASP.NET_SessionId`).
   - Consulta ao modal de anexos via `Upload.aspx?numsob={SOB_ID}` e extração de metadados em `gridviewUploads`.
@@ -380,18 +385,22 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Navegação e autenticação Microsoft Online com Edge/Chrome headless via Selenium (`SharePointClient`).
   - Localização precisa da SOB e detecção de ambiguidade com levantamento de `SobConflictError` acompanhado da lista de ocorrências e URL de busca.
   - Download validado para a pasta `CROQUI` via integração CDP com verificação de integridade física.
-- `sob_manager.py` (742 linhas - estritamente abaixo do soft limit de 750 linhas):
+- `sob_manager.py` (747 linhas - estritamente abaixo do soft limit de 750 linhas):
   - Orquestrador com execução dividida em Fase A (Pré-Validação Não-Destrutiva) e Fase B (Criação e Execução).
+  - Suporte a parâmetro de base, propagando para `derivar_caminhos_sob`.
   - Integração do fallback manual de múltiplas ocorrências: paralisação antes da criação de `SOB_ROOT` e condução da intervenção.
-  - **Regra Fundamental de Estrutura Independente do Croqui**:
-    A criação da estrutura local e a obtenção do croqui são operações distintas. Seja por download automático, manual ou dispensa (`CROQUI = SEM_ARQUIVOS`), a Fase B obrigatoriamente cria `SOB_ROOT\CROQUI\`, copia `BASE_TEMPLATE` para `BASE_SOB_DESENHO.dwg`, valida o DWG e abre no AutoCAD.
+  - **Regra Fundamental de Estrutura Independente do Croqui e Nomenclatura Dinâmica**:
+    A criação da estrutura local e a obtenção do croqui são operações distintas. Seja por download automático, manual ou dispensa (`CROQUI = SEM_ARQUIVOS`), a Fase B obrigatoriamente cria `SOB_ROOT\CROQUI\`, copia `BASE_TEMPLATE` para `{BASE}_{SOB}_DESENHO.dwg` (ex.: `PE_A057350816_DESENHO.dwg`), valida o DWG e abre no AutoCAD.
   - Checklist operacional completo para determinar `CONCLUÍDO` vs `BLOQUEADO`.
-- `sob_cad_launcher.lsp` (362 linhas):
+- `sob_cad_launcher.lsp` (211 linhas):
   - Rotina AutoLISP com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`** e **`RECARREGAR_SOB`**.
-  - Função operacional `(sob-executar-fluxo sobInput destPath abrirCad)` com verificação estrita de abertura de DWG (`CURRENT_AUTOCAD_DWG == BASE_DWG`).
+  - Prompt da Base (`(getstring "\nInforme a Base (PE/CF/AN/RE/NI/MA/SG/TE) <PE>: ")`).
+  - Derivação dinâmica de `{baseSigla}_{sobId}_DESENHO.dwg` e fallback com `(vl-directory-files sobRoot "*_DESENHO.dwg" 1)`.
+  - Função operacional `(sob-executar-fluxo sobInput destPath abrirCad baseInput)` com verificação estrita de abertura de DWG (`CURRENT_AUTOCAD_DWG == BASE_DWG`).
   - Apresentação no console e em diálogo do status de rollback e idempotência.
 - **Cobertura & Testes**:
-  - **107 testes unitários específicos do módulo SOB com 81% de cobertura global** (88% em `sob_manager.py`, 85% em `sob_progress_gui.py`, 83% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_fallback_manual.py`, 81% em `sob_idempotencia.py`, 100% em `sob_logger.py`).
+  - **120 testes unitários específicos do módulo SOB com 81% de cobertura global** (89% em `sob_manager.py`, 88% em `sob_bases.py`, 85% em `sob_progress_gui.py`, 83% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_fallback_manual.py`, 81% em `sob_idempotencia.py`, 100% em `sob_logger.py`).
   - **Suíte global de não-regressão**: 100% dos testes passando sem falhas.
   - **Bateria de testes operacionais no AutoCAD 2026 Core Console**: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
+
 

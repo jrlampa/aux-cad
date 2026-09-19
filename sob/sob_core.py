@@ -176,11 +176,17 @@ def derivar_caminhos_sob(
     sob_raw: str,
     destination_root: Union[str, Path],
     base_template: Optional[Union[str, Path]] = None,
+    base: Optional[str] = "PE",
 ) -> dict:
     """
     Constrói de forma centralizada e canônica a cadeia completa de caminhos (Seção 0-A & Seção 14):
-    SOB_ID -> SOB_NAME -> DESTINATION_ROOT -> SOB_ROOT -> CROQUI_DIR -> BASE_DWG
+    SOB_ID -> SOB_NAME -> DESTINATION_ROOT -> SOB_ROOT -> CROQUI_DIR -> BASE_DWG ({BASE}_{SOB}_DESENHO.dwg)
     """
+    try:
+        from sob_bases import gerar_nome_dwg_sob, normalizar_sigla_base
+    except ImportError:
+        from sob.sob_bases import gerar_nome_dwg_sob, normalizar_sigla_base
+
     sob_id = obter_sob_id(sob_raw)
     sob_name = obter_sob_name(sob_raw)
 
@@ -201,7 +207,8 @@ def derivar_caminhos_sob(
 
     croqui_dir = sob_root / NOME_PASTA_CROQUI
     base_template_path = Path(base_template).resolve() if base_template else CAMINHO_BASE_TEMPLATE_PADRAO
-    base_dwg = sob_root / NOME_ARQUIVO_BASE_DWG
+    nome_base_dwg = gerar_nome_dwg_sob(base, sob_id)
+    base_dwg = sob_root / nome_base_dwg
 
     return {
         "SOB_ID": sob_id,
@@ -211,6 +218,8 @@ def derivar_caminhos_sob(
         "CROQUI_DIR": croqui_dir,
         "BASE_TEMPLATE": base_template_path,
         "BASE_DWG": base_dwg,
+        "NOME_BASE_DWG": nome_base_dwg,
+        "BASE_SIGLA": normalizar_sigla_base(base),
     }
 
 

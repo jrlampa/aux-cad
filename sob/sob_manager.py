@@ -190,6 +190,7 @@ class SobOrchestrator:
         self,
         sob_raw: str,
         destino_dir: str,
+        base: Optional[str] = "PE",
         baixar_croqui_sp: bool = True,
         consultar_gomnet: bool = True,
         abrir_cad: bool = False,
@@ -310,7 +311,7 @@ class SobOrchestrator:
             resultado["estado"] = "DESTINO_VALIDADO"
 
             # ETAPA A06: Derivar caminhos canônicos
-            caminhos = derivar_caminhos_sob(sob_raw, destination_root, self.origem_base)
+            caminhos = derivar_caminhos_sob(sob_raw, destination_root, self.origem_base, base=base)
             sob_root_path = caminhos["SOB_ROOT"]
             croqui_dir = caminhos["CROQUI_DIR"]
             base_dwg = caminhos["BASE_DWG"]
@@ -333,6 +334,8 @@ class SobOrchestrator:
             resultado["SOB_ROOT"] = str(sob_root_path)
             resultado["CROQUI_DIR"] = str(croqui_dir)
             resultado["BASE_DWG"] = str(base_dwg)
+            resultado["BASE"] = caminhos.get("BASE_SIGLA", "PE")
+            resultado["NOME_BASE_DWG"] = caminhos.get("NOME_BASE_DWG", base_dwg.name)
             resultado["sob"] = sob_name
             resultado["sob_root"] = str(sob_root_path)
             resultado["croqui_dir"] = str(croqui_dir)
@@ -604,7 +607,7 @@ class SobOrchestrator:
 
             # ETAPA B05, B06 e B07: Copiar BASE_TEMPLATE, Validar BASE_DWG e Preservação
             resultado["etapa"] = "COPIAR_ARQUIVO_BASE"
-            self._notificar_progresso(callback_progresso, "CRIAR_BASE_DWG", "Criando BASE_SOB_DESENHO.dwg...", 11)
+            self._notificar_progresso(callback_progresso, "CRIAR_BASE_DWG", f"Criando {base_dwg.name}...", 11)
             self._checar_cancelamento(verificador_cancelamento or callback_progresso)
             dwg_copiado = copiar_arquivo_base(
                 base_template,

@@ -64,7 +64,7 @@ def test_executar_fluxo_completo_com_mock_sharepoint(tmp_path: Path, fake_pranch
     assert resultado["DESTINATION_ROOT"] == str(destino.resolve())
     assert resultado["SOB_ROOT"] == str((destino / "SOB_A057349839").resolve())
     assert resultado["CROQUI_DIR"] == str((destino / "SOB_A057349839" / "CROQUI").resolve())
-    assert resultado["BASE_DWG"] == str((destino / "SOB_A057349839" / "BASE_SOB_DESENHO.dwg").resolve())
+    assert resultado["BASE_DWG"] == str((destino / "SOB_A057349839" / "PE_A057349839_DESENHO.dwg").resolve())
     assert resultado["sob"] == "SOB_A057349839"
 
     # Verifica que o SharePoint foi consultado pelo SOB_ID puro (Seção 11)
@@ -77,7 +77,7 @@ def test_executar_fluxo_completo_com_mock_sharepoint(tmp_path: Path, fake_pranch
 
     dwg_path = Path(resultado["BASE_DWG"])
     assert dwg_path.exists()
-    assert dwg_path.name == "BASE_SOB_DESENHO.dwg"
+    assert dwg_path.name == "PE_A057349839_DESENHO.dwg"
     assert dwg_path.parent == sob_root
 
     # Confirma que o modelo original continuou intacto

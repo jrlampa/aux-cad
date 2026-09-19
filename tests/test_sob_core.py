@@ -209,9 +209,14 @@ def test_padronizacao_secao_0a_nomenclatura(tmp_path: Path):
     assert caminhos["DESTINATION_ROOT"] == dest_root.resolve()
     assert caminhos["SOB_ROOT"] == (dest_root / "SOB_A057349839").resolve()
     assert caminhos["CROQUI_DIR"] == (dest_root / "SOB_A057349839" / NOME_PASTA_CROQUI).resolve()
-    assert caminhos["BASE_DWG"] == (dest_root / "SOB_A057349839" / NOME_ARQUIVO_BASE_DWG).resolve()
+    assert caminhos["BASE_DWG"] == (dest_root / "SOB_A057349839" / caminhos["NOME_BASE_DWG"]).resolve()
     assert caminhos["CROQUI_DIR"].name == "CROQUI"
-    assert caminhos["BASE_DWG"].name == "BASE_SOB_DESENHO.dwg"
+    assert caminhos["BASE_DWG"].name == "PE_A057349839_DESENHO.dwg"
+
+    # Teste com base informada explicitamente (ex: CF - Cabo Frio)
+    caminhos_cf = derivar_caminhos_sob("A057349839", dest_root, base="CF")
+    assert caminhos_cf["BASE_DWG"].name == "CF_A057349839_DESENHO.dwg"
+    assert caminhos_cf["BASE_SIGLA"] == "CF"
 
 
 def test_secao_14_validar_sob_name():

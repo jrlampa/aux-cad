@@ -92,11 +92,17 @@
       ;; 2. Derivação canônica dos caminhos (Seções 2, 3, 4 e 5)
       (setq destinationRoot (vl-string-right-trim "\\" (vl-string-trim " " destPath)))
       (setq sobRoot (strcat destinationRoot "\\" sobName))
-      (setq croquiDir (strcat sobRoot "\\CROQUI"))
-      (setq baseDwg (strcat sobRoot "\\BASE_SOB_DESENHO.dwg"))
+      (if (not (boundp '*sob-base-padrao*))
+        (setq *sob-base-padrao* "PE")
+      )
+      (setq baseSigla (if (and (boundp '*sob-base-padrao*) *sob-base-padrao* (/= *sob-base-padrao* ""))
+                        (strcase (vl-string-trim " " *sob-base-padrao*))
+                        "PE"))
+      (setq baseDwg (strcat sobRoot "\\" baseSigla "_" sobId "_DESENHO.dwg"))
 
       ;; Logs canônicos padronizados (Seção 9)
       (princ (strcat "\n[INFO] SOB: " sobId))
+      (princ (strcat "\n[INFO] BASE: " baseSigla))
       (princ (strcat "\n[INFO] SOB_ROOT: " sobRoot))
       (princ (strcat "\n[INFO] CROQUI_DIR: " croquiDir))
       (princ (strcat "\n[INFO] BASE_DWG: " baseDwg))
@@ -131,7 +137,7 @@
             (progn
               ;; 5. Execução do Orquestrador Python em Segundo Plano
               (princ "\n[INFO] Acessando SharePoint e preparando projeto...")
-              (setq cmd (strcat "py \"" pyScript "\" --sob \"" sobId "\" --destino \"" destinationRoot "\" --json-out \"" jsonFile "\" > \"" logFile "\" 2>&1"))
+              (setq cmd (strcat "py \"" pyScript "\" --sob \"" sobId "\" --destino \"" destinationRoot "\" --base \"" baseSigla "\" --json-out \"" jsonFile "\" > \"" logFile "\" 2>&1"))
 
               (setq wsh (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
               (if (and wsh (not (vl-catch-all-error-p wsh)))
@@ -147,6 +153,17 @@
 
               ;; 6. Verificação do Resultado Canônico (BASE_DWG)
               (setq dwgTarget baseDwg)
+              (if (not (findfile dwgTarget))
+                (progn
+                  (setq dwgsFound (vl-directory-files sobRoot "*_DESENHO.dwg" 1))
+                  (if (and dwgsFound (> (length dwgsFound) 0))
+                    (setq dwgTarget (strcat sobRoot "\\" (car dwgsFound)))
+                  )
+                )
+              )
+              (if (not (findfile dwgTarget))
+                (setq dwgTarget (strcat sobRoot "\\BASE_SOB_DESENHO.dwg"))
+              )
 
               (if (and (findfile dwgTarget) (> (vl-file-size dwgTarget) 100))
                 (progn
@@ -309,6 +326,13 @@
       (princ "\n[INFO] Operação cancelada pelo usuário.")
       (exit)
     )
+  )
+
+  ;; 1.1 Solicitação da Base Técnica (Padrão: PE)
+  (setq baseInput (getstring "\nInforme a Base (PE/CF/AN/RE/NI/MA/SG/TE) <PE>: "))
+  (if (or (null baseInput) (= (vl-string-trim " " baseInput) ""))
+    (setq *sob-base-padrao* "PE")
+    (setq *sob-base-padrao* (strcase (vl-string-trim " " baseInput)))
   )
 
   ;; 2. Seleção do Diretório de Destino (Seção 14.5 & 14.22)
