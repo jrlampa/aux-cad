@@ -31,6 +31,11 @@ class SobFileNotFoundError(FileNotFoundError):
     pass
 
 
+class SobPermissionError(PermissionError):
+    """Exceção levantada quando não há permissão para criar diretórios."""
+    pass
+
+
 class SobIntegrityError(IOError):
     """Exceção levantada quando a cópia ou integridade do DWG falha."""
     pass
@@ -54,7 +59,7 @@ def normalizar_sob(sob_raw: str) -> str:
 
     if not limpo:
         raise SobValidationError(
-            "[FALHA] Número da SOB inválido.\nInforme uma SOB válida."
+            "[FALHA] SOB inválida.\nInforme uma SOB válida."
         )
 
     return f"SOB_{limpo}"
@@ -77,7 +82,7 @@ def obter_sob_id(sob_raw: str) -> str:
     sob_id = normalizada[4:]
     if not validar_sob_id(sob_id):
         raise SobValidationError(
-            "[FALHA] Número da SOB inválido.\nInforme uma SOB válida."
+            "[FALHA] SOB inválida.\nInforme uma SOB válida."
         )
     return sob_id
 
@@ -203,20 +208,37 @@ def verificar_pasta_sob_existente(destino: Union[str, Path], pasta_sob: str) -> 
     return caminho_destino.exists()
 
 
+def validar_permissao_criacao(destino: Union[str, Path]) -> bool:
+    """
+    Valida a permissão de criação no diretório de destino (Seção 17, Etapa 07).
+    """
+    import os
+    p = Path(destino).resolve()
+    if not p.exists() or not p.is_dir():
+        return False
+    return os.access(p, os.W_OK)
+
+
 def criar_estrutura_sob(
     destino: Union[str, Path],
     pasta_sob: str,
 ) -> Tuple[Path, Path]:
     """
-    Cria a estrutura de pastas do projeto de forma sequencial e controlada (Seção 14.6 & 14.7):
-    1. SOB_ROOT -> verifica fisicamente
-    2. CROQUI_DIR -> verifica fisicamente
+    Cria a estrutura de pastas do projeto de forma sequencial e controlada (Seção 14.6 & 14.7 & 17):
+    1. Validar permissão de escrita em destino
+    2. SOB_ROOT -> verifica fisicamente
+    3. CROQUI_DIR -> verifica fisicamente
     
     Retorna uma tupla (SOB_ROOT, CROQUI_DIR).
     """
     destino_path = Path(destino).resolve()
     if not destino_path.exists() or not destino_path.is_dir():
         raise SobValidationError(f"[FALHA] Diretório de destino inválido: {destino_path}")
+
+    if not validar_permissao_criacao(destino_path):
+        raise SobPermissionError(
+            "[FALHA] Não foi possível criar a pasta da SOB no diretório selecionado."
+        )
 
     sob_root = destino_path / pasta_sob
     if sob_root.exists():
@@ -272,7 +294,7 @@ def copiar_arquivo_base(
 ) -> Path:
     """
     Copia o arquivo-base DWG para a raiz da SOB com rigorosas validações de integridade
-    (Seções 14.9, 14.10, 14.11, 14.12 e 14.13):
+    (Seções 14.9, 14.10, 14.11, 14.12, 14.13 e 17):
     1. Validar existência, legibilidade e formato DWG de BASE_TEMPLATE
     2. Calcular hash de integridade inicial de BASE_TEMPLATE
     3. Validar que BASE_DWG NÃO existe antes da cópia
@@ -280,10 +302,11 @@ def copiar_arquivo_base(
     5. Validar existência, tamanho > 0 e integridade de hash de BASE_DWG
     6. Validar que BASE_TEMPLATE permanece intacto (mesmo hash inicial)
     """
+    import os
     origem_path = Path(origem_base).resolve()
-    if not origem_path.is_file():
+    if not origem_path.is_file() or not os.access(origem_path, os.R_OK):
         raise SobFileNotFoundError(
-            f"[FALHA] Arquivo-modelo prancha.dwg não encontrado: {origem_path}"
+            f"[FALHA] Arquivo-modelo prancha.dwg não encontrado ou inacessível: {origem_path}"
         )
 
     if not validar_arquivo_dwg(origem_path):

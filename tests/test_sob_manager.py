@@ -125,7 +125,7 @@ def test_executar_pasta_sob_ja_existente(tmp_path: Path, fake_prancha_dwg: Path)
 
     assert resultado["sucesso"] is False
     assert resultado["status"] == "BLOQUEADO"
-    assert "[FALHA] A pasta SOB_A057349839 já existe." in resultado["mensagem"]
+    assert "[FALHA] A pasta da SOB já existe." in resultado["mensagem"]
 
     # Verifica integridade do arquivo pré-existente
     assert arquivo_salvo.exists()
@@ -322,3 +322,22 @@ def test_secao_14_formatar_mensagem_erro():
     assert "Problema:\nA pasta SOB_A057349839 já existe." in msg
     assert "Caminho afetado:\nD:\\Projetos\\ENEL\\SOB_A057349839" in msg
     assert "Ação:\nVerifique a pasta existente" in msg
+
+
+def test_executar_sem_permissao_criacao(tmp_path: Path, fake_prancha_dwg: Path, monkeypatch):
+    """Valida que falta de permissão de escrita gera [FALHA] Não foi possível criar a pasta (Etapa 07)."""
+    import sob_manager
+
+    monkeypatch.setattr(sob_manager, "validar_permissao_criacao", lambda _: False)
+
+    orquestrador = SobOrchestrator(origem_base=fake_prancha_dwg)
+    resultado = orquestrador.executar(
+        sob_raw="A057349839",
+        destino_dir=str(tmp_path),
+        baixar_croqui_sp=False,
+    )
+
+    assert resultado["sucesso"] is False
+    assert resultado["status"] == "BLOQUEADO"
+    assert "[FALHA] Não foi possível criar a pasta da SOB no diretório selecionado." in resultado["mensagem"]
+

@@ -84,8 +84,8 @@
 
   (if (or (= sobId "") (<= (strlen sobId) 2))
     (progn
-      (princ "\n[ERRO] Número de SOB inválido. Operação interrompida.")
-      (sob-alert "Número de SOB inválido. Operação interrompida.")
+      (princ "\n[FALHA] SOB inválida.")
+      (sob-alert "SOB inválida.")
       (list (cons "sucesso" nil) (cons "erro" "SOB_INVALIDA"))
     )
     (progn
@@ -105,10 +105,10 @@
       (if (vl-file-directory-p sobRoot)
         (progn
           (princ "\n==============================================================")
-          (princ "\n[AVISO] A pasta da SOB já existe no local selecionado.")
+          (princ "\n[FALHA] A pasta da SOB já existe.")
           (princ "\nNenhum arquivo foi sobrescrito.")
           (princ "\n==============================================================")
-          (sob-alert (strcat "A pasta da SOB já existe no local selecionado.\n"
+          (sob-alert (strcat "A pasta da SOB já existe.\n"
                              "Nenhum arquivo foi sobrescrito.\n\n"
                              "Pasta: " sobRoot))
           (list (cons "sucesso" nil)
@@ -170,7 +170,7 @@
                               (princ (strcat "\n" erroCad))
                             )
                             (progn
-                              ;; Validação estrita: CURRENT_AUTOCAD_DWG == BASE_DWG
+                              ;; Validação estrita: CURRENT_AUTOCAD_DWG == BASE_DWG (Seção 17, Etapa 24)
                               (setq activeDoc (vl-catch-all-apply 'vla-get-ActiveDocument (list acadApp)))
                               (if (and activeDoc (not (vl-catch-all-error-p activeDoc)))
                                 (progn
@@ -178,7 +178,7 @@
                                   (if (and (stringp currentDwg) (/= currentDwg ""))
                                     (if (/= (strcase currentDwg) (strcase dwgTarget))
                                       (progn
-                                        (setq erroCad (strcat "[FALHA CRÍTICA] O AutoCAD não abriu o BASE_DWG esperado.\n\n"
+                                        (setq erroCad (strcat "[FALHA CRÍTICA] O arquivo aberto não corresponde ao BASE_DWG esperado.\n\n"
                                                               "BASE_DWG esperado: " dwgTarget "\n"
                                                               "DWG efetivamente aberto: " currentDwg "\n"
                                                               "SOB_ID: " sobId))

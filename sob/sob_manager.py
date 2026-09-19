@@ -26,12 +26,14 @@ from sob_core import (
     obter_sob_name,
     derivar_caminhos_sob,
     verificar_pasta_sob_existente,
+    validar_permissao_criacao,
     criar_estrutura_sob,
     copiar_arquivo_base,
     validar_arquivo_dwg,
     calcular_hash_arquivo,
     remover_estrutura_incompleta,
     SobValidationError,
+    SobPermissionError,
     SobDirectoryExistsError,
     SobFileExistsError,
     SobFileNotFoundError,
@@ -246,18 +248,24 @@ class SobOrchestrator:
             self.logger.info(f"CROQUI_DIR: {croqui_dir}")
             self.logger.info(f"BASE_DWG: {base_dwg}")
 
-            # ETAPA 3 & 4: Proteção contra existência prévia e Criação Segura da Estrutura (Seção 14.6 e 14.7)
-            resultado["etapa"] = "CRIAR_ESTRUTURA"
+            # ETAPA 06: Verificar existência da SOB_ROOT (Seção 17, Etapa 06)
             if verificar_pasta_sob_existente(destination_root, sob_name):
                 raise SobDirectoryExistsError(
                     formatar_mensagem_erro(
                         etapa="Criação da pasta da SOB",
-                        problema=f"[FALHA] A pasta {sob_name} já existe.",
+                        problema="[FALHA] A pasta da SOB já existe.",
                         caminho=str(sob_root_path),
                         acao="Verifique a pasta existente ou selecione outro diretório de destino.",
                     )
                 )
 
+            # ETAPA 07: Validar permissão de criação (Seção 17, Etapa 07)
+            if not validar_permissao_criacao(destination_root):
+                raise SobPermissionError(
+                    "[FALHA] Não foi possível criar a pasta da SOB no diretório selecionado."
+                )
+
+            # ETAPAS 08, 09 e 10: Criação de SOB_ROOT e CROQUI_DIR (Seção 17, Etapas 08-10)
             sob_root_criado, croqui_dir_criado = criar_estrutura_sob(destination_root, sob_name)
             estrutura_criada_nesta_execucao = True
             resultado["estado"] = "ESTRUTURA_CRIADA"
@@ -265,7 +273,27 @@ class SobOrchestrator:
             self.logger.info("Pasta da SOB criada")
             self.logger.info("Pasta CROQUI criada")
 
-            # ETAPA 5: Acesso ao SharePoint e Download do Croqui (Seções 14.14, 14.15, 14.16, 14.17 e 14.18)
+            # FASE 6 — PREPARAÇÃO DO ARQUIVO-BASE (Seção 17, Etapas 11 e 12)
+            resultado["etapa"] = "VALIDAR_BASE_TEMPLATE"
+            if not base_template.is_file() or not os.access(base_template, os.R_OK):
+                raise SobFileNotFoundError(
+                    formatar_mensagem_erro(
+                        etapa="Validação do Arquivo-Modelo",
+                        problema="[FALHA] Arquivo-modelo prancha.dwg não encontrado ou inacessível.",
+                        caminho=str(base_template),
+                        acao="Verifique se o arquivo modelos/prancha.dwg está presente e acessível.",
+                    )
+                )
+
+            if base_dwg.exists():
+                raise SobFileExistsError(
+                    f"[FALHA] O arquivo de destino já existe: {base_dwg}"
+                )
+
+            checklist["BASE_TEMPLATE validado"] = True
+            self.logger.info("Arquivo-base localizado")
+
+            # FASE 7 & 8 — SHAREPOINT E DOWNLOAD DO CROQUI (Seção 17, Etapas 13 a 18)
             if baixar_croqui_sp:
                 resultado["etapa"] = "SHAREPOINT"
                 self.logger.info("Autenticação SharePoint iniciada")
@@ -285,6 +313,10 @@ class SobOrchestrator:
                     pasta_info = client.localizar_pasta_sob(sob_id)
                     checklist["SOB encontrada no SharePoint"] = True
                     resultado["estado"] = "SOB_LOCALIZADA"
+
+                    # ETAPA 16: Preparar download (validar CROQUI_DIR novamente)
+                    if not croqui_dir.is_dir():
+                        raise SobValidationError(f"[FALHA] Diretório do croqui inválido: {croqui_dir}")
 
                     self.logger.info("Download iniciado")
                     arquivos = client.baixar_croqui(pasta_info, croqui_dir)
@@ -307,21 +339,8 @@ class SobOrchestrator:
                 checklist["Conteúdo do CROQUI validado"] = True
                 resultado["estado"] = "DOWNLOAD_VALIDADO"
 
-            # ETAPA 6: Validação de BASE_TEMPLATE, Cópia e Integridade de BASE_DWG (Seções 14.9 a 14.13)
+            # FASE 9 — CRIAÇÃO DO DWG DE TRABALHO (Seção 17, Etapas 19 a 21)
             resultado["etapa"] = "COPIAR_ARQUIVO_BASE"
-            if not base_template.is_file():
-                raise SobFileNotFoundError(
-                    formatar_mensagem_erro(
-                        etapa="Validação do Arquivo-Modelo",
-                        problema="[FALHA] Arquivo-modelo prancha.dwg não encontrado.",
-                        caminho=str(base_template),
-                        acao="Verifique se o arquivo modelos/prancha.dwg está presente no projeto.",
-                    )
-                )
-
-            checklist["BASE_TEMPLATE validado"] = True
-            self.logger.info("Arquivo-base localizado")
-
             dwg_copiado = copiar_arquivo_base(
                 base_template,
                 sob_root_path,
