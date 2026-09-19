@@ -55,13 +55,154 @@
   pyScript
 )
 
-;; Comando Principal: SOB (Aliases: NOVASOB, PREPARAR_SOB)
-(defun c:SOB (/ acadApp doc sobInput sobNormalizada sh folder destPath sobRoot
-                jsonFile logFile pyScript cmd wsh resJson f_json line_json
-                dwgTarget f_log line_log log_txt erro_msg)
+;; Exibição segura de alertas (não trava em ambientes headless / scripts de teste)
+(defun sob-alert (msg)
+  (if (and (fboundp 'alert) (vlax-get-acad-object))
+    (vl-catch-all-apply 'alert (list msg))
+    (princ (strcat "\n[ALERTA] " msg))
+  )
+)
+
+;; Executa o fluxo operacional completo da SOB
+(defun sob-executar-fluxo (sobInput destPath abrirCad / acadApp doc sobNormalizada sobRoot
+                             jsonFile logFile pyScript cmd wsh resJson f_json line_json
+                             dwgTarget f_log line_log log_txt erro_msg sucesso retVal)
 
   (setq acadApp (vlax-get-acad-object))
-  (setq doc (vla-get-ActiveDocument acadApp))
+  (if (and acadApp (not (vl-catch-all-error-p acadApp)))
+    (setq doc (vl-catch-all-apply 'vla-get-ActiveDocument (list acadApp)))
+  )
+
+  ;; 1. Normalização e Validação
+  (setq sobNormalizada (sob-normalizar-str sobInput))
+  (if (or (= sobNormalizada "") (<= (strlen sobNormalizada) 4))
+    (progn
+      (princ "\n[ERRO] Número de SOB inválido. Operação interrompida.")
+      (sob-alert "Número de SOB inválido. Operação interrompida.")
+      (list (cons "sucesso" nil) (cons "erro" "SOB_INVALIDA"))
+    )
+    (progn
+      (princ (strcat "\n[INFO] SOB identificada: " sobNormalizada))
+      (princ (strcat "\n[INFO] Diretório de destino: " destPath))
+
+      ;; 2. Proteção contra SOB Existente (NÃO SOBRESCREVER / NÃO APAGAR / NÃO MISTURAR)
+      (setq sobRoot (strcat destPath "\\" sobNormalizada))
+      (if (vl-file-directory-p sobRoot)
+        (progn
+          (princ "\n==============================================================")
+          (princ "\n[AVISO] A pasta da SOB já existe no local selecionado.")
+          (princ "\nNenhum arquivo foi sobrescrito.")
+          (princ "\n==============================================================")
+          (sob-alert (strcat "A pasta da SOB já existe no local selecionado.\n"
+                             "Nenhum arquivo foi sobrescrito.\n\n"
+                             "Pasta: " sobRoot))
+          (list (cons "sucesso" nil) (cons "erro" "PASTA_EXISTENTE") (cons "sobRoot" sobRoot))
+        )
+        (progn
+          ;; 3. Arquivos de Intercâmbio e Log Protegidos
+          (setq jsonFile (vl-filename-mktemp "sob_out.json"))
+          (setq logFile  (vl-filename-mktemp "sob_log.txt"))
+          (setq pyScript (sob-localizar-script))
+
+          (if (not (findfile pyScript))
+            (progn
+              (princ (strcat "\n[ERRO] Script Python não encontrado em: " pyScript))
+              (sob-alert (strcat "Script de automação não localizado:\n" pyScript))
+              (list (cons "sucesso" nil) (cons "erro" "SCRIPT_NAO_ENCONTRADO"))
+            )
+            (progn
+              ;; 4. Execução do Orquestrador Python em Segundo Plano
+              (princ "\n[INFO] Acessando SharePoint e preparando projeto...")
+              (setq cmd (strcat "py \"" pyScript "\" --sob \"" sobNormalizada "\" --destino \"" destPath "\" --json-out \"" jsonFile "\" > \"" logFile "\" 2>&1"))
+
+              (setq wsh (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
+              (if (and wsh (not (vl-catch-all-error-p wsh)))
+                (progn
+                  (vl-catch-all-apply 'vlax-invoke-method (list wsh "Run" (strcat "cmd.exe /c " cmd) 0 :vlax-true))
+                  (vlax-release-object wsh)
+                )
+                (progn
+                  (startapp "cmd.exe" (strcat "/c " cmd))
+                  (command "_.DELAY" "4000")
+                )
+              )
+
+              ;; 5. Verificação do Resultado
+              (setq dwgTarget (strcat sobRoot "\\BASE_SOB_DESENHO.dwg"))
+
+              (if (and (findfile dwgTarget) (> (vl-file-size dwgTarget) 100))
+                (progn
+                  (princ "\n==============================================================")
+                  (princ (strcat "\n✔ PROJETO " sobNormalizada " PREPARADO COM SUCESSO!"))
+                  (princ (strcat "\nArquivo: " dwgTarget))
+                  (princ "\n==============================================================")
+
+                  ;; 6. Abertura do Arquivo no AutoCAD
+                  (if abrirCad
+                    (progn
+                      (princ "\n[INFO] Abrindo BASE_SOB_DESENHO.dwg no AutoCAD...")
+                      (if (and acadApp (not (vl-catch-all-error-p acadApp)))
+                        (vl-catch-all-apply 'vla-open (list (vla-get-Documents acadApp) dwgTarget))
+                      )
+                    )
+                  )
+                  (sob-alert (strcat "Preparação de Projeto Concluída com Sucesso!\n\n"
+                                     "SOB: " sobNormalizada "\n"
+                                     "Pasta: " sobRoot "\n"
+                                     "Arquivo: BASE_SOB_DESENHO.dwg\n\n"
+                                     "O desenho foi aberto no AutoCAD."))
+                  (list (cons "sucesso" t) (cons "sob" sobNormalizada) (cons "sobRoot" sobRoot) (cons "dwgTarget" dwgTarget))
+                )
+                (progn
+                  ;; Em caso de falha, lê o log para exibir mensagem exata ao usuário
+                  (setq log_txt "")
+                  (if (findfile logFile)
+                    (progn
+                      (setq f_log (open logFile "r"))
+                      (while (and (setq line_log (read-line f_log)) (< (strlen log_txt) 800))
+                        (setq log_txt (strcat log_txt line_log "\n"))
+                      )
+                      (close f_log)
+                    )
+                  )
+
+                  ;; Lê JSON de resposta se disponível
+                  (setq erro_msg "")
+                  (if (findfile jsonFile)
+                    (progn
+                      (setq f_json (open jsonFile "r"))
+                      (while (setq line_json (read-line f_json))
+                        (if (vl-string-search "\"mensagem\":" line_json)
+                          (setq erro_msg line_json)
+                        )
+                      )
+                      (close f_json)
+                    )
+                  )
+
+                  (princ "\n==============================================================")
+                  (princ "\n[ERRO NA PREPARAÇÃO DA SOB]")
+                  (if (/= log_txt "")
+                    (princ (strcat "\n" log_txt))
+                    (princ (strcat "\n" erro_msg))
+                  )
+                  (princ "\n==============================================================")
+
+                  (sob-alert (strcat "Falha na preparação da SOB:\n\n"
+                                     (if (/= log_txt "") log_txt "Consulte a janela de texto do AutoCAD (F2).")))
+                  (list (cons "sucesso" nil) (cons "erro" (if (/= log_txt "") log_txt erro_msg)))
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+)
+
+;; Comando Principal Interativo: SOB (Aliases: NOVASOB, PREPARAR_SOB)
+(defun c:SOB (/ sobInput sh folder destPath)
 
   (princ "\n==============================================================")
   (princ "\n       PREPARAÇÃO AUTOMÁTICA DE PROJETO SOB (AUX CAD)         ")
@@ -76,18 +217,7 @@
     )
   )
 
-  ;; 2. Normalização e Validação
-  (setq sobNormalizada (sob-normalizar-str sobInput))
-  (if (or (= sobNormalizada "") (<= (strlen sobNormalizada) 4))
-    (progn
-      (princ "\n[ERRO] Número de SOB inválido. Operação interrompida.")
-      (alert "Número de SOB inválido. Operação interrompida.")
-      (exit)
-    )
-  )
-  (princ (strcat "\n[INFO] SOB identificada: " sobNormalizada))
-
-  ;; 3. Seleção do Diretório de Destino (Diálogo Nativo Windows)
+  ;; 2. Seleção do Diretório de Destino (Diálogo Nativo Windows)
   (princ "\n[INFO] Selecione onde a pasta da SOB deverá ser criada...")
   (setq destPath nil)
   (setq sh (vl-catch-all-apply 'vlax-create-object (list "Shell.Application")))
@@ -108,111 +238,9 @@
       (exit)
     )
   )
-  (princ (strcat "\n[INFO] Diretório selecionado: " destPath))
 
-  ;; 4. Proteção contra SOB Existente (NÃO SOBRESCREVER / NÃO APAGAR / NÃO MISTURAR)
-  (setq sobRoot (strcat destPath "\\" sobNormalizada))
-  (if (vl-file-directory-p sobRoot)
-    (progn
-      (princ "\n==============================================================")
-      (princ "\n[AVISO] A pasta da SOB já existe no local selecionado.")
-      (princ "\nNenhum arquivo foi sobrescrito.")
-      (princ "\n==============================================================")
-      (alert (strcat "A pasta da SOB já existe no local selecionado.\n"
-                     "Nenhum arquivo foi sobrescrito.\n\n"
-                     "Pasta: " sobRoot))
-      (exit)
-    )
-  )
-
-  ;; 5. Arquivos de Intercâmbio e Log Protegidos
-  (setq jsonFile (vl-filename-mktemp "sob_out.json"))
-  (setq logFile  (vl-filename-mktemp "sob_log.txt"))
-  (setq pyScript (sob-localizar-script))
-
-  (if (not (findfile pyScript))
-    (progn
-      (princ (strcat "\n[ERRO] Script Python não encontrado em: " pyScript))
-      (alert (strcat "Script de automação não localizado:\n" pyScript))
-      (exit)
-    )
-  )
-
-  ;; 6. Execução do Orquestrador Python em Segundo Plano
-  (princ "\n[INFO] Acessando SharePoint e preparando projeto...")
-  (setq cmd (strcat "py \"" pyScript "\" --sob \"" sobNormalizada "\" --destino \"" destPath "\" --json-out \"" jsonFile "\" > \"" logFile "\" 2>&1"))
-
-  (setq wsh (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
-  (if (and wsh (not (vl-catch-all-error-p wsh)))
-    (progn
-      (vl-catch-all-apply 'vlax-invoke-method (list wsh "Run" (strcat "cmd.exe /c " cmd) 0 :vlax-true))
-      (vlax-release-object wsh)
-    )
-    (progn
-      (startapp "cmd.exe" (strcat "/c " cmd))
-      (command "_.DELAY" "4000")
-    )
-  )
-
-  ;; 7. Verificação do Resultado
-  (setq dwgTarget (strcat sobRoot "\\BASE_SOB_DESENHO.dwg"))
-
-  (if (and (findfile dwgTarget) (> (vl-file-size dwgTarget) 100))
-    (progn
-      (princ "\n==============================================================")
-      (princ (strcat "\n✔ PROJETO " sobNormalizada " PREPARADO COM SUCESSO!"))
-      (princ (strcat "\nArquivo: " dwgTarget))
-      (princ "\n==============================================================")
-
-      ;; 8. Abertura do Arquivo no AutoCAD
-      (princ "\n[INFO] Abrindo BASE_SOB_DESENHO.dwg no AutoCAD...")
-      (vl-catch-all-apply 'vla-open (list (vla-get-Documents acadApp) dwgTarget))
-      (alert (strcat "Preparação de Projeto Concluída com Sucesso!\n\n"
-                     "SOB: " sobNormalizada "\n"
-                     "Pasta: " sobRoot "\n"
-                     "Arquivo: BASE_SOB_DESENHO.dwg\n\n"
-                     "O desenho foi aberto no AutoCAD."))
-    )
-    (progn
-      ;; Em caso de falha, lê o log para exibir mensagem exata ao usuário
-      (setq log_txt "")
-      (if (findfile logFile)
-        (progn
-          (setq f_log (open logFile "r"))
-          (while (and (setq line_log (read-line f_log)) (< (strlen log_txt) 800))
-            (setq log_txt (strcat log_txt line_log "\n"))
-          )
-          (close f_log)
-        )
-      )
-
-      ;; Lê JSON de resposta se disponível
-      (setq erro_msg "")
-      (if (findfile jsonFile)
-        (progn
-          (setq f_json (open jsonFile "r"))
-          (while (setq line_json (read-line f_json))
-            (if (vl-string-search "\"mensagem\":" line_json)
-              (setq erro_msg line_json)
-            )
-          )
-          (close f_json)
-        )
-      )
-
-      (princ "\n==============================================================")
-      (princ "\n[ERRO NA PREPARAÇÃO DA SOB]")
-      (if (/= log_txt "")
-        (princ (strcat "\n" log_txt))
-        (princ (strcat "\n" erro_msg))
-      )
-      (princ "\n==============================================================")
-
-      (alert (strcat "Falha na preparação da SOB:\n\n"
-                     (if (/= log_txt "") log_txt "Consulte a janela de texto do AutoCAD (F2).")))
-    )
-  )
-
+  ;; 3. Dispara o fluxo operacional com abertura no AutoCAD
+  (sob-executar-fluxo sobInput destPath t)
   (princ)
 )
 
