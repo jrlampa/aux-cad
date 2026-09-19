@@ -42,7 +42,10 @@ def main(args_list: Optional[list] = None):
     # Tenta usar interface gráfica caso não esteja desabilitada e não esteja sob pytest
     if not args.no_ui and not os.environ.get("PYTEST_CURRENT_TEST"):
         try:
-            from sob_progress_gui import SobProgressGUI
+            try:
+                from sob.sob_progress_gui import SobProgressGUI
+            except ImportError:
+                from sob_progress_gui import SobProgressGUI
 
             def _tarefa(observer):
                 return orchestrator.executar(
@@ -56,7 +59,8 @@ def main(args_list: Optional[list] = None):
 
             gui = SobProgressGUI(sob_id=args.sob, tarefa_executora=_tarefa)
             resultado = gui.iniciar()
-        except Exception:
+        except Exception as e_gui:
+            orchestrator.logger.warning(f"Interface gráfica não pôde ser inicializada ({e_gui}). Executando em modo console.")
             resultado = None
 
     if resultado is None:

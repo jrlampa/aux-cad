@@ -153,6 +153,13 @@ class SobProgressGUI:
         x = (sw - w) // 2
         y = (sh - h) // 2
         self.root.geometry(f"{w}x{h}+{x}+{y}")
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.attributes("-topmost", True)
+            self.root.after_idle(self.root.attributes, "-topmost", False)
+        except Exception:
+            pass
 
     def _configurar_estilos(self):
         """Configura os estilos TTK."""
