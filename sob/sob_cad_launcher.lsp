@@ -248,12 +248,16 @@
 
                   ;; Lê JSON de resposta se disponível
                   (setq erro_msg "")
+                  (setq rb_info "")
                   (if (findfile jsonFile)
                     (progn
                       (setq f_json (open jsonFile "r"))
                       (while (setq line_json (read-line f_json))
                         (if (vl-string-search "\"mensagem\":" line_json)
                           (setq erro_msg line_json)
+                        )
+                        (if (vl-string-search "\"rollback\":" line_json)
+                          (setq rb_info line_json)
                         )
                       )
                       (close f_json)
@@ -265,6 +269,9 @@
                   (if (/= log_txt "")
                     (princ (strcat "\n" log_txt))
                     (princ (strcat "\n" erro_msg))
+                  )
+                  (if (/= rb_info "")
+                    (princ (strcat "\n" rb_info))
                   )
                   (princ "\n==============================================================")
 

@@ -39,6 +39,7 @@ from sob_core import (
     SobFileNotFoundError,
     SobIntegrityError,
 )
+from sob_rollback import RollbackContext
 from sob_sharepoint import (
     obter_credenciais_sharepoint,
     sanitizar_mensagem,
@@ -165,6 +166,8 @@ class SobOrchestrator:
             "dwg_path": "",
             "arquivos_croqui": [],
             "checklist": {},
+            "rollback": "ROLLBACK_NÃO_NECESSÁRIO",
+            "rollback_info": None,
         }
 
         checklist: Dict[str, bool] = {
@@ -197,6 +200,7 @@ class SobOrchestrator:
         sob_root_path: Optional[Path] = None
         client: Optional[SharePointClient] = None
         pasta_info: Optional[Dict[str, Any]] = None
+        rollback_ctx: Optional[RollbackContext] = None
 
         try:
             self.logger.info("Início da operação - FASE A: PRÉ-VALIDAÇÃO")
@@ -244,6 +248,17 @@ class SobOrchestrator:
             croqui_dir = caminhos["CROQUI_DIR"]
             base_dwg = caminhos["BASE_DWG"]
             base_template = caminhos["BASE_TEMPLATE"]
+
+            # Instancia o contexto de rollback seguro (Seção 18.2)
+            rollback_ctx = RollbackContext(
+                sob_id=sob_id,
+                destination_root=destination_root,
+                sob_root=sob_root_path,
+                croqui_dir=croqui_dir,
+                base_dwg=base_dwg,
+                base_template=base_template,
+                logger_instance=self.logger,
+            )
 
             resultado["SOB_ID"] = sob_id
             resultado["SOB_NAME"] = sob_name
@@ -346,11 +361,17 @@ class SobOrchestrator:
             # FASE B — CRIAÇÃO E EXECUÇÃO (Somente após PRE_VALIDACAO = OK)
             # =========================================================================
             resultado["fase"] = "FASE_B"
+            if rollback_ctx:
+                rollback_ctx.inicializar_fase_b()
 
             # ETAPA B01 & B02: Criar SOB_ROOT e CROQUI_DIR
             resultado["etapa"] = "CRIAR_ESTRUTURA"
             sob_root_criado, croqui_dir_criado = criar_estrutura_sob(destination_root, sob_name)
             estrutura_criada_nesta_execucao = True
+            if rollback_ctx:
+                rollback_ctx.registrar_criacao("SOB_ROOT", sob_root_criado, tipo="dir")
+                rollback_ctx.registrar_criacao("CROQUI_DIR", croqui_dir_criado, tipo="dir")
+
             checklist["SOB_ROOT criado"] = True
             checklist["CROQUI_DIR criado"] = True
             resultado["estado"] = "ESTRUTURA_CRIADA"
@@ -362,6 +383,9 @@ class SobOrchestrator:
                 resultado["etapa"] = "DOWNLOAD_CROQUI"
                 self.logger.info("Download iniciado")
                 arquivos = client.baixar_croqui(pasta_info, croqui_dir)
+                if rollback_ctx:
+                    for a in arquivos:
+                        rollback_ctx.registrar_download_arquivo(a)
 
                 client.validar_download(croqui_dir)
                 checklist["Download concluído"] = True
@@ -381,6 +405,9 @@ class SobOrchestrator:
                 sob_root_path,
                 nome_destino=base_dwg.name,
             )
+            if rollback_ctx:
+                rollback_ctx.registrar_criacao("BASE_DWG", dwg_copiado, tipo="file")
+
             checklist["BASE_DWG criado"] = True
             checklist["Integridade validada"] = True
             checklist["BASE_TEMPLATE preservado"] = True
@@ -419,6 +446,8 @@ class SobOrchestrator:
             if abrir_cad:
                 resultado["etapa"] = "ABRIR_AUTOCAD"
                 self._abrir_no_autocad(dwg_copiado)
+                if rollback_ctx:
+                    rollback_ctx.marcar_dwg_aberto()
                 resultado["estado"] = "AUTOCAD_ABERTO"
                 self.logger.info("DWG aberto")
 
@@ -459,13 +488,17 @@ class SobOrchestrator:
             resultado["mensagem"] = msg_str
             self.logger.error(msg_str)
 
-            # Rollback seguro da estrutura incompleta (Seção 14.8)
-            if estrutura_criada_nesta_execucao and sob_root_path and sob_root_path.exists():
-                limpou = remover_estrutura_incompleta(sob_root_path)
-                if limpou:
-                    self.logger.info(f"Limpeza controlada da estrutura incompleta realizada: {sob_root_path}")
-                else:
-                    self.logger.warning(f"Estrutura incompleta mantida por segurança: {sob_root_path}")
+            # Rollback seguro da Fase B (Seção 18)
+            if rollback_ctx and rollback_ctx.houve_alteracao_em_disco():
+                relatorio_rb = rollback_ctx.executar_rollback(
+                    etapa_falha=resultado.get("etapa", "DESCONHECIDA"),
+                    motivo_falha=msg_str,
+                )
+                resultado["rollback"] = relatorio_rb["resultado_do_rollback"]
+                resultado["rollback_info"] = relatorio_rb
+                self.logger.info(f"Rollback executado: {resultado['rollback']}")
+            else:
+                resultado["rollback"] = "ROLLBACK_NÃO_NECESSÁRIO"
 
         except Exception as e:
             resultado["sucesso"] = False
@@ -475,8 +508,17 @@ class SobOrchestrator:
             resultado["mensagem"] = msg_str
             self.logger.error(msg_str)
 
-            if estrutura_criada_nesta_execucao and sob_root_path and sob_root_path.exists():
-                remover_estrutura_incompleta(sob_root_path)
+            # Rollback seguro da Fase B (Seção 18)
+            if rollback_ctx and rollback_ctx.houve_alteracao_em_disco():
+                relatorio_rb = rollback_ctx.executar_rollback(
+                    etapa_falha=resultado.get("etapa", "DESCONHECIDA"),
+                    motivo_falha=msg_str,
+                )
+                resultado["rollback"] = relatorio_rb["resultado_do_rollback"]
+                resultado["rollback_info"] = relatorio_rb
+                self.logger.info(f"Rollback executado: {resultado['rollback']}")
+            else:
+                resultado["rollback"] = "ROLLBACK_NÃO_NECESSÁRIO"
 
         finally:
             if client and not self.sharepoint_client:

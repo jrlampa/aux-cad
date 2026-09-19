@@ -464,10 +464,25 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
     - `B09 - Abrir BASE_DWG no AutoCAD`: Abertura exclusiva de `BASE_DWG` (nunca o template).
     - `B10 - Validar DWG efetivamente aberto`: Verificação estrita do desenho ativo (`CURRENT_AUTOCAD_DWG == BASE_DWG`).
     - `B11 - Validação final`: Checagem integral do checklist operacional e emissão de `STATUS = CONCLUÍDO`.
+  - **Mecanismo de Rollback Seguro da Fase B (Seção 18 - `sob_rollback.py`)**:
+    - `RollbackContext`: Gerenciador de contexto atômico e seguro disparado em qualquer falha da Fase B.
+    - **Princípio Fundamental (18.1)**: Remoção estrita e exclusiva daquilo que foi comprovadamente criado pela execução atual (`CRIADO_NESTA_EXECUÇÃO = SIM`), com proibição expressa de `shutil.rmtree` indiscriminado.
+    - **Proteção Absoluta do BASE_TEMPLATE (18.8)**: Imutabilidade absoluta do arquivo-modelo (nunca apagado, movido ou renomeado).
+    - **Proteção de Conteúdo Preexistente (18.6)**: Arquivos e pastas preexistentes nunca são apagados; em caso de resíduo, declara-se `ROLLBACK_PARCIAL`.
+    - **Ordem Inversa Estrita de Desfazimento (18.10)**:
+      1. Fechar / desassociar `BASE_DWG` do AutoCAD;
+      2. Remover `BASE_DWG` criado pela execução;
+      3. Remover arquivos baixados pela execução;
+      4. Remover `CROQUI_DIR` se vazio e criado nesta execução;
+      5. Remover `SOB_ROOT` se vazio e criado nesta execução.
+    - **Estados Formais**: `ROLLBACK_NÃO_NECESSÁRIO`, `ROLLBACK_INICIADO`, `ROLLBACK_CONCLUÍDO`, `ROLLBACK_PARCIAL`.
+    - **Registro Estruturado**: Rastreabilidade completa com `recursos_criados_pela_execucao`, `recursos_removidos`, `recursos_preservados`, `recursos_remanescentes` e orientações de ação.
 - **Arquitetura & Componentes**:
-  - `sob_core.py` (407 linhas): Lógica de domínio, normalização, checagem não-destrutiva de permissões (`validar_permissao_criacao`), validações de integridade SHA-256 e rollback atômico.
-  - `sob_sharepoint.py` (544 linhas): Driver Selenium headless, autenticação Microsoft Online, busca unívoca, verificação prévia de conteúdo (`validar_conteudo_disponivel`) e download seguro via CDP.
-  - `sob_manager.py` (525 linhas): Orquestrador de máquina de estados estritamente segregada em Fase A e Fase B, garantindo atomicidade e checklist de 21 itens.
-  - `sob_cad_launcher.lsp` (351 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`**, verificação `CURRENT_AUTOCAD_DWG == BASE_DWG`, mensagens padronizadas da Seção 17 e rotina programática `(sob-executar-fluxo ...)`.
-- **Cobertura de Testes**: 51 testes unitários específicos do módulo SOB e suíte global com **207 testes unitários passando com 100% de sucesso**. Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
+  - `sob_core.py` (437 linhas): Lógica de domínio, normalização, checagem não-destrutiva de permissões (`validar_permissao_criacao`), validações de integridade SHA-256 e limpeza segura sem `rmtree` genérico.
+  - `sob_rollback.py` (350 linhas): Classes `RecursoRastreado`, `RecursoRemanescente` e `RollbackContext` para desfazimento sequencial reverso, validação pós-rollback e proteção de dados.
+  - `sob_sharepoint.py` (550 linhas): Driver Selenium headless, autenticação Microsoft Online, busca unívoca, verificação prévia de conteúdo (`validar_conteudo_disponivel`) e download seguro via CDP.
+  - `sob_manager.py` (572 linhas): Orquestrador de máquina de estados segregada em Fase A e Fase B, com integração nativa de `RollbackContext`, rastreamento de recursos criados e checklist de 21 itens.
+  - `sob_cad_launcher.lsp` (357 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`**, verificação `CURRENT_AUTOCAD_DWG == BASE_DWG`, exibição de status de rollback no console e rotina programática `(sob-executar-fluxo ...)`.
+- **Cobertura de Testes**: 59 testes unitários específicos do módulo SOB (81% de cobertura do pacote, 90% em `sob_manager.py` e 85% em `sob_rollback.py`) e suíte global com **215 testes unitários passando com 100% de sucesso**. Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
+
 

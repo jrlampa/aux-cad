@@ -392,8 +392,9 @@ def validar_arquivo_dwg(caminho_dwg: Union[str, Path]) -> bool:
 
 def remover_estrutura_incompleta(sob_root: Union[str, Path]) -> bool:
     """
-    Realiza a limpeza controlada de uma estrutura criada nesta execução que falhou (Seção 14.8).
-    Remove apenas se for um diretório contendo SOB_ no nome, prevenindo exclusão acidental.
+    Realiza a limpeza controlada de uma estrutura criada nesta execução que falhou (Seções 14.8 e 18).
+    Não realiza exclusão recursiva indiscriminada (proibição de rmtree genérico conforme Seção 18.1).
+    Remove apenas os arquivos derivados do processo e diretórios esvaziados pertencentes à SOB.
     """
     p = Path(sob_root).resolve()
     if not p.exists() or not p.is_dir():
@@ -403,8 +404,34 @@ def remover_estrutura_incompleta(sob_root: Union[str, Path]) -> bool:
         return False
 
     try:
-        shutil.rmtree(p)
+        # Ordem inversa de limpeza segura (Seção 18.10)
+        base_dwg = p / NOME_ARQUIVO_BASE_DWG
+        if base_dwg.is_file():
+            try:
+                base_dwg.unlink()
+            except Exception:
+                pass
+
+        croqui_dir = p / NOME_PASTA_CROQUI
+        if croqui_dir.is_dir():
+            for item in list(croqui_dir.iterdir()):
+                if item.is_file():
+                    try:
+                        item.unlink()
+                    except Exception:
+                        pass
+            try:
+                croqui_dir.rmdir()
+            except Exception:
+                pass
+
+        try:
+            p.rmdir()
+        except Exception:
+            pass
+
         return not p.exists()
     except Exception:
         return False
+
 
