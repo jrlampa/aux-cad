@@ -438,21 +438,80 @@ class SharePointClient:
         Baixa os arquivos contidos na pasta da SOB localizada para destino_croqui.
         Garante integridade e ausência de arquivos temporários parciais.
         """
+        from selenium.webdriver.common.by import By
+
         destino_path = Path(destino_croqui).resolve()
         destino_path.mkdir(parents=True, exist_ok=True)
 
-        # Clica na pasta para abrir seu conteúdo
+        # Habilita download via CDP para o destino configurado
+        try:
+            self.driver.execute_cdp_cmd(
+                "Page.setDownloadBehavior",
+                {"behavior": "allow", "downloadPath": str(destino_path)}
+            )
+        except Exception:
+            pass
+
         elem = pasta_info.get("elemento")
         if elem:
+            clicado = False
             try:
-                elem.click()
-                time.sleep(3)
+                botoes = elem.find_elements(By.TAG_NAME, "button")
+                for b in botoes:
+                    aria = (b.get_attribute("aria-label") or "").lower()
+                    if any(k in aria for k in ["mais", "ações", "actions"]):
+                        self.driver.execute_script("arguments[0].click();", b)
+                        time.sleep(1.5)
+                        menu_items = self.driver.find_elements(By.CSS_SELECTOR, "[role='menuitem'], button")
+                        for mi in menu_items:
+                            txt = (mi.text or mi.get_attribute("name") or "").strip().lower()
+                            if "baixar" in txt or "download" in txt:
+                                self.driver.execute_script("arguments[0].click();", mi)
+                                clicado = True
+                                break
+                        if clicado:
+                            break
             except Exception:
                 pass
 
-        # Aguarda a conclusão e validação do download
-        arquivos_baixados = list(destino_path.glob("*"))
-        return arquivos_baixados
+            if not clicado:
+                try:
+                    chks = elem.find_elements(By.CSS_SELECTOR, "[role='checkbox'], [data-automationid='DetailsRowCheck']")
+                    if chks:
+                        self.driver.execute_script("arguments[0].click();", chks[0])
+                    else:
+                        elem.click()
+                    time.sleep(1)
+                    btns_top = self.driver.find_elements(
+                        By.CSS_SELECTOR,
+                        "button[name='Download'], button[name='Baixar'], [data-automationid='downloadCommand']"
+                    )
+                    for btn in btns_top:
+                        if btn.is_displayed():
+                            self.driver.execute_script("arguments[0].click();", btn)
+                            break
+                except Exception:
+                    pass
+
+        # Aguarda a conclusão do download (até 30 segundos)
+        inicio = time.time()
+        while time.time() - inicio < 30:
+            arquivos = list(destino_path.glob("*"))
+            non_temp = [f for f in arquivos if f.is_file() and not f.name.endswith((".crdownload", ".tmp", ".partial"))]
+            if non_temp:
+                for f in list(non_temp):
+                    if f.suffix.lower() == ".zip":
+                        try:
+                            import zipfile
+                            with zipfile.ZipFile(f, 'r') as zip_ref:
+                                zip_ref.extractall(destino_path)
+                            f.unlink()
+                        except Exception:
+                            pass
+                return [f for f in destino_path.glob("*") if f.is_file()]
+            time.sleep(1)
+
+        return [f for f in destino_path.glob("*") if f.is_file()]
 
     def validar_download(self, destino_croqui: Path) -> bool:
         """

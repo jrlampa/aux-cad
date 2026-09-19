@@ -232,9 +232,11 @@ def test_localizar_pasta_sob_sucesso():
 def test_baixar_croqui(tmp_path: Path):
     """Valida chamada a baixar_croqui."""
     client = SharePointClient(login="user", senha="pwd")
+    client.driver = MagicMock()
     dest = tmp_path / "croqui_down"
 
     mock_elem = MagicMock()
+    mock_elem.find_elements.return_value = []
     pasta_info = {"elemento": mock_elem, "sob": "A057349839"}
 
     # Cria arquivo fake para simular download concluído

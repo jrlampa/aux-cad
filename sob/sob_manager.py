@@ -13,6 +13,10 @@ from pathlib import Path
 import sys
 from typing import Any, Dict, Optional, Tuple
 
+_current_dir = str(Path(__file__).resolve().parent)
+if _current_dir not in sys.path:
+    sys.path.insert(0, _current_dir)
+
 from sob_core import (
     normalizar_sob,
     validar_sob,
@@ -285,7 +289,9 @@ def main():
     )
 
     if args.json_out:
-        with open(args.json_out, "w", encoding="utf-8") as f:
+        out_path = Path(args.json_out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
             json.dump(resultado, f, indent=2, ensure_ascii=False)
 
     sys.exit(0 if resultado["sucesso"] else 1)
