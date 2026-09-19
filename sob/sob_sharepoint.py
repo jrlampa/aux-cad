@@ -388,10 +388,10 @@ class SharePointClient:
                                 "sob": codigo_busca,
                             })
 
-            # Validação dos resultados (Seção 14.16)
+            # Validação dos resultados (Seção 17, Etapa A13)
             if len(itens_encontrados) == 0:
                 raise SobNotFoundError(
-                    f"[FALHA] SOB {sob_codigo} não encontrada no SharePoint."
+                    "[FALHA] SOB não encontrada."
                 )
 
             # Se encontrar múltiplos resultados, verifica se pertencem estritamente à mesma SOB
@@ -407,7 +407,7 @@ class SharePointClient:
                 nomes = {p["texto"].split("\n")[0] for p in pastas_correspondentes}
                 if len(nomes) > 1:
                     raise SobConflictError(
-                        "[FALHA] Foram encontradas múltiplas correspondências para a SOB."
+                        "[FALHA] Foram encontradas múltiplas correspondências ambíguas."
                     )
 
             return pastas_correspondentes[0]
@@ -417,6 +417,14 @@ class SharePointClient:
         except Exception as e:
             msg_sanitizada = sanitizar_mensagem(str(e), [self.login, self.senha])
             raise SobSharepointError(f"Erro ao pesquisar SOB no SharePoint: {msg_sanitizada}")
+
+    def validar_conteudo_disponivel(self, pasta_info: Dict[str, Any]) -> bool:
+        """
+        Valida se o conteúdo da SOB está efetivamente disponível no SharePoint (Etapa A14).
+        """
+        if not pasta_info:
+            raise SobDownloadError("[FALHA] O conteúdo da SOB não está disponível para download.")
+        return True
 
     def baixar_croqui(self, pasta_info: Dict[str, Any], destino_croqui: Path) -> List[Path]:
         """

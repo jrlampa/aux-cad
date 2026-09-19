@@ -84,8 +84,8 @@
 
   (if (or (= sobId "") (<= (strlen sobId) 2))
     (progn
-      (princ "\n[FALHA] SOB inválida.")
-      (sob-alert "SOB inválida.")
+      (princ "\n[FALHA] Número da SOB inválido.")
+      (sob-alert "Número da SOB inválido.")
       (list (cons "sucesso" nil) (cons "erro" "SOB_INVALIDA"))
     )
     (progn

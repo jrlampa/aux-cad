@@ -59,7 +59,7 @@ def normalizar_sob(sob_raw: str) -> str:
 
     if not limpo:
         raise SobValidationError(
-            "[FALHA] SOB inválida.\nInforme uma SOB válida."
+            "[FALHA] Número da SOB inválido.\nInforme uma SOB válida."
         )
 
     return f"SOB_{limpo}"
@@ -82,7 +82,7 @@ def obter_sob_id(sob_raw: str) -> str:
     sob_id = normalizada[4:]
     if not validar_sob_id(sob_id):
         raise SobValidationError(
-            "[FALHA] SOB inválida.\nInforme uma SOB válida."
+            "[FALHA] Número da SOB inválido.\nInforme uma SOB válida."
         )
     return sob_id
 
@@ -237,7 +237,7 @@ def criar_estrutura_sob(
 
     if not validar_permissao_criacao(destino_path):
         raise SobPermissionError(
-            "[FALHA] Não foi possível criar a pasta da SOB no diretório selecionado."
+            "[FALHA] O diretório selecionado não permite a criação da estrutura da SOB."
         )
 
     sob_root = destino_path / pasta_sob
@@ -249,14 +249,14 @@ def criar_estrutura_sob(
 
     croqui_dir = sob_root / NOME_PASTA_CROQUI
 
-    # Criação controlada e verificação física
+    # Criação controlada e verificação física (Etapas B01 e B02)
     try:
         sob_root.mkdir(parents=False, exist_ok=False)
     except Exception as e:
-        raise IOError(f"[FALHA] Não foi possível criar o diretório: {sob_root} ({e})")
+        raise IOError(f"[FALHA] Não foi possível criar SOB_ROOT: {sob_root} ({e})")
 
     if not sob_root.is_dir():
-        raise IOError(f"[FALHA] Não foi possível criar o diretório: {sob_root}")
+        raise IOError(f"[FALHA] Não foi possível criar SOB_ROOT: {sob_root}")
 
     try:
         croqui_dir.mkdir(parents=False, exist_ok=False)
@@ -266,10 +266,14 @@ def criar_estrutura_sob(
             sob_root.rmdir()
         except Exception:
             pass
-        raise IOError(f"[FALHA] Não foi possível criar o diretório: {croqui_dir} ({e})")
+        raise IOError(f"[FALHA] Não foi possível criar CROQUI_DIR: {croqui_dir} ({e})")
 
     if not croqui_dir.is_dir():
-        raise IOError(f"[FALHA] Não foi possível criar o diretório: {croqui_dir}")
+        try:
+            sob_root.rmdir()
+        except Exception:
+            pass
+        raise IOError(f"[FALHA] Não foi possível criar CROQUI_DIR: {croqui_dir}")
 
     return sob_root, croqui_dir
 

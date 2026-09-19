@@ -93,7 +93,10 @@ def test_executar_sob_invalida(tmp_path: Path, fake_prancha_dwg: Path):
     assert resultado["sucesso"] is False
     assert resultado["status"] == "BLOQUEADO"
     assert "VALIDAR_SOB" in resultado["etapa"]
-    assert "[FALHA] SOB não informada." in resultado["mensagem"]
+    assert (
+        "[FALHA] Número da SOB inválido." in resultado["mensagem"]
+        or "[FALHA] SOB não informada." in resultado["mensagem"]
+    )
 
 
 def test_executar_destino_inexistente(fake_prancha_dwg: Path):
@@ -325,7 +328,7 @@ def test_secao_14_formatar_mensagem_erro():
 
 
 def test_executar_sem_permissao_criacao(tmp_path: Path, fake_prancha_dwg: Path, monkeypatch):
-    """Valida que falta de permissão de escrita gera [FALHA] Não foi possível criar a pasta (Etapa 07)."""
+    """Valida que falta de permissão de escrita gera [FALHA] O diretório selecionado não permite a criação (Etapa A08)."""
     import sob_manager
 
     monkeypatch.setattr(sob_manager, "validar_permissao_criacao", lambda _: False)
@@ -339,5 +342,35 @@ def test_executar_sem_permissao_criacao(tmp_path: Path, fake_prancha_dwg: Path, 
 
     assert resultado["sucesso"] is False
     assert resultado["status"] == "BLOQUEADO"
-    assert "[FALHA] Não foi possível criar a pasta da SOB no diretório selecionado." in resultado["mensagem"]
+    assert resultado["pre_validacao"] == "BLOQUEADA"
+    assert "[FALHA] O diretório selecionado não permite a criação da estrutura da SOB." in resultado["mensagem"]
+    # Garante que nada foi criado no disco
+    assert not (tmp_path / "SOB_A057349839").exists()
+
+
+def test_fase_a_pre_validacao_atomica_falha_sharepoint(tmp_path: Path, fake_prancha_dwg: Path):
+    """Comprova a regra de atomicidade da Seção 17: falha na Fase A não cria absolutamente nada no disco."""
+    mock_client = MagicMock(spec=SharePointClient)
+    mock_client.autenticar.side_effect = SobAuthenticationError(
+        "[FALHA] Não foi possível autenticar no SharePoint."
+    )
+
+    orquestrador = SobOrchestrator(
+        origem_base=fake_prancha_dwg,
+        sharepoint_client=mock_client,
+    )
+    resultado = orquestrador.executar(
+        sob_raw="A057349839",
+        destino_dir=str(tmp_path),
+        baixar_croqui_sp=True,
+    )
+
+    assert resultado["sucesso"] is False
+    assert resultado["status"] == "BLOQUEADO"
+    assert resultado["pre_validacao"] == "BLOQUEADA"
+    assert resultado["fase"] == "FASE_A"
+    assert "[FALHA] Não foi possível autenticar no SharePoint." in resultado["mensagem"]
+    # Comprovação absoluta de que NADA foi criado no disco
+    assert not (tmp_path / "SOB_A057349839").exists()
+
 

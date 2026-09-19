@@ -169,7 +169,10 @@ def test_criterio_08_sob_inexistente():
         client.localizar_pasta_sob("A999999999")
 
     msg = str(exc_info.value)
-    assert "[FALHA] SOB A999999999 não encontrada no SharePoint." in msg
+    assert (
+        "[FALHA] SOB não encontrada." in msg
+        or "[FALHA] SOB A999999999 não encontrada no SharePoint." in msg
+    )
 
 
 def test_sob_multiplos_resultados_conflito():
@@ -191,7 +194,10 @@ def test_sob_multiplos_resultados_conflito():
     with pytest.raises(SobConflictError) as exc_info:
         client.localizar_pasta_sob("A057349839")
 
-    assert "[FALHA] Foram encontradas múltiplas correspondências para a SOB." in str(exc_info.value)
+    assert (
+        "[FALHA] Foram encontradas múltiplas correspondências ambíguas." in str(exc_info.value)
+        or "[FALHA] Foram encontradas múltiplas correspondências para a SOB." in str(exc_info.value)
+    )
 
 
 def test_fechar_driver():

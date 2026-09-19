@@ -295,45 +295,55 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 
 ### 18. `sob/` (Projeto Automação de Preparação de Projeto SOB - SharePoint & CAD)
 - **Conceito & Contexto**: Automatiza o ciclo de preparação inicial de um projeto de distribuição a partir de uma SOB informada pelo usuário no AutoCAD, integrando o download de croquis do SharePoint da HBT/Enel com a geração do arquivo-base de desenho `BASE_SOB_DESENHO.dwg`.
-- **Ordem Oficial das Etapas — Fluxo Completo (Seção 17 - 12 Fases e 28 Etapas Sequenciais)**:
-  - `FASE 1 - INICIALIZAÇÃO`: Comando reconhecido, solução carregada e ambiente inicializado (`c:SOB`, `c:NOVASOB`, `c:PREPARAR_SOB`).
-  - `FASE 2 - IDENTIFICAÇÃO DA SOB`: Solicitação da SOB e normalização estrita (`SOB_ID` canônico e `SOB_NAME = SOB_<SOB_ID>`). Falha: `[FALHA] SOB inválida.`.
-  - `FASE 3 - DEFINIÇÃO DO DESTINO`: Solicitação de `DESTINATION_ROOT` via BrowseForFolder nativo. Cancelamento: `[INFO] Operação cancelada pelo usuário.`. Derivação de `SOB_ROOT = DESTINATION_ROOT\SOB_NAME`.
-  - `FASE 4 - PROTEÇÃO CONTRA CONFLITOS`: Verificação prévia de existência de `SOB_ROOT` (`[FALHA] A pasta da SOB já existe.`, não sobrescrever/apagar/mesclar) e validação de permissão de escrita em `DESTINATION_ROOT` (`[FALHA] Não foi possível criar a pasta da SOB no diretório selecionado.`).
-  - `FASE 5 - CRIAÇÃO DA ESTRUTURA LOCAL`: Criação e validação física de `SOB_ROOT` e subpasta `CROQUI_DIR = SOB_ROOT\CROQUI`.
-  - `FASE 6 - PREPARAÇÃO DO ARQUIVO-BASE`: Validação da existência e legibilidade de `BASE_TEMPLATE` (`modelos/prancha.dwg`). Falha: `[FALHA] Arquivo-modelo prancha.dwg não encontrado ou inacessível.`. Derivação de `BASE_DWG = SOB_ROOT\BASE_SOB_DESENHO.dwg` e validação de que não existe antes da cópia.
-  - `FASE 7 - SHAREPOINT`: Leitura segura e isolada de `SHAREPOINT_ID` e `SHAREPOINT_SENHA` do `.env`. Autenticação validada (`[FALHA] Não foi possível autenticar no SharePoint.`). Localização unívoca pelo `SOB_ID` puro (0 ou múltiplos bloqueiam).
-  - `FASE 8 - DOWNLOAD DO CROQUI`: Validação de `CROQUI_DIR`, download preservando estrutura e conferência estrita de integridade (sem temporários `.tmp`/`.crdownload` e sem arquivos de 0 bytes).
-  - `FASE 9 - CRIAÇÃO DO DWG DE TRABALHO`: Cópia preservando original (`BASE_TEMPLATE -> BASE_DWG`), verificação de integridade binária (tamanho > 0, cabeçalho `AC10`, hash SHA-256) e comprovação de que `BASE_TEMPLATE` permaneceu intacto (`hash_antes == hash_depois`).
-  - `FASE 10 - VALIDAÇÃO DA ESTRUTURA FINAL`: Conferência física obrigatória de `SOB_ROOT`, `CROQUI_DIR`, arquivos baixados, `BASE_DWG` e integridade do template antes de chamar o AutoCAD.
-  - `FASE 11 - ABERTURA NO AUTOCAD`: Abertura exclusiva de `BASE_DWG` e validação estrita do caminho absoluto aberto (`CURRENT_AUTOCAD_DWG == BASE_DWG`). Falha: `[FALHA CRÍTICA] O arquivo aberto não corresponde ao BASE_DWG esperado.`.
-  - `FASE 12 - CONCLUSÃO`: Checklist consolidado com 15 critérios atendidos antes de emitir `STATUS = CONCLUÍDO`.
-- `sob_core.py` (406 linhas):
+- **Arquitetura Oficial: Divisão Estrita em FASE A (Pré-Validação) e FASE B (Criação e Execução) — Seção 17**:
+  - **Princípio Fundamental de Atomicidade Não-Destrutiva**: Nenhuma criação de pasta (`SOB_ROOT`, `CROQUI_DIR`), cópia de DWG (`BASE_DWG`), download ou alteração de arquivos ocorre antes de a Fase A atingir `PRE_VALIDACAO = OK`. Se qualquer pré-condição falhar, nada é criado no disco.
+  - **FASE A — PRÉ-VALIDAÇÃO (Etapas A01 a A15)**:
+    - `A01`: Iniciar comando no AutoCAD (`SOB`, `NOVASOB`, `PREPARAR_SOB`), validar solução e ambiente.
+    - `A02 & A03`: Solicitar SOB e normalizar para `SOB_ID` e `SOB_NAME`. Falha: `[FALHA] Número da SOB inválido.`.
+    - `A04 & A05`: Selecionar e validar `DESTINATION_ROOT` via diálogo nativo Windows. Cancelamento: `[INFO] Operação cancelada pelo usuário.`.
+    - `A06`: Derivação canônica dos caminhos (`SOB_ROOT`, `CROQUI_DIR`, `BASE_DWG`, `BASE_TEMPLATE`).
+    - `A07`: Verificar conflito de `SOB_ROOT` pré-existente (`[FALHA] A pasta da SOB já existe.`). Não apaga/sobrescreve/mescla.
+    - `A08`: Validar possibilidade e permissão de criação em `DESTINATION_ROOT` (`[FALHA] O diretório selecionado não permite a criação da estrutura da SOB.`).
+    - `A09`: Validar existência, legibilidade e formato do `BASE_TEMPLATE` (`modelos/prancha.dwg`). Falha: `[FALHA] Arquivo-modelo prancha.dwg não encontrado ou inacessível.`.
+    - `A10`: Validar disponibilidade de `BASE_DWG` (`[FALHA] O arquivo BASE_SOB_DESENHO.dwg já existe no destino.`).
+    - `A11`: Validar credenciais no `.env` (`[FALHA] Credenciais do SharePoint não configuradas.`).
+    - `A12`: Autenticar no SharePoint (`[FALHA] Não foi possível autenticar no SharePoint.`).
+    - `A13`: Localizar SOB unívoca pelo `SOB_ID` puro (falhas: `[FALHA] SOB não encontrada.` ou `[FALHA] Foram encontradas múltiplas correspondências ambíguas.`).
+    - `A14`: Validar conteúdo disponível para download no SharePoint (`[FALHA] O conteúdo da SOB não está disponível para download.`).
+    - `A15`: Encerrar pré-validação (`PRE_VALIDACAO = OK`).
+  - **FASE B — CRIAÇÃO E EXECUÇÃO (Etapas B01 a B11 - Somente após PRE_VALIDACAO = OK)**:
+    - `B01 & B02`: Criar e validar fisicamente `SOB_ROOT` e `CROQUI_DIR` (falhas: `[FALHA] Não foi possível criar SOB_ROOT/CROQUI_DIR.`).
+    - `B03 & B04`: Baixar conteúdo para `CROQUI_DIR` e validar fisicamente (sem temporários `.tmp`/`.crdownload` e sem arquivos vazios).
+    - `B05, B06 & B07`: Copiar `BASE_TEMPLATE -> BASE_DWG`, validar integridade binária (tamanho > 0, cabeçalho `AC10`, hash SHA-256) e comprovar preservação do template original (`hash_antes == hash_depois`).
+    - `B08`: Validar estrutura física final completa (`SOB_ROOT`, `CROQUI_DIR`, conteúdo, `BASE_DWG`, template preservado).
+    - `B09 & B10`: Abrir exclusivamente `BASE_DWG` no AutoCAD e validar o caminho absoluto ativo `CURRENT_AUTOCAD_DWG == BASE_DWG` (`[OK] BASE_DWG correto aberto no AutoCAD.`).
+    - `B11`: Validação final do checklist de 21 critérios para emitir `STATUS = CONCLUÍDO`.
+- `sob_core.py` (407 linhas):
   - Normalização e validação robusta da SOB (`obter_sob_id`, `obter_sob_name`, `validar_sob_name`, `derivar_caminhos_sob`).
-  - Validação de permissão de escrita em diretórios (`validar_permissao_criacao` e `SobPermissionError`).
+  - Checagem não-destrutiva de permissão de escrita em diretórios (`validar_permissao_criacao` e `SobPermissionError`).
   - Proteção incondicional contra sobrescrita (`SobDirectoryExistsError` e `SobFileExistsError`).
   - Criação da estrutura canônica de diretórios (`SOB_ROOT` e subpasta `CROQUI`).
   - Cópia segura com conferência de hash SHA-256 e validação de cabeçalho DWG `AC10`.
   - Limpeza de rollback seguro para execuções incompletas (`remover_estrutura_incompleta`).
-- `sob_sharepoint.py` (554 linhas):
+- `sob_sharepoint.py` (544 linhas):
   - Carregamento seguro e isolado de credenciais do `.env` (`SHAREPOINT_ID` e `SHAREPOINT_SENHA`) com `dotenv_values` e parser resiliente sem vazamento para `os.environ`.
   - Zero exposição de senhas: sanitização rigorosa de logs, exceções e saídas do AutoCAD (`sanitizar_mensagem`).
   - Navegação e autenticação Microsoft Online com Edge/Chrome headless via Selenium (`SharePointClient`).
-  - Localização precisa da SOB na biblioteca `Documentos Compartilhados` utilizando o `SOB_ID` puro, com resolução de ambiguidades (`SobConflictError`) e tratamento de SOB inexistente (`SobNotFoundError`).
+  - Localização precisa da SOB na biblioteca `Documentos Compartilhados` utilizando o `SOB_ID` puro, resolução de ambiguidades (`SobConflictError`) e tratamento de SOB inexistente (`SobNotFoundError`).
+  - Método `validar_conteudo_disponivel` para conferência prévia na Fase A antes de qualquer alteração no disco.
   - Download validado para a pasta `CROQUI` via integração CDP (`Page.setDownloadBehavior`) e menu de contexto, com verificação de integridade e ausência de temporários (`.crdownload`, `.tmp`) ou arquivos vazios.
-- `sob_manager.py` (488 linhas):
-  - Orquestrador com máquina de estados rigorosamente ordenada de acordo com as 12 Fases e 28 Etapas da Seção 17.
-  - Validação de permissão de criação (Etapa 07) e validação precoce de `BASE_TEMPLATE` na Fase 6 antes do SharePoint.
-  - Formatação de erro padronizada da Seção 14.26 e logs estruturados canônicos (`[INFO] SOB: ...`, `[INFO] SOB_ROOT: ...`, `[INFO] CROQUI_DIR: ...`, `[INFO] BASE_DWG: ...`).
-  - Checklist completo de 15 condições para determinar `CONCLUÍDO` vs `BLOQUEADO`.
+- `sob_manager.py` (525 linhas):
+  - Orquestrador desacoplado com execução rigorosamente dividida em Fase A (Pré-Validação Não-Destrutiva) e Fase B (Criação e Execução).
+  - Rastreamento explícito: `pre_validacao: "OK" / "BLOQUEADA"` e `fase: "FASE_A" / "FASE_B"`.
+  - Checklist completo de 21 condições para determinar `CONCLUÍDO` vs `BLOQUEADO`.
   - CLI com suporte a `--sob`, `--destino`, `--sem-sharepoint`, `--abrir-cad` e `--json-out`.
-- `sob_cad_launcher.lsp` (350 linhas):
+- `sob_cad_launcher.lsp` (351 linhas):
   - Rotina AutoLISP com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`** e **`RECARREGAR_SOB`**.
   - Função operacional `(sob-executar-fluxo sobInput destPath abrirCad)` com verificação estrita de abertura de DWG (`CURRENT_AUTOCAD_DWG == BASE_DWG`).
-  - Mensagens canônicas de erro: `[FALHA] SOB inválida.`, `[FALHA] A pasta da SOB já existe.` e `[FALHA CRÍTICA] O arquivo aberto não corresponde ao BASE_DWG esperado.`.
+  - Mensagens canônicas oficiais: `[FALHA] Número da SOB inválido.`, `[FALHA] A pasta da SOB já existe.` e `[FALHA CRÍTICA] O arquivo aberto não corresponde ao BASE_DWG esperado.`.
   - Tratamento nativo de cancelamento pelo usuário sem falso erro (`[INFO] Operação cancelada pelo usuário.`).
 - **Cobertura & Testes**:
-  - `tests/test_sob_core.py` (17 testes), `tests/test_sob_sharepoint.py` (19 testes) e `tests/test_sob_manager.py` (14 testes).
-  - **50 testes unitários específicos no módulo `sob` (73% a 86% de cobertura nos componentes de domínio e orquestração)**.
-  - **Suíte global de não-regressão**: **206 testes unitários passando com 100% de sucesso** (`python -m pytest`).
+  - `tests/test_sob_core.py` (17 testes), `tests/test_sob_sharepoint.py` (19 testes) e `tests/test_sob_manager.py` (15 testes).
+  - **51 testes unitários específicos no módulo `sob` (72% a 87% de cobertura nos componentes de domínio e orquestração)**.
+  - **Suíte global de não-regressão**: **207 testes unitários passando com 100% de sucesso** (`python -m pytest`).
   - **Bateria de testes operacionais no AutoCAD 2026 Core Console**: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).

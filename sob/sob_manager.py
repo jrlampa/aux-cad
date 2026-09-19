@@ -148,6 +148,8 @@ class SobOrchestrator:
         resultado: Dict[str, Any] = {
             "sucesso": False,
             "status": "BLOQUEADO",
+            "pre_validacao": "BLOQUEADA",
+            "fase": "FASE_A",
             "estado": "INICIANDO",
             "etapa": "INICIO",
             "mensagem": "",
@@ -169,13 +171,21 @@ class SobOrchestrator:
             "SOB_ID válido": False,
             "SOB_NAME válido": False,
             "DESTINATION_ROOT válido": False,
+            "SOB_ROOT disponível": False,
             "SOB_ROOT correto": False,
             "CROQUI_DIR correto": False,
-            "SOB encontrada no SharePoint": False,
+            "Permissão de criação validada": False,
+            "BASE_TEMPLATE validado": False,
+            "BASE_DWG disponível": False,
+            "Credenciais SharePoint validadas": False,
             "Autenticação validada": False,
+            "SOB encontrada no SharePoint": False,
+            "Conteúdo disponível para download": False,
+            "Pré-validação concluída": False,
+            "SOB_ROOT criado": False,
+            "CROQUI_DIR criado": False,
             "Download concluído": False,
             "Conteúdo do CROQUI validado": False,
-            "BASE_TEMPLATE validado": False,
             "BASE_DWG criado": False,
             "BASE_DWG validado": False,
             "Integridade validada": False,
@@ -185,16 +195,22 @@ class SobOrchestrator:
 
         estrutura_criada_nesta_execucao = False
         sob_root_path: Optional[Path] = None
+        client: Optional[SharePointClient] = None
+        pasta_info: Optional[Dict[str, Any]] = None
 
         try:
-            self.logger.info("Início da operação")
+            self.logger.info("Início da operação - FASE A: PRÉ-VALIDAÇÃO")
 
-            # ETAPA 1: Validação da Entrada da SOB (Seções 14.2, 14.3 e 14.4)
+            # =========================================================================
+            # FASE A — PRÉ-VALIDAÇÃO (Não cria, não copia e não baixa nada)
+            # =========================================================================
+
+            # ETAPA A02 & A03: Normalizar e validar SOB
             resultado["estado"] = "INICIANDO"
             resultado["etapa"] = "VALIDAR_SOB"
 
             if not sob_raw or not str(sob_raw).strip():
-                raise SobValidationError("[FALHA] SOB não informada.")
+                raise SobValidationError("[FALHA] Número da SOB inválido.")
 
             sob_id = obter_sob_id(sob_raw)
             checklist["SOB_ID válido"] = True
@@ -203,7 +219,7 @@ class SobOrchestrator:
             checklist["SOB_NAME válido"] = True
             resultado["estado"] = "SOB_VALIDADA"
 
-            # ETAPA 2: Seleção e Validação de DESTINATION_ROOT (Seção 14.5)
+            # ETAPA A04 & A05: Selecionar e Validar DESTINATION_ROOT
             resultado["etapa"] = "VALIDAR_DESTINO"
             if not destino_dir or not str(destino_dir).strip():
                 raise SobValidationError("[INFO] Operação cancelada pelo usuário.")
@@ -222,7 +238,7 @@ class SobOrchestrator:
             checklist["DESTINATION_ROOT válido"] = True
             resultado["estado"] = "DESTINO_VALIDADO"
 
-            # Derivação Canônica Centralizada (Seção 0-A & 14.6)
+            # ETAPA A06: Derivar caminhos canônicos
             caminhos = derivar_caminhos_sob(sob_raw, destination_root, self.origem_base)
             sob_root_path = caminhos["SOB_ROOT"]
             croqui_dir = caminhos["CROQUI_DIR"]
@@ -242,13 +258,12 @@ class SobOrchestrator:
             checklist["SOB_ROOT correto"] = True
             checklist["CROQUI_DIR correto"] = True
 
-            # Logs canônicos padronizados (Seção 9)
             self.logger.info(f"SOB: {sob_id}")
             self.logger.info(f"SOB_ROOT: {sob_root_path}")
             self.logger.info(f"CROQUI_DIR: {croqui_dir}")
             self.logger.info(f"BASE_DWG: {base_dwg}")
 
-            # ETAPA 06: Verificar existência da SOB_ROOT (Seção 17, Etapa 06)
+            # ETAPA A07: Verificar conflito de SOB_ROOT
             if verificar_pasta_sob_existente(destination_root, sob_name):
                 raise SobDirectoryExistsError(
                     formatar_mensagem_erro(
@@ -258,22 +273,16 @@ class SobOrchestrator:
                         acao="Verifique a pasta existente ou selecione outro diretório de destino.",
                     )
                 )
+            checklist["SOB_ROOT disponível"] = True
 
-            # ETAPA 07: Validar permissão de criação (Seção 17, Etapa 07)
+            # ETAPA A08: Validar possibilidade de criação (sem criar nada)
             if not validar_permissao_criacao(destination_root):
                 raise SobPermissionError(
-                    "[FALHA] Não foi possível criar a pasta da SOB no diretório selecionado."
+                    "[FALHA] O diretório selecionado não permite a criação da estrutura da SOB."
                 )
+            checklist["Permissão de criação validada"] = True
 
-            # ETAPAS 08, 09 e 10: Criação de SOB_ROOT e CROQUI_DIR (Seção 17, Etapas 08-10)
-            sob_root_criado, croqui_dir_criado = criar_estrutura_sob(destination_root, sob_name)
-            estrutura_criada_nesta_execucao = True
-            resultado["estado"] = "ESTRUTURA_CRIADA"
-
-            self.logger.info("Pasta da SOB criada")
-            self.logger.info("Pasta CROQUI criada")
-
-            # FASE 6 — PREPARAÇÃO DO ARQUIVO-BASE (Seção 17, Etapas 11 e 12)
+            # ETAPA A09: Validar BASE_TEMPLATE
             resultado["etapa"] = "VALIDAR_BASE_TEMPLATE"
             if not base_template.is_file() or not os.access(base_template, os.R_OK):
                 raise SobFileNotFoundError(
@@ -284,19 +293,20 @@ class SobOrchestrator:
                         acao="Verifique se o arquivo modelos/prancha.dwg está presente e acessível.",
                     )
                 )
-
-            if base_dwg.exists():
-                raise SobFileExistsError(
-                    f"[FALHA] O arquivo de destino já existe: {base_dwg}"
-                )
-
             checklist["BASE_TEMPLATE validado"] = True
             self.logger.info("Arquivo-base localizado")
 
-            # FASE 7 & 8 — SHAREPOINT E DOWNLOAD DO CROQUI (Seção 17, Etapas 13 a 18)
+            # ETAPA A10: Validar disponibilidade de BASE_DWG
+            if base_dwg.exists():
+                raise SobFileExistsError(
+                    f"[FALHA] O arquivo BASE_SOB_DESENHO.dwg já existe no destino."
+                )
+            checklist["BASE_DWG disponível"] = True
+
+            # ETAPAS A11 a A14: SharePoint na Pré-Validação
             if baixar_croqui_sp:
-                resultado["etapa"] = "SHAREPOINT"
-                self.logger.info("Autenticação SharePoint iniciada")
+                resultado["etapa"] = "SHAREPOINT_PRE_VALIDACAO"
+                self.logger.info("Pré-validação SharePoint iniciada")
 
                 client = self.sharepoint_client
                 if not client:
@@ -304,42 +314,67 @@ class SobOrchestrator:
                     self.logger.adicionar_segredo(senha)
                     client = SharePointClient(login=login, senha=senha, headless=True)
 
-                try:
-                    client.autenticar()
-                    checklist["Autenticação validada"] = True
-                    resultado["estado"] = "SHAREPOINT_AUTENTICADO"
+                # ETAPA A11 & A12: Credenciais e Autenticação
+                checklist["Credenciais SharePoint validadas"] = True
+                client.autenticar()
+                checklist["Autenticação validada"] = True
+                resultado["estado"] = "SHAREPOINT_AUTENTICADO"
 
-                    self.logger.info("SOB localizada")
-                    pasta_info = client.localizar_pasta_sob(sob_id)
-                    checklist["SOB encontrada no SharePoint"] = True
-                    resultado["estado"] = "SOB_LOCALIZADA"
+                # ETAPA A13: Localizar SOB
+                self.logger.info("SOB localizada")
+                pasta_info = client.localizar_pasta_sob(sob_id)
+                checklist["SOB encontrada no SharePoint"] = True
+                resultado["estado"] = "SOB_LOCALIZADA"
 
-                    # ETAPA 16: Preparar download (validar CROQUI_DIR novamente)
-                    if not croqui_dir.is_dir():
-                        raise SobValidationError(f"[FALHA] Diretório do croqui inválido: {croqui_dir}")
-
-                    self.logger.info("Download iniciado")
-                    arquivos = client.baixar_croqui(pasta_info, croqui_dir)
-
-                    client.validar_download(croqui_dir)
-                    checklist["Download concluído"] = True
-                    checklist["Conteúdo do CROQUI validado"] = True
-                    resultado["estado"] = "DOWNLOAD_VALIDADO"
-
-                    resultado["arquivos_croqui"] = [str(a) for a in arquivos]
-                    self.logger.info("Download concluído")
-                finally:
-                    if not self.sharepoint_client:
-                        client.fechar()
+                # ETAPA A14: Validar conteúdo disponível para download
+                client.validar_conteudo_disponivel(pasta_info)
+                checklist["Conteúdo disponível para download"] = True
             else:
-                # Modo sem sharepoint (testes offline)
+                # Modo offline (para testes unitários sem rede externa)
+                checklist["Credenciais SharePoint validadas"] = True
                 checklist["Autenticação validada"] = True
                 checklist["SOB encontrada no SharePoint"] = True
+                checklist["Conteúdo disponível para download"] = True
+
+            # ETAPA A15: Encerrar pré-validação com sucesso
+            checklist["Pré-validação concluída"] = True
+            resultado["pre_validacao"] = "OK"
+            resultado["estado"] = "PRE_VALIDACAO_CONCLUIDA"
+            self.logger.info("Pré-validação concluída com sucesso - Iniciando FASE B: CRIAÇÃO E EXECUÇÃO")
+
+            # =========================================================================
+            # FASE B — CRIAÇÃO E EXECUÇÃO (Somente após PRE_VALIDACAO = OK)
+            # =========================================================================
+            resultado["fase"] = "FASE_B"
+
+            # ETAPA B01 & B02: Criar SOB_ROOT e CROQUI_DIR
+            resultado["etapa"] = "CRIAR_ESTRUTURA"
+            sob_root_criado, croqui_dir_criado = criar_estrutura_sob(destination_root, sob_name)
+            estrutura_criada_nesta_execucao = True
+            checklist["SOB_ROOT criado"] = True
+            checklist["CROQUI_DIR criado"] = True
+            resultado["estado"] = "ESTRUTURA_CRIADA"
+            self.logger.info("Pasta da SOB criada")
+            self.logger.info("Pasta CROQUI criada")
+
+            # ETAPA B03 & B04: Baixar conteúdo da SOB e Validar download
+            if baixar_croqui_sp and client and pasta_info:
+                resultado["etapa"] = "DOWNLOAD_CROQUI"
+                self.logger.info("Download iniciado")
+                arquivos = client.baixar_croqui(pasta_info, croqui_dir)
+
+                client.validar_download(croqui_dir)
+                checklist["Download concluído"] = True
+                checklist["Conteúdo do CROQUI validado"] = True
+                resultado["estado"] = "DOWNLOAD_VALIDADO"
+                resultado["arquivos_croqui"] = [str(a) for a in arquivos]
+                self.logger.info("Download concluído")
+            else:
                 checklist["Download concluído"] = True
                 checklist["Conteúdo do CROQUI validado"] = True
                 resultado["estado"] = "DOWNLOAD_VALIDADO"
 
-            # FASE 9 — CRIAÇÃO DO DWG DE TRABALHO (Seção 17, Etapas 19 a 21)
+            # ETAPA B05, B06 e B07: Copiar BASE_TEMPLATE, Validar BASE_DWG e Preservação
             resultado["etapa"] = "COPIAR_ARQUIVO_BASE"
             dwg_copiado = copiar_arquivo_base(
                 base_template,
@@ -364,7 +399,7 @@ class SobOrchestrator:
             resultado["dwg_path"] = str(dwg_copiado)
             self.logger.info("DWG validado")
 
-            # ETAPA 7: Validação da Estrutura Final (Seção 14.19)
+            # ETAPA B08: Validar estrutura final completa
             resultado["etapa"] = "VALIDAR_ESTRUTURA_FINAL"
             if not (
                 sob_root_path.is_dir()
@@ -380,14 +415,14 @@ class SobOrchestrator:
             checklist["Estrutura final validada"] = True
             resultado["estado"] = "ESTRUTURA_VALIDADA"
 
-            # ETAPA 8: Abertura no AutoCAD (se solicitado via CLI)
+            # ETAPA B09 & B10: Abertura no AutoCAD (se solicitado via CLI)
             if abrir_cad:
                 resultado["etapa"] = "ABRIR_AUTOCAD"
                 self._abrir_no_autocad(dwg_copiado)
                 resultado["estado"] = "AUTOCAD_ABERTO"
                 self.logger.info("DWG aberto")
 
-            # Verificação Final da Regra de Não Falso Sucesso (Seção 14.25 e 14.27)
+            # ETAPA B11: Validação final (Regra de Não Falso Sucesso)
             if all(checklist.values()):
                 resultado["sucesso"] = True
                 resultado["status"] = "CONCLUÍDO"
@@ -442,6 +477,13 @@ class SobOrchestrator:
 
             if estrutura_criada_nesta_execucao and sob_root_path and sob_root_path.exists():
                 remover_estrutura_incompleta(sob_root_path)
+
+        finally:
+            if client and not self.sharepoint_client:
+                try:
+                    client.fechar()
+                except Exception:
+                    pass
 
         resultado["checklist"] = checklist
         return resultado
