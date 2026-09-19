@@ -295,40 +295,43 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 
 ### 18. `sob/` (Projeto Automação de Preparação de Projeto SOB - SharePoint & CAD)
 - **Conceito & Contexto**: Automatiza o ciclo de preparação inicial de um projeto de distribuição a partir de uma SOB informada pelo usuário no AutoCAD, integrando o download de croquis do SharePoint da HBT/Enel com a geração do arquivo-base de desenho `BASE_SOB_DESENHO.dwg`.
-- **Padronização Canônica Obrigatória (Seção 0-A)**:
+- **Padronização Canônica Obrigatória (Seção 0-A) & Validações Rigorosas (Seção 14)**:
   - `SOB_ID`: Número puro informado pelo usuário (ex: `A057349839`), sem prefixo. Utilizado para busca no SharePoint, logs, validações e identificação interna.
-  - `SOB_NAME`: Nome padronizado da pasta local (`"SOB_" + SOB_ID`, ex: `SOB_A057349839`).
+  - `SOB_NAME`: Nome padronizado da pasta local (`"SOB_" + SOB_ID`, ex: `SOB_A057349839`). Valida ausência de caracteres proibidos no SO (`<>:"/\|?*`), separadores de diretório e duplicações (`SOB_SOB_...`).
   - `DESTINATION_ROOT`: Diretório escolhido pelo usuário no diálogo Windows (ex: `D:\Projetos\ENEL`).
-  - `SOB_ROOT`: Diretório raiz do projeto da SOB (`DESTINATION_ROOT\SOB_NAME`).
+  - `SOB_ROOT`: Diretório raiz do projeto da SOB (`DESTINATION_ROOT\SOB_NAME`). Bloqueia categoricamente se já existir, evitando sobrescrita ou mistura de projetos.
   - `CROQUI_DIR`: Subpasta do conteúdo baixado (`SOB_ROOT\CROQUI`).
   - `BASE_TEMPLATE`: Arquivo-modelo original mantido intacto (`modelos/prancha.dwg`).
-  - `BASE_DWG`: Arquivo de trabalho criado na raiz da SOB (`SOB_ROOT\BASE_SOB_DESENHO.dwg`).
+  - `BASE_DWG`: Arquivo de trabalho criado na raiz da SOB (`SOB_ROOT\BASE_SOB_DESENHO.dwg`). Bloqueia se o arquivo já existir antes da cópia.
   - Derivação centralizada: `SOB_ID -> SOB_NAME -> DESTINATION_ROOT -> SOB_ROOT -> CROQUI_DIR -> BASE_DWG`.
-- `sob_core.py` (223 linhas):
-  - Normalização e validação robusta da SOB (`obter_sob_id`, `obter_sob_name`, `normalizar_sob`, `validar_sob`, `derivar_caminhos_sob`).
-  - Proteção incondicional contra sobrescrita de pastas existentes (`SobDirectoryExistsError`), garantindo que nenhum arquivo existente seja apagado, sobrescrito ou misturado.
+- **Validação de Integridade & Rollback Seguro (Seção 14)**:
+  - Hash SHA-256 binário comparado entre `BASE_TEMPLATE` e `BASE_DWG` pós-cópia.
+  - Verificação de preservação do template original antes e depois da cópia (`hash_antes == hash_depois`).
+  - Limpeza controlada (`remover_estrutura_incompleta`) em caso de falhas intermediárias, sem jamais tocar em pastas pré-existentes.
+  - Rastreamento explícito de estados da operação: `INICIANDO` -> `SOB_VALIDADA` -> `DESTINO_VALIDADO` -> `ESTRUTURA_CRIADA` -> `SHAREPOINT_AUTENTICADO` -> `SOB_LOCALIZADA` -> `DOWNLOAD_VALIDADO` -> `BASE_COPIADO` -> `ESTRUTURA_VALIDADA` -> `AUTOCAD_ABERTO` -> `CONCLUÍDO`.
+  - Regra de não falso sucesso: checklist com 15 itens obrigatórios. Falha em qualquer item define `STATUS = BLOQUEADO`.
+- `sob_core.py` (380 linhas):
+  - Normalização e validação robusta da SOB (`obter_sob_id`, `obter_sob_name`, `validar_sob_name`, `derivar_caminhos_sob`).
+  - Proteção incondicional contra sobrescrita (`SobDirectoryExistsError` e `SobFileExistsError`).
   - Criação da estrutura canônica de diretórios (`SOB_ROOT` e subpasta `CROQUI`).
-  - Cópia segura do template oficial `modelos/prancha.dwg` para `BASE_DWG`, mantendo o modelo original 100% intacto.
-  - Validação de integridade de arquivos DWG (`validar_arquivo_dwg` com verificação de cabeçalho `AC10`).
-- `sob_sharepoint.py` (553 linhas):
+  - Cópia segura com conferência de hash SHA-256 e validação de cabeçalho DWG `AC10`.
+  - Limpeza de rollback seguro para execuções incompletas (`remover_estrutura_incompleta`).
+- `sob_sharepoint.py` (554 linhas):
   - Carregamento seguro e isolado de credenciais do `.env` (`SHAREPOINT_ID` e `SHAREPOINT_SENHA`) com `dotenv_values` e parser resiliente sem vazamento para `os.environ`.
   - Zero exposição de senhas: sanitização rigorosa de logs, exceções e saídas do AutoCAD (`sanitizar_mensagem`).
   - Navegação e autenticação Microsoft Online com Edge/Chrome headless via Selenium (`SharePointClient`).
-  - Localização precisa da SOB na biblioteca `Documentos Compartilhados` utilizando prioritariamente o `SOB_ID` puro, com resolução de ambiguidades (`SobConflictError`) e tratamento de SOB inexistente (`SobNotFoundError`).
-  - Download validado para a pasta `CROQUI` via integração CDP (`Page.setDownloadBehavior`) e acionamento de menu de contexto, com verificação de integridade e ausência de arquivos temporários (`.crdownload`, `.tmp`) ou corrompidos de zero bytes.
-- `sob_manager.py` (335 linhas):
-  - Orquestrador de fluxo com máquina de estados e logging canônico passo a passo formatado (`[INFO] SOB: ...`, `[INFO] SOB_ROOT: ...`, `[INFO] CROQUI_DIR: ...`, `[INFO] BASE_DWG: ...`).
+  - Localização precisa da SOB na biblioteca `Documentos Compartilhados` utilizando o `SOB_ID` puro, com resolução de ambiguidades (`SobConflictError`) e tratamento de SOB inexistente (`SobNotFoundError`).
+  - Download validado para a pasta `CROQUI` via integração CDP (`Page.setDownloadBehavior`) e menu de contexto, com verificação de integridade e ausência de temporários (`.crdownload`, `.tmp`) ou arquivos vazios.
+- `sob_manager.py` (470 linhas):
+  - Orquestrador com máquina de estados, formatação de erro padronizada da Seção 14.26 e logs estruturados canônicos (`[INFO] SOB: ...`, `[INFO] SOB_ROOT: ...`, `[INFO] CROQUI_DIR: ...`, `[INFO] BASE_DWG: ...`).
+  - Checklist completo de 15 condições para determinar `CONCLUÍDO` vs `BLOQUEADO`.
   - CLI com suporte a `--sob`, `--destino`, `--sem-sharepoint`, `--abrir-cad` e `--json-out`.
-  - Tratamento de todos os 16 cenários de erro do fluxo com mensagens claras em pt-BR.
-- `sob_cad_launcher.lsp` (270 linhas):
+- `sob_cad_launcher.lsp` (350 linhas):
   - Rotina AutoLISP com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`** e **`RECARREGAR_SOB`**.
-  - Função operacional `(sob-executar-fluxo sobInput destPath abrirCad)` com derivação canônica centralizada.
-  - Solicitação no prompt: `Informe o número da SOB:`.
-  - Diálogo nativo do Windows de seleção de pasta: `Selecione onde a pasta da SOB deverá ser criada.`.
-  - Validação prévia de existência de pasta e execução do orquestrador em segundo plano.
-  - Abertura automática de `BASE_DWG` no AutoCAD via ActiveX `(vla-open ...)` ao término.
+  - Função operacional `(sob-executar-fluxo sobInput destPath abrirCad)` com verificação estrita de abertura de DWG (`CURRENT_AUTOCAD_DWG == BASE_DWG`).
+  - Tratamento nativo de cancelamento pelo usuário sem falso erro (`[INFO] Operação cancelada pelo usuário.`).
 - **Cobertura & Testes**:
-  - `tests/test_sob_core.py` (12 testes), `tests/test_sob_sharepoint.py` (19 testes) e `tests/test_sob_manager.py` (10 testes).
-  - **41 testes específicos com cobertura total no módulo `sob`**.
-  - **Suíte global de não-regressão**: **197 testes unitários passando com 100% de sucesso** (`python -m pytest`).
-  - **Bateria de testes operacionais no AutoCAD 2026**: 12/12 **PASS** (AUTOCAD-01 a AUTOCAD-12).
+  - `tests/test_sob_core.py` (17 testes), `tests/test_sob_sharepoint.py` (19 testes) e `tests/test_sob_manager.py` (13 testes).
+  - **49 testes unitários específicos no módulo `sob` (81% a 100% de cobertura nos componentes de domínio e orquestração)**.
+  - **Suíte global de não-regressão**: **205 testes unitários passando com 100% de sucesso** (`python -m pytest`).
+  - **Bateria de testes operacionais no AutoCAD 2026 Core Console**: **PASS** em todos os cenários.

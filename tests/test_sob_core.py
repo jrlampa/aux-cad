@@ -101,8 +101,8 @@ def test_criterio_09_protecao_pasta_existente(tmp_path: Path):
         criar_estrutura_sob(tmp_path, pasta_sob)
 
     msg = str(exc_info.value)
-    assert "A pasta da SOB já existe no local selecionado." in msg
-    assert "Nenhum arquivo foi sobrescrito." in msg
+    assert "A pasta da SOB já existe." in msg
+    assert "Operação interrompida para evitar sobrescrita ou mistura de projetos." in msg
 
     # Garante que o arquivo sentinela permanece 100% intacto
     assert arquivo_sentinela.exists()
@@ -212,4 +212,118 @@ def test_padronizacao_secao_0a_nomenclatura(tmp_path: Path):
     assert caminhos["BASE_DWG"] == (dest_root / "SOB_A057349839" / NOME_ARQUIVO_BASE_DWG).resolve()
     assert caminhos["CROQUI_DIR"].name == "CROQUI"
     assert caminhos["BASE_DWG"].name == "BASE_SOB_DESENHO.dwg"
+
+
+def test_secao_14_validar_sob_name():
+    """Valida regras estritas da Seção 14.4 para SOB_NAME."""
+    from sob_core import validar_sob_name
+
+    assert validar_sob_name("SOB_A057349839") is True
+    assert validar_sob_name("SOB_1234567") is True
+
+    # Separadores de diretório proibidos
+    assert validar_sob_name("SOB_A0573/49839") is False
+    assert validar_sob_name("SOB_A0573\\49839") is False
+
+    # Caracteres proibidos em diretórios Windows
+    assert validar_sob_name("SOB_A0573:49839") is False
+    assert validar_sob_name("SOB_A0573*49839") is False
+    assert validar_sob_name("SOB_A0573?49839") is False
+    assert validar_sob_name("SOB_A0573<49839") is False
+    assert validar_sob_name("SOB_A0573>49839") is False
+    assert validar_sob_name("SOB_A0573|49839") is False
+
+    # Proibição de repetição de prefixo SOB_SOB_
+    assert validar_sob_name("SOB_SOB_A057349839") is False
+    assert validar_sob_name("") is False
+
+
+def test_secao_14_bloqueio_base_dwg_preexistente(tmp_path: Path):
+    """Valida bloqueio se BASE_DWG já existir antes da cópia (Seção 14.10)."""
+    from sob_core import copiar_arquivo_base, SobFileExistsError
+
+    # Cria modelo fake
+    prancha = tmp_path / "prancha.dwg"
+    prancha.write_bytes(b"AC1032" + (b"\x00" * 150))
+
+    sob_root = tmp_path / "SOB_A057349839"
+    sob_root.mkdir()
+
+    # Pre-cria BASE_SOB_DESENHO.dwg
+    dwg_existente = sob_root / "BASE_SOB_DESENHO.dwg"
+    dwg_existente.write_bytes(b"AC1032" + (b"\x00" * 150))
+
+    with pytest.raises(SobFileExistsError) as exc_info:
+        copiar_arquivo_base(prancha, sob_root)
+
+    assert "[FALHA] O arquivo BASE_SOB_DESENHO.dwg já existe." in str(exc_info.value)
+
+
+def test_secao_14_integridade_hash_falha(tmp_path: Path, monkeypatch):
+    """Valida falha se houver divergência de hash pós-cópia (Seção 14.12)."""
+    from sob_core import copiar_arquivo_base, SobIntegrityError
+    import sob_core
+
+    prancha = tmp_path / "prancha.dwg"
+    prancha.write_bytes(b"AC1032" + (b"\x00" * 150))
+
+    sob_root = tmp_path / "SOB_A057349839"
+    sob_root.mkdir()
+
+    # Simula alteração do hash na validação de destino
+    contador = 0
+    def fake_hash(p):
+        nonlocal contador
+        contador += 1
+        return f"hash_fake_{contador}"
+
+    monkeypatch.setattr(sob_core, "calcular_hash_arquivo", fake_hash)
+
+    with pytest.raises(SobIntegrityError) as exc_info:
+        copiar_arquivo_base(prancha, sob_root)
+
+    assert "[FALHA] A cópia do arquivo-modelo não passou na validação de integridade." in str(exc_info.value)
+
+
+def test_secao_14_preservacao_arquivo_modelo_original(tmp_path: Path):
+    """Valida que o arquivo-modelo original permanece idêntico em bytes e hash (Seção 14.13)."""
+    from sob_core import copiar_arquivo_base, calcular_hash_arquivo
+
+    prancha = tmp_path / "prancha.dwg"
+    conteudo_bin = b"AC1032" + (b"\x00" * 250) + b"INTEGRIDADE_ABSOLUTA"
+    prancha.write_bytes(conteudo_bin)
+    hash_esperado = calcular_hash_arquivo(prancha)
+
+    sob_root = tmp_path / "SOB_A057349839"
+    sob_root.mkdir()
+
+    copiar_arquivo_base(prancha, sob_root)
+
+    assert prancha.exists()
+    assert prancha.read_bytes() == conteudo_bin
+    assert calcular_hash_arquivo(prancha) == hash_esperado
+
+
+def test_secao_14_remover_estrutura_incompleta(tmp_path: Path):
+    """Valida limpeza controlada de estrutura incompleta (Seção 14.8)."""
+    from sob_core import remover_estrutura_incompleta
+
+    # 1. Estrutura válida da SOB
+    sob_root = tmp_path / "SOB_A057349839"
+    sob_root.mkdir()
+    (sob_root / "CROQUI").mkdir()
+    (sob_root / "CROQUI" / "arq.txt").write_text("parcial")
+
+    removido = remover_estrutura_incompleta(sob_root)
+    assert removido is True
+    assert not sob_root.exists()
+
+    # 2. Pasta não SOB não pode ser removida por segurança
+    pasta_terceiro = tmp_path / "ProjetosImportantes"
+    pasta_terceiro.mkdir()
+    (pasta_terceiro / "segredo.txt").write_text("nao toque")
+
+    removido_terceiro = remover_estrutura_incompleta(pasta_terceiro)
+    assert removido_terceiro is False
+    assert pasta_terceiro.exists()
 

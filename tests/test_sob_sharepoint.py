@@ -36,7 +36,7 @@ def test_obter_credenciais_chaves_ausentes(tmp_path: Path):
 
     with pytest.raises(SobCredentialError) as exc_info:
         obter_credenciais_sharepoint(caminho_env=env_vazio)
-    assert "SHAREPOINT_ID" in str(exc_info.value)
+    assert "[FALHA] Credenciais do SharePoint não configuradas." in str(exc_info.value)
 
 
 def test_obter_credenciais_senha_ausente(tmp_path: Path):
@@ -46,7 +46,7 @@ def test_obter_credenciais_senha_ausente(tmp_path: Path):
 
     with pytest.raises(SobCredentialError) as exc_info:
         obter_credenciais_sharepoint(caminho_env=env_sem_senha)
-    assert "SHAREPOINT_SENHA" in str(exc_info.value)
+    assert "[FALHA] Credenciais do SharePoint não configuradas." in str(exc_info.value)
 
 
 def test_obter_credenciais_sucesso(tmp_path: Path):
@@ -85,12 +85,14 @@ def test_validar_download_sucesso(tmp_path: Path):
 
 
 def test_validar_download_vazio(tmp_path: Path):
-    """Rejeita diretório vazio."""
+    """Rejeita diretório vazio com mensagem da Seção 14.17."""
     croqui = tmp_path / "CROQUI"
     croqui.mkdir()
 
     client = SharePointClient(login="user", senha="pwd", headless=True)
-    assert client.validar_download(croqui) is False
+    with pytest.raises(SobDownloadIncompleteError) as exc_info:
+        client.validar_download(croqui)
+    assert "[FALHA] Download reportado como concluído, porém o conteúdo não foi encontrado em CROQUI_DIR." in str(exc_info.value)
 
 
 def test_validar_download_incompleto_crdownload(tmp_path: Path):
@@ -119,9 +121,7 @@ def test_criterio_07_falha_autenticacao():
     """
     TESTE 07 — Falha de autenticação:
     Com credencial inválida:
-    PROCESSO INTERROMPIDO
-    FALHA NA AUTENTICAÇÃO DO SHAREPOINT
-    Não prosseguir.
+    [FALHA] Não foi possível autenticar no SharePoint.
     """
     # 1. Testa verificação direta de mensagem de erro
     with pytest.raises(SobAuthenticationError) as exc_info1:
@@ -130,9 +130,7 @@ def test_criterio_07_falha_autenticacao():
         )
 
     msg1 = str(exc_info1.value)
-    assert "PROCESSO INTERROMPIDO" in msg1
-    assert "FALHA NA AUTENTICAÇÃO DO SHAREPOINT" in msg1
-    assert "Conta ou senha incorreta" in msg1
+    assert "[FALHA] Não foi possível autenticar no SharePoint." in msg1
 
     # 2. Testa fluxo completo no cliente quando URL permanece no login Microsoft
     client = SharePointClient(login="usuario_invalido@hbt.com.br", senha="senha_errada")
@@ -149,16 +147,14 @@ def test_criterio_07_falha_autenticacao():
             client.autenticar()
 
     msg2 = str(exc_info2.value)
-    assert "PROCESSO INTERROMPIDO" in msg2
-    assert "FALHA NA AUTENTICAÇÃO DO SHAREPOINT" in msg2
+    assert "[FALHA] Não foi possível autenticar no SharePoint." in msg2
 
 
 def test_criterio_08_sob_inexistente():
     """
     TESTE 08 — SOB inexistente:
     Com uma SOB inexistente:
-    SOB NÃO ENCONTRADA NO SHAREPOINT
-    Não criar um projeto incompleto.
+    [FALHA] SOB A999999999 não encontrada no SharePoint.
     """
     client = SharePointClient(login="user", senha="pwd")
     client._autenticado = True
@@ -173,7 +169,7 @@ def test_criterio_08_sob_inexistente():
         client.localizar_pasta_sob("A999999999")
 
     msg = str(exc_info.value)
-    assert "SOB NÃO ENCONTRADA NO SHAREPOINT" in msg
+    assert "[FALHA] SOB A999999999 não encontrada no SharePoint." in msg
 
 
 def test_sob_multiplos_resultados_conflito():
@@ -195,7 +191,7 @@ def test_sob_multiplos_resultados_conflito():
     with pytest.raises(SobConflictError) as exc_info:
         client.localizar_pasta_sob("A057349839")
 
-    assert "Múltiplos resultados conflitantes" in str(exc_info.value)
+    assert "[FALHA] Foram encontradas múltiplas correspondências para a SOB." in str(exc_info.value)
 
 
 def test_fechar_driver():
@@ -274,7 +270,7 @@ def test_autenticar_usuario_nao_reconhecido():
         with pytest.raises(SobAuthenticationError) as exc_info:
             client.autenticar()
 
-    assert "Usuário não reconhecido pela Microsoft" in str(exc_info.value)
+    assert "[FALHA] Não foi possível autenticar no SharePoint." in str(exc_info.value)
 
 
 def test_obter_credenciais_sem_dotenv(tmp_path: Path):

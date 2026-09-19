@@ -434,28 +434,26 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - `unifilar_cad.lsp`: Comandos **`UNIFILAR`** e **`PROTECAO`** gerando esquema em prancha, ramal geográfico interativo no ModelSpace a partir da coordenada real do KMZ ou atualização in-place dos textos técnicos da prancha.
 
 ### 17. Módulo Preparação de Projeto SOB (`sob/`)
-- **Padronização Canônica Obrigatória (Seção 0-A)**:
+- **Padronização Canônica Obrigatória (Seção 0-A) & Validações Rigorosas (Seção 14)**:
   - `SOB_ID`: Número puro informado pelo usuário (`A057349839`), utilizado para busca no SharePoint, logs e identificação interna.
-  - `SOB_NAME`: Nome padronizado da pasta local (`"SOB_" + SOB_ID`, ex: `SOB_A057349839`).
+  - `SOB_NAME`: Nome padronizado da pasta local (`"SOB_" + SOB_ID`, ex: `SOB_A057349839`). Validação estrita contra caracteres proibidos (`<>:"/\|?*`), separadores de pasta e duplicação (`SOB_SOB_...`).
   - `DESTINATION_ROOT`: Diretório escolhido pelo usuário no seletor Windows.
-  - `SOB_ROOT`: Diretório raiz do projeto (`DESTINATION_ROOT\SOB_NAME`).
+  - `SOB_ROOT`: Diretório raiz do projeto (`DESTINATION_ROOT\SOB_NAME`). Bloqueia com status `BLOQUEADO` se a pasta já existir.
   - `CROQUI_DIR`: Subpasta do conteúdo baixado (`SOB_ROOT\CROQUI`).
   - `BASE_TEMPLATE`: Arquivo-modelo original mantido intacto (`modelos/prancha.dwg`).
-  - `BASE_DWG`: Arquivo de trabalho criado na raiz da SOB (`SOB_ROOT\BASE_SOB_DESENHO.dwg`).
+  - `BASE_DWG`: Arquivo de trabalho criado na raiz da SOB (`SOB_ROOT\BASE_SOB_DESENHO.dwg`). Bloqueia com status `BLOQUEADO` se o arquivo já existir antes da cópia.
   - Derivação centralizada e obrigatória: `SOB_ID -> SOB_NAME -> DESTINATION_ROOT -> SOB_ROOT -> CROQUI_DIR -> BASE_DWG`.
-- **Objetivo & Regra de Negócio**: Automatização completa da preparação inicial do projeto a partir de uma SOB informada pelo usuário no AutoCAD:
-  1. Solicitação do número da SOB e derivação canônica de `SOB_ID` e `SOB_NAME`.
-  2. Seleção de `DESTINATION_ROOT` via diálogo nativo do Windows.
-  3. Proteção rigorosa contra `SOB_ROOT` já existente (interrompe sem sobrescrever, sem apagar e sem misturar).
-  4. Criação da estrutura canônica de pastas: `SOB_ROOT` e subpasta `CROQUI_DIR`.
-  5. Conexão autenticada ao SharePoint com credenciais estritamente protegidas no `.env`.
-  6. Localização da SOB via `SOB_ID` puro e download dos croquis de campo para `CROQUI_DIR`.
-  7. Cópia segura de `BASE_TEMPLATE` para `BASE_DWG`, mantendo o modelo original 100% intacto.
-  8. Abertura imediata de `BASE_DWG` no AutoCAD via ActiveX `(vla-open ...)`.
+- **Validação de Integridade, Rastreamento de Estados & Rollback Seguro (Seção 14)**:
+  - Comparação de integridade binária por hash SHA-256 entre `BASE_TEMPLATE` e `BASE_DWG`.
+  - Auditoria de preservação do arquivo-modelo original antes e após a cópia (`hash_antes == hash_depois`).
+  - Limpeza controlada (`remover_estrutura_incompleta`) em caso de interrupção de etapas subsequentes à criação da pasta.
+  - Máquina de estados explícita: `INICIANDO` -> `SOB_VALIDADA` -> `DESTINO_VALIDADO` -> `ESTRUTURA_CRIADA` -> `SHAREPOINT_AUTENTICADO` -> `SOB_LOCALIZADA` -> `DOWNLOAD_VALIDADO` -> `BASE_COPIADO` -> `ESTRUTURA_VALIDADA` -> `AUTOCAD_ABERTO` -> `CONCLUÍDO`.
+  - Checklist rigoroso de 15 condições obrigatórias para emitir `CONCLUÍDO`; qualquer falha determina `STATUS = BLOQUEADO`.
+  - Mensagens de erro padronizadas, descritivas e acionáveis conforme Seção 14.26 (`Etapa`, `Problema`, `Caminho afetado`, `Ação`).
 - **Arquitetura & Componentes**:
-  - `sob_core.py` (223 linhas): Lógica de domínio, normalização, validação, verificação de diretórios e função centralizada `derivar_caminhos_sob`.
-  - `sob_sharepoint.py` (553 linhas): Driver Selenium headless, autenticação Microsoft Online e download seguro via CDP / menu de contexto.
-  - `sob_manager.py` (335 linhas): Orquestrador de máquina de estados, logs estruturados canônicos (`[INFO] SOB: ...`, `[INFO] SOB_ROOT: ...`, `[INFO] CROQUI_DIR: ...`, `[INFO] BASE_DWG: ...`) e CLI.
-  - `sob_cad_launcher.lsp` (270 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`** e rotina programática `(sob-executar-fluxo ...)`.
-- **Cobertura de Testes**: 41 testes unitários específicos e suíte de não-regressão com **197 testes unitários passando com 100% de sucesso**. Bateria de testes operacionais no AutoCAD: 12/12 **PASS**.
+  - `sob_core.py` (380 linhas): Lógica de domínio, normalização, validações de integridade SHA-256 e rollback de estrutura.
+  - `sob_sharepoint.py` (554 linhas): Driver Selenium headless, autenticação Microsoft Online e download seguro via CDP / menu de contexto.
+  - `sob_manager.py` (470 linhas): Orquestrador de máquina de estados, logs estruturados canônicos (`[INFO] SOB: ...`, `[INFO] SOB_ROOT: ...`, `[INFO] CROQUI_DIR: ...`, `[INFO] BASE_DWG: ...`) e CLI.
+  - `sob_cad_launcher.lsp` (350 linhas): Ponto de entrada nativo com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`**, verificação `CURRENT_AUTOCAD_DWG == BASE_DWG` e rotina programática `(sob-executar-fluxo ...)`.
+- **Cobertura de Testes**: 49 testes unitários específicos e suíte de não-regressão com **205 testes unitários passando com 100% de sucesso**. Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS**.
 

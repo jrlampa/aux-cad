@@ -111,7 +111,10 @@
           (sob-alert (strcat "A pasta da SOB já existe no local selecionado.\n"
                              "Nenhum arquivo foi sobrescrito.\n\n"
                              "Pasta: " sobRoot))
-          (list (cons "sucesso" nil) (cons "erro" "PASTA_EXISTENTE") (cons "sobRoot" sobRoot))
+          (list (cons "sucesso" nil)
+                (cons "status" "BLOQUEADO")
+                (cons "erro" "PASTA_EXISTENTE")
+                (cons "sobRoot" sobRoot))
         )
         (progn
           ;; 4. Arquivos de Intercâmbio e Log Protegidos
@@ -152,31 +155,83 @@
                   (princ (strcat "\nArquivo: " dwgTarget))
                   (princ "\n==============================================================")
 
-                  ;; 7. Abertura do Arquivo no AutoCAD (Seção 10: BASE_DWG)
+                  ;; 7. Abertura do Arquivo no AutoCAD (Seção 14.20 e 14.21: BASE_DWG)
+                  (setq erroCad nil)
                   (if abrirCad
                     (progn
                       (princ "\n[INFO] Abrindo BASE_SOB_DESENHO.dwg no AutoCAD...")
                       (if (and acadApp (not (vl-catch-all-error-p acadApp)))
-                        (vl-catch-all-apply 'vla-open (list (vla-get-Documents acadApp) dwgTarget))
+                        (progn
+                          (setq openedDoc (vl-catch-all-apply 'vla-open (list (vla-get-Documents acadApp) dwgTarget)))
+                          (if (vl-catch-all-error-p openedDoc)
+                            (progn
+                              (setq erroCad (strcat "[FALHA] BASE_SOB_DESENHO.dwg foi criado, porém não pôde ser aberto no AutoCAD: "
+                                                    (vl-catch-all-error-message openedDoc)))
+                              (princ (strcat "\n" erroCad))
+                            )
+                            (progn
+                              ;; Validação estrita: CURRENT_AUTOCAD_DWG == BASE_DWG
+                              (setq activeDoc (vl-catch-all-apply 'vla-get-ActiveDocument (list acadApp)))
+                              (if (and activeDoc (not (vl-catch-all-error-p activeDoc)))
+                                (progn
+                                  (setq currentDwg (vl-catch-all-apply 'vla-get-FullName (list activeDoc)))
+                                  (if (and (stringp currentDwg) (/= currentDwg ""))
+                                    (if (/= (strcase currentDwg) (strcase dwgTarget))
+                                      (progn
+                                        (setq erroCad (strcat "[FALHA CRÍTICA] O AutoCAD não abriu o BASE_DWG esperado.\n\n"
+                                                              "BASE_DWG esperado: " dwgTarget "\n"
+                                                              "DWG efetivamente aberto: " currentDwg "\n"
+                                                              "SOB_ID: " sobId))
+                                        (princ (strcat "\n" erroCad))
+                                      )
+                                    )
+                                  )
+                                )
+                              )
+                            )
+                          )
+                        )
+                        (progn
+                          ;; Em ambiente sem GUI (accoreconsole), validação por DWGPREFIX + DWGNAME
+                          (setq currentPrefix (getvar "DWGPREFIX"))
+                          (setq currentName (getvar "DWGNAME"))
+                          (if (and (stringp currentPrefix) (stringp currentName))
+                            (setq currentDwg (strcat currentPrefix currentName))
+                          )
+                        )
                       )
                     )
                   )
-                  (sob-alert (strcat "Preparação de Projeto Concluída com Sucesso!\n\n"
-                                     "SOB_ID: " sobId "\n"
-                                     "SOB_NAME: " sobName "\n"
-                                     "SOB_ROOT: " sobRoot "\n"
-                                     "BASE_DWG: BASE_SOB_DESENHO.dwg\n\n"
-                                     "O desenho foi aberto no AutoCAD."))
-                  (list (cons "sucesso" t)
-                        (cons "SOB_ID" sobId)
-                        (cons "SOB_NAME" sobName)
-                        (cons "DESTINATION_ROOT" destinationRoot)
-                        (cons "SOB_ROOT" sobRoot)
-                        (cons "CROQUI_DIR" croquiDir)
-                        (cons "BASE_DWG" baseDwg)
-                        (cons "sob" sobName)
-                        (cons "sobRoot" sobRoot)
-                        (cons "dwgTarget" dwgTarget))
+
+                  (if erroCad
+                    (progn
+                      (sob-alert erroCad)
+                      (list (cons "sucesso" nil)
+                            (cons "status" "BLOQUEADO")
+                            (cons "erro" erroCad)
+                            (cons "SOB_ID" sobId)
+                            (cons "BASE_DWG" baseDwg))
+                    )
+                    (progn
+                      (sob-alert (strcat "Preparação de Projeto Concluída com Sucesso!\n\n"
+                                         "SOB_ID: " sobId "\n"
+                                         "SOB_NAME: " sobName "\n"
+                                         "SOB_ROOT: " sobRoot "\n"
+                                         "BASE_DWG: BASE_SOB_DESENHO.dwg\n\n"
+                                         "O desenho foi aberto no AutoCAD."))
+                      (list (cons "sucesso" t)
+                            (cons "status" "CONCLUIDO")
+                            (cons "SOB_ID" sobId)
+                            (cons "SOB_NAME" sobName)
+                            (cons "DESTINATION_ROOT" destinationRoot)
+                            (cons "SOB_ROOT" sobRoot)
+                            (cons "CROQUI_DIR" croquiDir)
+                            (cons "BASE_DWG" baseDwg)
+                            (cons "sob" sobName)
+                            (cons "sobRoot" sobRoot)
+                            (cons "dwgTarget" dwgTarget))
+                    )
+                  )
                 )
                 (progn
                   ;; Em caso de falha, lê o log para exibir mensagem exata ao usuário
@@ -215,7 +270,9 @@
 
                   (sob-alert (strcat "Falha na preparação da SOB:\n\n"
                                      (if (/= log_txt "") log_txt "Consulte a janela de texto do AutoCAD (F2).")))
-                  (list (cons "sucesso" nil) (cons "erro" (if (/= log_txt "") log_txt erro_msg)))
+                  (list (cons "sucesso" nil)
+                        (cons "status" "BLOQUEADO")
+                        (cons "erro" (if (/= log_txt "") log_txt erro_msg)))
                 )
               )
             )
@@ -233,16 +290,16 @@
   (princ "\n       PREPARAÇÃO AUTOMÁTICA DE PROJETO SOB (AUX CAD)         ")
   (princ "\n==============================================================")
 
-  ;; 1. Solicitação do Número da SOB
+  ;; 1. Solicitação do Número da SOB (Seção 14.2 & 14.22)
   (setq sobInput (getstring "\nInforme o número da SOB: "))
   (if (or (null sobInput) (= (vl-string-trim " " sobInput) ""))
     (progn
-      (princ "\n[AVISO] Operação cancelada: nenhuma SOB informada.")
+      (princ "\n[INFO] Operação cancelada pelo usuário.")
       (exit)
     )
   )
 
-  ;; 2. Seleção do Diretório de Destino (Diálogo Nativo Windows)
+  ;; 2. Seleção do Diretório de Destino (Seção 14.5 & 14.22)
   (princ "\n[INFO] Selecione onde a pasta da SOB deverá ser criada...")
   (setq destPath nil)
   (setq sh (vl-catch-all-apply 'vlax-create-object (list "Shell.Application")))
@@ -259,7 +316,7 @@
 
   (if (or (null destPath) (= destPath ""))
     (progn
-      (princ "\n[AVISO] Operação cancelada pelo usuário (diretório não selecionado).")
+      (princ "\n[INFO] Operação cancelada pelo usuário.")
       (exit)
     )
   )
@@ -268,6 +325,7 @@
   (sob-executar-fluxo sobInput destPath t)
   (princ)
 )
+
 
 ;; Aliases do Comando
 (defun c:NOVASOB () (c:SOB))

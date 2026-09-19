@@ -91,8 +91,9 @@ def test_executar_sob_invalida(tmp_path: Path, fake_prancha_dwg: Path):
     resultado = orquestrador.executar(sob_raw="", destino_dir=str(tmp_path))
 
     assert resultado["sucesso"] is False
+    assert resultado["status"] == "BLOQUEADO"
     assert "VALIDAR_SOB" in resultado["etapa"]
-    assert "não pode ser vazio" in resultado["mensagem"]
+    assert "[FALHA] SOB não informada." in resultado["mensagem"]
 
 
 def test_executar_destino_inexistente(fake_prancha_dwg: Path):
@@ -104,8 +105,9 @@ def test_executar_destino_inexistente(fake_prancha_dwg: Path):
     )
 
     assert resultado["sucesso"] is False
+    assert resultado["status"] == "BLOQUEADO"
     assert "VALIDAR_DESTINO" in resultado["etapa"]
-    assert "inexistente" in resultado["mensagem"]
+    assert "[FALHA] Diretório de destino inválido." in resultado["mensagem"]
 
 
 def test_executar_pasta_sob_ja_existente(tmp_path: Path, fake_prancha_dwg: Path):
@@ -122,8 +124,8 @@ def test_executar_pasta_sob_ja_existente(tmp_path: Path, fake_prancha_dwg: Path)
     )
 
     assert resultado["sucesso"] is False
-    assert "A pasta da SOB já existe no local selecionado." in resultado["mensagem"]
-    assert "Nenhum arquivo foi sobrescrito." in resultado["mensagem"]
+    assert resultado["status"] == "BLOQUEADO"
+    assert "[FALHA] A pasta SOB_A057349839 já existe." in resultado["mensagem"]
 
     # Verifica integridade do arquivo pré-existente
     assert arquivo_salvo.exists()
@@ -134,7 +136,7 @@ def test_executar_falha_autenticacao_sharepoint(tmp_path: Path, fake_prancha_dwg
     """TESTE 07 no Manager: falha de autenticação do SharePoint interrompe o fluxo."""
     mock_client = MagicMock(spec=SharePointClient)
     mock_client.autenticar.side_effect = SobAuthenticationError(
-        "PROCESSO INTERROMPIDO\nFALHA NA AUTENTICAÇÃO DO SHAREPOINT"
+        "[FALHA] Não foi possível autenticar no SharePoint."
     )
 
     orquestrador = SobOrchestrator(
@@ -149,7 +151,8 @@ def test_executar_falha_autenticacao_sharepoint(tmp_path: Path, fake_prancha_dwg
     )
 
     assert resultado["sucesso"] is False
-    assert "FALHA NA AUTENTICAÇÃO DO SHAREPOINT" in resultado["mensagem"]
+    assert resultado["status"] == "BLOQUEADO"
+    assert "[FALHA] Não foi possível autenticar no SharePoint." in resultado["mensagem"]
     # Não cria o DWG em caso de falha
     assert resultado["dwg_path"] == ""
 
@@ -159,7 +162,7 @@ def test_executar_sob_nao_encontrada_sharepoint(tmp_path: Path, fake_prancha_dwg
     mock_client = MagicMock(spec=SharePointClient)
     mock_client.autenticar.return_value = True
     mock_client.localizar_pasta_sob.side_effect = SobNotFoundError(
-        "SOB NÃO ENCONTRADA NO SHAREPOINT"
+        "[FALHA] SOB A057349839 não encontrada no SharePoint."
     )
 
     orquestrador = SobOrchestrator(
@@ -174,7 +177,8 @@ def test_executar_sob_nao_encontrada_sharepoint(tmp_path: Path, fake_prancha_dwg
     )
 
     assert resultado["sucesso"] is False
-    assert "SOB NÃO ENCONTRADA NO SHAREPOINT" in resultado["mensagem"]
+    assert resultado["status"] == "BLOQUEADO"
+    assert "[FALHA] SOB A057349839 não encontrada no SharePoint." in resultado["mensagem"]
     # Não deve finalizar como sucesso e não deve gerar BASE_SOB_DESENHO.dwg
     assert resultado["dwg_path"] == ""
 
@@ -193,7 +197,8 @@ def test_executar_arquivo_base_inexistente(tmp_path: Path):
     )
 
     assert resultado["sucesso"] is False
-    assert "Arquivo-base não encontrado" in resultado["mensagem"]
+    assert resultado["status"] == "BLOQUEADO"
+    assert "Arquivo-modelo prancha.dwg não encontrado" in resultado["mensagem"]
 
 
 def test_abrir_no_autocad(tmp_path: Path, fake_prancha_dwg: Path):
@@ -243,3 +248,77 @@ def test_cli_main(tmp_path: Path, fake_prancha_dwg: Path, monkeypatch):
     dados = json.loads(json_out.read_text(encoding="utf-8"))
     assert dados["sucesso"] is True
     assert dados["sob"] == "SOB_A057349839"
+
+
+def test_secao_14_rollback_em_falha_copia(tmp_path: Path, fake_prancha_dwg: Path, monkeypatch):
+    """Valida rollback seguro da pasta criada quando etapa posterior falha (Seção 14.8)."""
+    import sob_manager
+    destino = tmp_path / "projetos"
+    destino.mkdir()
+
+    # Faz a cópia falhar para testar o rollback de sob_root
+    def fake_copiar(*args, **kwargs):
+        raise IOError("Falha simulada na cópia do DWG")
+
+    monkeypatch.setattr(sob_manager, "copiar_arquivo_base", fake_copiar)
+
+    orquestrador = SobOrchestrator(origem_base=fake_prancha_dwg)
+    resultado = orquestrador.executar(
+        sob_raw="A057349839",
+        destino_dir=str(destino),
+        baixar_croqui_sp=False,
+    )
+
+    assert resultado["sucesso"] is False
+    assert resultado["status"] == "BLOQUEADO"
+    # A pasta incompleta deve ter sido removida no rollback
+    sob_root = destino / "SOB_A057349839"
+    assert not sob_root.exists()
+
+
+def test_secao_14_checklist_completo_sucesso(tmp_path: Path, fake_prancha_dwg: Path):
+    """Valida que todos os 15 itens do checklist são satisfeitos para CONCLUÍDO (Seção 14.27)."""
+    destino = tmp_path / "projetos"
+    destino.mkdir()
+
+    orquestrador = SobOrchestrator(origem_base=fake_prancha_dwg)
+    resultado = orquestrador.executar(
+        sob_raw="A057349839",
+        destino_dir=str(destino),
+        baixar_croqui_sp=False,
+    )
+
+    assert resultado["sucesso"] is True
+    assert resultado["status"] == "CONCLUÍDO"
+    assert resultado["estado"] == "CONCLUÍDO"
+
+    chk = resultado["checklist"]
+    assert chk["SOB_ID válido"] is True
+    assert chk["SOB_NAME válido"] is True
+    assert chk["DESTINATION_ROOT válido"] is True
+    assert chk["SOB_ROOT correto"] is True
+    assert chk["CROQUI_DIR correto"] is True
+    assert chk["BASE_TEMPLATE validado"] is True
+    assert chk["BASE_DWG criado"] is True
+    assert chk["BASE_DWG validado"] is True
+    assert chk["Integridade validada"] is True
+    assert chk["BASE_TEMPLATE preservado"] is True
+    assert chk["Estrutura final validada"] is True
+
+
+def test_secao_14_formatar_mensagem_erro():
+    """Valida estrutura recomendada de mensagem de erro da Seção 14.26."""
+    from sob_manager import formatar_mensagem_erro
+
+    msg = formatar_mensagem_erro(
+        etapa="Criação da pasta da SOB",
+        problema="A pasta SOB_A057349839 já existe.",
+        caminho="D:\\Projetos\\ENEL\\SOB_A057349839",
+        acao="Verifique a pasta existente ou selecione outro diretório de destino.",
+    )
+
+    assert "[ERRO]" in msg
+    assert "Etapa:\nCriação da pasta da SOB" in msg
+    assert "Problema:\nA pasta SOB_A057349839 já existe." in msg
+    assert "Caminho afetado:\nD:\\Projetos\\ENEL\\SOB_A057349839" in msg
+    assert "Ação:\nVerifique a pasta existente" in msg

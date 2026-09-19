@@ -117,14 +117,9 @@ def obter_credenciais_sharepoint(
                     elif k == "SHAREPOINT_SENHA" and not senha:
                         senha = v
 
-    if not login:
+    if not login or not senha:
         raise SobCredentialError(
-            "Variável 'SHAREPOINT_ID' não definida ou vazia no arquivo .env."
-        )
-
-    if not senha:
-        raise SobCredentialError(
-            "Variável 'SHAREPOINT_SENHA' não definida ou vazia no arquivo .env."
+            "[FALHA] Credenciais do SharePoint não configuradas."
         )
 
     return login, senha
@@ -230,9 +225,7 @@ class SharePointClient:
             "AADSTS50126",
         ]):
             raise SobAuthenticationError(
-                "PROCESSO INTERROMPIDO\n"
-                "FALHA NA AUTENTICAÇÃO DO SHAREPOINT:\n"
-                "Conta ou senha incorreta no serviço Microsoft Online."
+                "[FALHA] Não foi possível autenticar no SharePoint."
             )
 
     def autenticar(self):
@@ -271,9 +264,7 @@ class SharePointClient:
                 err_user = self.driver.find_elements(By.ID, "usernameError")
                 if err_user and err_user[0].is_displayed():
                     raise SobAuthenticationError(
-                        "PROCESSO INTERROMPIDO\n"
-                        "FALHA NA AUTENTICAÇÃO DO SHAREPOINT:\n"
-                        f"Usuário não reconhecido pela Microsoft: {self.login}"
+                        "[FALHA] Não foi possível autenticar no SharePoint."
                     )
 
                 # 2. Digita a senha
@@ -298,9 +289,7 @@ class SharePointClient:
 
                 if self.driver.find_elements(By.ID, "passwordError"):
                     raise SobAuthenticationError(
-                        "PROCESSO INTERROMPIDO\n"
-                        "FALHA NA AUTENTICAÇÃO DO SHAREPOINT:\n"
-                        "Conta ou senha incorreta no serviço Microsoft Online."
+                        "[FALHA] Não foi possível autenticar no SharePoint."
                     )
 
                 # Trata tela de "Permanecer conectado?" (KMSI)
@@ -323,9 +312,7 @@ class SharePointClient:
                 self._verificar_erro_login(body_elem.text if body_elem else "")
 
                 raise SobAuthenticationError(
-                    "PROCESSO INTERROMPIDO\n"
-                    "FALHA NA AUTENTICAÇÃO DO SHAREPOINT:\n"
-                    "Não foi possível concluir o login no SharePoint."
+                    "[FALHA] Não foi possível autenticar no SharePoint."
                 )
 
         except SobAuthenticationError:
@@ -401,11 +388,10 @@ class SharePointClient:
                                 "sob": codigo_busca,
                             })
 
-            # Validação dos resultados
+            # Validação dos resultados (Seção 14.16)
             if len(itens_encontrados) == 0:
                 raise SobNotFoundError(
-                    "PROCESSO INTERROMPIDO\n"
-                    f"SOB NÃO ENCONTRADA NO SHAREPOINT: {sob_codigo}"
+                    f"[FALHA] SOB {sob_codigo} não encontrada no SharePoint."
                 )
 
             # Se encontrar múltiplos resultados, verifica se pertencem estritamente à mesma SOB
@@ -421,8 +407,7 @@ class SharePointClient:
                 nomes = {p["texto"].split("\n")[0] for p in pastas_correspondentes}
                 if len(nomes) > 1:
                     raise SobConflictError(
-                        f"Múltiplos resultados conflitantes encontrados para a SOB '{sob_codigo}': "
-                        f"{list(nomes)}. Processo interrompido por segurança."
+                        "[FALHA] Foram encontradas múltiplas correspondências para a SOB."
                     )
 
             return pastas_correspondentes[0]
@@ -515,28 +500,32 @@ class SharePointClient:
 
     def validar_download(self, destino_croqui: Path) -> bool:
         """
-        Valida que o download foi concluído com sucesso:
+        Valida que o download foi concluído com sucesso (Seção 14.17 & 14.18):
         1. Diretório existe e não está vazio.
         2. Não existem arquivos parciais (.crdownload, .tmp, .partial).
         3. Todos os arquivos possuem tamanho > 0 bytes.
         """
         p = Path(destino_croqui).resolve()
         if not p.is_dir():
-            return False
+            raise SobDownloadIncompleteError(
+                "[FALHA] Download reportado como concluído, porém o conteúdo não foi encontrado em CROQUI_DIR."
+            )
 
         arquivos = [f for f in p.iterdir() if f.is_file()]
         if not arquivos:
-            return False
+            raise SobDownloadIncompleteError(
+                "[FALHA] Download reportado como concluído, porém o conteúdo não foi encontrado em CROQUI_DIR."
+            )
 
         for f in arquivos:
             ext = f.suffix.lower()
             if ext in [".crdownload", ".tmp", ".partial", ".download"]:
                 raise SobDownloadIncompleteError(
-                    f"Download incompleto detectado: arquivo temporário '{f.name}' presente."
+                    f"[FALHA] Download incompleto: arquivo temporário '{f.name}' presente."
                 )
             if f.stat().st_size == 0:
                 raise SobDownloadIncompleteError(
-                    f"Arquivo com zero bytes detectado: '{f.name}'."
+                    f"[FALHA] Download incompleto: arquivo com zero bytes detectado '{f.name}'."
                 )
 
         return True
