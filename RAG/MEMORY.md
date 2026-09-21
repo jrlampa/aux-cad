@@ -388,11 +388,12 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Classes `RecursoRastreado`, `RecursoRemanescente` e `RollbackContext`.
   - Rastreamento fino de recursos SharePoint, GOMNET (`gomnet_created_files`), pasta `ANEXOS_DIR` e DWG aberto no CAD.
   - Execução sequencial reversa, validação pós-rollback e relatório de integridade.
-- `sob_sharepoint.py` (554 linhas):
-  - Carregamento seguro e isolado de credenciais do `.env` (`SHAREPOINT_ID` e `SHAREPOINT_SENHA`) com `dotenv_values` e parser resiliente sem vazamento para `os.environ`.
+- `sob_sharepoint.py` (637 linhas):
+  - Carregamento seguro e isolado de credenciais do `.env` (`SHAREPOINT_ID`, `SHAREPOINT_SENHA` e opcional `SHAREPOINT_URL`) com `dotenv_values` e parser resiliente sem vazamento para `os.environ`.
+  - URL Canônica Padrão configurada para a pasta compartilhada de **Levantamentos de campo**: `https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/IgALh51uFX0fRovCUeVsprYWAWYGyn7GwehC6BrYpg9KcFc?e=ltJeMr`.
   - Navegação e autenticação Microsoft Online com Edge/Chrome headless via Selenium (`SharePointClient`).
-  - Localização precisa da SOB e detecção de ambiguidade com levantamento de `SobConflictError` acompanhado da lista de ocorrências e URL de busca.
-  - Download validado para a pasta `CROQUI` via integração CDP com verificação de integridade física.
+  - Localização precisa da pasta da SOB na pasta de levantamentos de campo, com busca filtrada e detecção de ambiguidade (`SobConflictError`).
+  - Download da **pasta inteira** da SOB via seleção de checkbox/menu de ações no SharePoint (baixada em formato `.zip`), com descompactação atômica, nivelamento de subpasta raiz para `CROQUI_DIR` e validação recursiva de integridade física.
 - `sob_manager.py` (747 linhas - estritamente abaixo do soft limit de 750 linhas):
   - Orquestrador com execução dividida em Fase A (Pré-Validação Não-Destrutiva) e Fase B (Criação e Execução).
   - Suporte a parâmetro de base, propagando para `derivar_caminhos_sob`.
@@ -412,7 +413,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Interface gráfica interativa para preparação autônoma de projetos SOB via Windows Explorer (`Abrir_SOB.bat`) ou através do Hub Central (`aux_cad_hub.py`).
   - Seleção visual de SOB, Base técnica (combobox Enel Rio/FABAO) e pasta de destino.
 - **Cobertura & Testes**:
-  - **284 testes unitários e de integração com 100% de aprovação (PASS)** em todo o projeto.
+  - **288 testes unitários e de integração com 100% de aprovação (PASS)** em todo o projeto.
   - **81% de cobertura global no módulo SOB** e **80% no módulo CQT**.
   - **Suíte global de não-regressão**: 100% dos testes passando sem falhas.
   - **Bateria de testes operacionais no AutoCAD 2026 Core Console**: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).

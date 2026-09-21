@@ -8,8 +8,10 @@ localização da SOB na biblioteca documental e download íntegro para a pasta C
 import os
 from pathlib import Path
 import re
+import shutil
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
+import zipfile
 
 try:
     from dotenv import dotenv_values, load_dotenv
@@ -18,10 +20,10 @@ except ImportError:
     load_dotenv = None
 
 
-# URL Padrão do SharePoint da HBT Enel Rio
+# URL Padrão do SharePoint da HBT Enel Rio (Pasta "Levantamentos de campo")
 SHAREPOINT_URL_PADRAO = (
-    "https://hbtengenharia1.sharepoint.com/sites/HBT-EnelRJ-Sul/"
-    "Documentos%20Compartilhados/Forms/AllItems.aspx"
+    "https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/"
+    "IgALh51uFX0fRovCUeVsprYWAWYGyn7GwehC6BrYpg9KcFc?e=ltJeMr"
 )
 
 
@@ -123,6 +125,31 @@ def obter_credenciais_sharepoint(
     return login, senha
 
 
+def obter_url_sharepoint(
+    caminho_env: Optional[Union[str, Path]] = None,
+) -> str:
+    """
+    Retorna a URL do SharePoint configurada no .env ou o link padrão da pasta de Levantamentos de campo.
+    """
+    env_path = Path(caminho_env) if caminho_env else obter_caminho_env_padrao()
+    if env_path.is_file():
+        if dotenv_values:
+            vals = dotenv_values(dotenv_path=env_path)
+            url_cfg = (vals.get("SHAREPOINT_URL") or "").strip()
+            if url_cfg:
+                return url_cfg
+        with open(env_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                linha = line.strip()
+                if linha and not linha.startswith("#") and "=" in linha:
+                    k, v = linha.split("=", 1)
+                    if k.strip() == "SHAREPOINT_URL":
+                        v_clean = v.strip().strip('"').strip("'")
+                        if v_clean:
+                            return v_clean
+    return os.environ.get("SHAREPOINT_URL", "").strip() or SHAREPOINT_URL_PADRAO
+
+
 def sanitizar_mensagem(texto: str, segredos: Optional[List[str]] = None) -> str:
     """
     Remove segredos e credenciais de mensagens ou logs.
@@ -152,13 +179,13 @@ class SharePointClient:
         self,
         login: str,
         senha: str,
-        url: str = SHAREPOINT_URL_PADRAO,
+        url: Optional[str] = None,
         headless: bool = True,
         timeout: int = 30,
     ):
         self.login = login
         self.senha = senha
-        self.url = url
+        self.url = url or obter_url_sharepoint()
         self.headless = headless
         self.timeout = timeout
         self.driver = None
@@ -341,17 +368,16 @@ class SharePointClient:
         else:
             codigo_busca = codigo_limpo
 
-        # Executa busca no SharePoint via DOM / API interna
         try:
-            # Navega para a raiz da biblioteca caso necessário
+            # Garante que a página do SharePoint / pasta de levantamentos esteja carregada
             if "sharepoint.com" not in self.driver.current_url:
                 self.driver.get(self.url)
                 time.sleep(4)
 
             # Busca por elementos de pasta ou itens contendo o código da SOB
-            # Avalia linhas de arquivo/pasta na visualização do SharePoint
             itens_encontrados = []
-            linhas = self.driver.find_elements(By.CSS_SELECTOR, "[role='row'], [data-automationid='DetailsRow']")
+            seletor_linhas = "[role='row'], [data-automationid='DetailsRow'], tr[role='row'], div.ms-DetailsRow"
+            linhas = self.driver.find_elements(By.CSS_SELECTOR, seletor_linhas)
 
             for linha in linhas:
                 txt = linha.text
@@ -362,11 +388,26 @@ class SharePointClient:
                         "sob": codigo_busca,
                     })
 
-            # Se não encontrou na listagem inicial, tenta pesquisar na barra de busca do SharePoint
+            # 2. Se não encontrou, tenta buscar por links diretos de pastas (nomes de arquivos/pastas)
+            if not itens_encontrados:
+                links = self.driver.find_elements(
+                    By.CSS_SELECTOR,
+                    "button[data-automationid='FieldRenderer-name'], a[data-automationid='FieldRenderer-name'], [role='gridcell']"
+                )
+                for lk in links:
+                    txt = lk.text
+                    if codigo_busca in txt.upper():
+                        itens_encontrados.append({
+                            "texto": txt,
+                            "elemento": lk,
+                            "sob": codigo_busca,
+                        })
+
+            # 3. Se não encontrou na listagem inicial, tenta pesquisar na barra de busca do SharePoint
             if not itens_encontrados:
                 caixas_busca = self.driver.find_elements(
                     By.CSS_SELECTOR,
-                    "input[type='search'], input[aria-label*='Pesquisar'], input[aria-label*='Search']"
+                    "input[type='search'], input[aria-label*='Pesquisar'], input[aria-label*='Search'], input[placeholder*='Pesquisar']"
                 )
                 if caixas_busca:
                     caixa = caixas_busca[0]
@@ -376,7 +417,7 @@ class SharePointClient:
                     time.sleep(5)
 
                     # Reavalia itens encontrados após a busca
-                    linhas = self.driver.find_elements(By.CSS_SELECTOR, "[role='row'], [data-automationid='DetailsRow']")
+                    linhas = self.driver.find_elements(By.CSS_SELECTOR, seletor_linhas)
                     for linha in linhas:
                         txt = linha.text
                         if codigo_busca in txt.upper():
@@ -389,16 +430,20 @@ class SharePointClient:
             # Validação dos resultados (Seção 17, Etapa A13)
             if len(itens_encontrados) == 0:
                 raise SobNotFoundError(
-                    "[FALHA] SOB não encontrada."
+                    f"[FALHA] SOB {sob_codigo} não encontrada no SharePoint."
                 )
 
             # Se encontrar múltiplos resultados, verifica se pertencem estritamente à mesma SOB
             pastas_correspondentes = []
+            nomes_unicos = set()
             for item in itens_encontrados:
-                # Extrai nome
-                nome = item["texto"].split("\n")[0]
-                if codigo_busca in nome.upper():
+                nome = item["texto"].split("\n")[0].strip()
+                if codigo_busca in nome.upper() and nome not in nomes_unicos:
+                    nomes_unicos.add(nome)
                     pastas_correspondentes.append(item)
+
+            if len(pastas_correspondentes) == 0:
+                pastas_correspondentes = [itens_encontrados[0]]
 
             if len(pastas_correspondentes) > 1:
                 try:
@@ -431,8 +476,8 @@ class SharePointClient:
 
     def baixar_croqui(self, pasta_info: Dict[str, Any], destino_croqui: Path) -> List[Path]:
         """
-        Baixa os arquivos contidos na pasta da SOB localizada para destino_croqui.
-        Garante integridade e ausência de arquivos temporários parciais.
+        Baixa a pasta inteira da SOB localizada para destino_croqui.
+        Garante descompactação íntegra (caso baixada como ZIP) e ausência de arquivos temporários.
         """
         from selenium.webdriver.common.by import By
 
@@ -451,32 +496,53 @@ class SharePointClient:
         elem = pasta_info.get("elemento")
         if elem:
             clicado = False
+            # 1. Tenta marcar o checkbox de seleção da linha da pasta
             try:
-                botoes = elem.find_elements(By.TAG_NAME, "button")
-                for b in botoes:
-                    aria = (b.get_attribute("aria-label") or "").lower()
-                    if any(k in aria for k in ["mais", "ações", "actions"]):
-                        self.driver.execute_script("arguments[0].click();", b)
-                        time.sleep(1.5)
-                        menu_items = self.driver.find_elements(By.CSS_SELECTOR, "[role='menuitem'], button")
-                        for mi in menu_items:
-                            txt = (mi.text or mi.get_attribute("name") or "").strip().lower()
-                            if "baixar" in txt or "download" in txt:
-                                self.driver.execute_script("arguments[0].click();", mi)
-                                clicado = True
-                                break
-                        if clicado:
+                chks = elem.find_elements(
+                    By.CSS_SELECTOR,
+                    "[role='checkbox'], [data-automationid='DetailsRowCheck'], .ms-Check"
+                )
+                if chks:
+                    self.driver.execute_script("arguments[0].click();", chks[0])
+                    time.sleep(1)
+                    # Clica no botão de Download na barra superior
+                    btns_top = self.driver.find_elements(
+                        By.CSS_SELECTOR,
+                        "button[name='Download'], button[name='Baixar'], [data-automationid='downloadCommand'], button[aria-label*='Baixar'], button[aria-label*='Download']"
+                    )
+                    for btn in btns_top:
+                        if btn.is_displayed():
+                            self.driver.execute_script("arguments[0].click();", btn)
+                            clicado = True
                             break
             except Exception:
                 pass
 
+            # 2. Se não clicou via checkbox e barra superior, tenta o menu de contexto (...) da pasta
             if not clicado:
                 try:
-                    chks = elem.find_elements(By.CSS_SELECTOR, "[role='checkbox'], [data-automationid='DetailsRowCheck']")
-                    if chks:
-                        self.driver.execute_script("arguments[0].click();", chks[0])
-                    else:
-                        elem.click()
+                    botoes = elem.find_elements(By.TAG_NAME, "button")
+                    for b in botoes:
+                        aria = (b.get_attribute("aria-label") or "").lower()
+                        if any(k in aria for k in ["mais", "ações", "actions", "..."]):
+                            self.driver.execute_script("arguments[0].click();", b)
+                            time.sleep(1.5)
+                            menu_items = self.driver.find_elements(By.CSS_SELECTOR, "[role='menuitem'], button")
+                            for mi in menu_items:
+                                txt = (mi.text or mi.get_attribute("name") or "").strip().lower()
+                                if "baixar" in txt or "download" in txt:
+                                    self.driver.execute_script("arguments[0].click();", mi)
+                                    clicado = True
+                                    break
+                            if clicado:
+                                break
+                except Exception:
+                    pass
+
+            # 3. Fallback: clique no elemento e busca na barra de comandos
+            if not clicado:
+                try:
+                    elem.click()
                     time.sleep(1)
                     btns_top = self.driver.find_elements(
                         By.CSS_SELECTOR,
@@ -489,25 +555,43 @@ class SharePointClient:
                 except Exception:
                     pass
 
-        # Aguarda a conclusão do download (até 30 segundos)
+        # Aguarda a conclusão do download (até 45 segundos para pastas inteiras)
         inicio = time.time()
-        while time.time() - inicio < 30:
+        while time.time() - inicio < 45:
             arquivos = list(destino_path.glob("*"))
-            non_temp = [f for f in arquivos if f.is_file() and not f.name.endswith((".crdownload", ".tmp", ".partial"))]
-            if non_temp:
+            non_temp = [f for f in arquivos if f.is_file() and not f.name.endswith((".crdownload", ".tmp", ".partial", ".download"))]
+            em_andamento = any(f.name.endswith((".crdownload", ".tmp", ".partial", ".download")) for f in arquivos)
+            
+            if non_temp and not em_andamento:
+                # Processa descompactação de ZIPs (pastas baixadas pelo SharePoint vêm sempre em ZIP)
                 for f in list(non_temp):
                     if f.suffix.lower() == ".zip":
                         try:
-                            import zipfile
                             with zipfile.ZipFile(f, 'r') as zip_ref:
                                 zip_ref.extractall(destino_path)
                             f.unlink()
+
+                            # Se a extração gerou uma pasta raiz única (ex: SOB_A057389468/), move conteúdos para destino_path
+                            itens_extraidos = [i for i in destino_path.iterdir()]
+                            if len(itens_extraidos) == 1 and itens_extraidos[0].is_dir():
+                                pasta_interna = itens_extraidos[0]
+                                for sub_item in list(pasta_interna.iterdir()):
+                                    dest_sub = destino_path / sub_item.name
+                                    if not dest_sub.exists():
+                                        shutil.move(str(sub_item), str(dest_sub))
+                                try:
+                                    pasta_interna.rmdir()
+                                except Exception:
+                                    pass
                         except Exception:
                             pass
-                return [f for f in destino_path.glob("*") if f.is_file()]
+
+                arquivos_finais = [f for f in destino_path.rglob("*") if f.is_file()]
+                if arquivos_finais:
+                    return arquivos_finais
             time.sleep(1)
 
-        return [f for f in destino_path.glob("*") if f.is_file()]
+        return [f for f in destino_path.rglob("*") if f.is_file()]
 
     def validar_download(self, destino_croqui: Path) -> bool:
         """
@@ -522,7 +606,7 @@ class SharePointClient:
                 "[FALHA] Download reportado como concluído, porém o conteúdo não foi encontrado em CROQUI_DIR."
             )
 
-        arquivos = [f for f in p.iterdir() if f.is_file()]
+        arquivos = [f for f in p.rglob("*") if f.is_file()]
         if not arquivos:
             raise SobDownloadIncompleteError(
                 "[FALHA] Download reportado como concluído, porém o conteúdo não foi encontrado em CROQUI_DIR."

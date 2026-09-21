@@ -11,8 +11,10 @@ from unittest.mock import MagicMock, patch
 
 from sob_sharepoint import (
     obter_credenciais_sharepoint,
+    obter_url_sharepoint,
     sanitizar_mensagem,
     SharePointClient,
+    SHAREPOINT_URL_PADRAO,
     SobEnvNotFoundError,
     SobCredentialError,
     SobAuthenticationError,
@@ -307,3 +309,54 @@ def test_criar_driver_mock_chrome(tmp_path: Path):
             client._criar_driver(pasta_download=tmp_path)
             assert client.driver is not None
             mock_chrome.assert_called_once()
+
+
+def test_obter_url_sharepoint_padrao(tmp_path: Path):
+    """Valida que a URL padrão do SharePoint aponta para a pasta Levantamentos de campo."""
+    env_sem_url = tmp_path / ".env"
+    env_sem_url.write_text("OUTRA=1\n", encoding="utf-8")
+
+    url = obter_url_sharepoint(caminho_env=env_sem_url)
+    assert url == SHAREPOINT_URL_PADRAO
+    assert "HBT-EnelRJ-Sul" in url
+    assert "IgALh51uFX0fRovCUeVsprYWAWYGyn7GwehC6BrYpg9KcFc" in url
+
+
+def test_obter_url_sharepoint_customizada_env(tmp_path: Path):
+    """Valida que SHAREPOINT_URL definida no .env sobrescreve a URL padrão."""
+    env_com_url = tmp_path / ".env"
+    custom_url = "https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/PASTA_CUSTOM"
+    env_com_url.write_text(f'SHAREPOINT_URL="{custom_url}"\n', encoding="utf-8")
+
+    url = obter_url_sharepoint(caminho_env=env_com_url)
+    assert url == custom_url
+
+
+def test_baixar_croqui_pasta_inteira_zip_com_subpasta(tmp_path: Path):
+    """Valida que o download de uma pasta inteira compactada em ZIP pelo SharePoint é extraído e nivelado."""
+    import zipfile
+
+    client = SharePointClient(login="user", senha="pwd")
+    client.driver = MagicMock()
+    dest = tmp_path / "CROQUI"
+    dest.mkdir(parents=True, exist_ok=True)
+
+    # Simula o arquivo ZIP que o SharePoint gera ao baixar uma pasta inteira:
+    # Contém uma subpasta SOB_A057389468 com arquivos dentro
+    zip_path = dest / "SOB_A057389468.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("SOB_A057389468/croqui_levantamento.dwg", b"DWG DADOS REAIS")
+        zf.writestr("SOB_A057389468/fotos/poste_01.jpg", b"FOTO DADOS REAIS")
+
+    pasta_info = {"elemento": MagicMock(), "sob": "A057389468"}
+    arquivos = client.baixar_croqui(pasta_info, dest)
+
+    # O zip original deve ter sido removido
+    assert not zip_path.exists()
+    # Os arquivos devem ter sido extraídos diretamente para a raiz do destino
+    dwg_extraido = dest / "croqui_levantamento.dwg"
+    foto_extraida = dest / "fotos" / "poste_01.jpg"
+    assert dwg_extraido.exists()
+    assert foto_extraida.exists()
+    assert client.validar_download(dest) is True
+

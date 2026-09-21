@@ -26,16 +26,25 @@ def gerar_url_busca_sharepoint(sob_id: str, base_url: str = "") -> str:
     encoded_id = urllib.parse.quote(codigo_limpo)
 
     if not base_url:
-        base_url = (
-            "https://hbtengenharia1.sharepoint.com/sites/HBT-EnelRJ-Sul/"
-            "Documentos%20Compartilhados/Forms/AllItems.aspx"
-        )
+        try:
+            from sob_sharepoint import SHAREPOINT_URL_PADRAO
+            base_url = SHAREPOINT_URL_PADRAO
+        except ImportError:
+            try:
+                from sob.sob_sharepoint import SHAREPOINT_URL_PADRAO
+                base_url = SHAREPOINT_URL_PADRAO
+            except ImportError:
+                base_url = (
+                    "https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/"
+                    "IgALh51uFX0fRovCUeVsprYWAWYGyn7GwehC6BrYpg9KcFc?e=ltJeMr"
+                )
 
     # Extrai o site base para a URL de busca padrão do SharePoint Modern
-    match_site = re.match(r"(https://[^/]+/sites/[^/]+)", base_url)
+    match_site = re.search(r"https://([^/]+)/(?:sites|:f:/s|s)/([^/?#]+)", base_url)
     if match_site:
-        site_root = match_site.group(1)
-        return f"{site_root}/_layouts/15/search.aspx/siteall?q={encoded_id}"
+        host = match_site.group(1)
+        site_name = match_site.group(2)
+        return f"https://{host}/sites/{site_name}/_layouts/15/search.aspx/siteall?q={encoded_id}"
 
     # Fallback seguro adicionando o parâmetro de query
     sep = "&" if "?" in base_url else "?"
