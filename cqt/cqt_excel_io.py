@@ -16,38 +16,143 @@ for _d in [_curr_dir, _root_dir]:
     if _d not in sys.path:
         sys.path.insert(0, _d)
 
-DEFAULT_TEMPLATE_PATH = r"G:\Meu Drive\1-HBT\HBT\SETEMBRO\CQT TRECHO.xlsm"
-
-
-def load_cables_from_database(xlsm_path: str) -> List[str]:
-    """Carrega a lista de condutores homologados da aba BASE DE DADOS."""
-    default_cables = [
-        "3x150+70 - Al - F.P 1",
-        "3x150+1x80 - Al - F.P 1",
-        "3x95+1x54,6 - Al - F.P 1",
-        "3x70+1x70 - Al - F.P 1",
-        "3x50+1x50 - Al - F.P 1",
-        "3x50+1x54,6 - Al - F.P 1",
-        "3x35+1x54,6 - Al - F.P 1",
-        "3x35+1x35 - Al - F.P 1",
-        "2x16+25 - Al - F.P 1"
+def get_default_template_path() -> str:
+    """Retorna o caminho do template oficial de CQT, priorizando modelo local e diretórios padrão."""
+    candidate_paths = [
+        os.path.join(_root_dir, "modelos", "cqt_modelo.xlsm"),
+        r"G:\Meu Drive\1-HBT\04_MODELOS\CQT TRECHO.xlsm",
+        r"G:\Meu Drive\1-HBT\05_PROJETOS_HISTORICOS\SETEMBRO\CQT TRECHO.xlsm",
+        r"G:\Meu Drive\1-HBT\HBT\SETEMBRO\CQT TRECHO.xlsm",
     ]
-    if not os.path.exists(xlsm_path):
-        return default_cables
+    for p in candidate_paths:
+        if p and os.path.exists(p):
+            return p
+    return candidate_paths[0]
 
-    try:
-        wb = openpyxl.load_workbook(xlsm_path, data_only=True)
-        if 'BASE DE DADOS' not in wb.sheetnames:
-            return default_cables
-        sheet = wb['BASE DE DADOS']
-        cables = []
-        for r in range(4, sheet.max_row + 1):
-            val = sheet.cell(r, 1).value
-            if val and str(val).strip():
-                cables.append(str(val).strip())
-        return cables if cables else default_cables
-    except Exception:
-        return default_cables
+
+DEFAULT_TEMPLATE_PATH = get_default_template_path()
+
+# Lista oficial completa de condutores homologados (Fonte: BASE DE DADOS da planilha oficial Enel/HBT)
+DEFAULT_CABLES_BASE = [
+    "3x150+1x80 - Al - F.P 1",
+    "3x95+1x54,6 - Al - F.P 1",
+    "3x50+1x54,6 - Al - F.P 1",
+    "3x50+1x50 - Al - F.P 1",
+    "3x35+1x54,6 - Al - F.P 1",
+    "3x35+1x35 - Al - F.P 1",
+    "3x35+1x50 - Al - F.P 1",
+    "3x70+1x70 - Al - F.P 1",
+    "3x95+1x70 - Al - F.P 1",
+    "3x95+1x50 - Al - F.P 1",
+    "3x35+35 (nú) - Al - F.P 1",
+    "3x50+50 (nú) - Al - F.P 1",
+    "3x70+70 (nú) - Al - F.P 1",
+    "3x120+70 (nú) - Al - F.P 1",
+    "3x150+70 - Al - F.P 1",
+    "2x16+25 - Al - F.P 1",
+    "Subterrâneo 16 - Al - F.P 1",
+    "Subterrâneo 25 - Al - F.P 1",
+    "Subterrâneo 50 - Al - F.P 1",
+    "Subterrâneo 95 - Al - F.P 1",
+    "Subterrâneo 150 - Al - F.P 1",
+    "Subterrâneo 240 - Al - F.P 1",
+    "Subterrâneo 400 - Al - F.P 1",
+    "3# 4 - Al - F.P 1",
+    "3# 2 - Al - F.P 1",
+    "3# 1/0 - Al - F.P 1",
+    "3# 2/0 - Al - F.P 1",
+    "3# 4/0 - Al - F.P 1",
+    "2# 4(4) - Al - F.P 1",
+    "2# 2(4) - Al - F.P 1",
+    "2# 2(2) - Al - F.P 1",
+    "2# 1/0(2) - Al - F.P 1",
+    "2# 2/0(2) - Al - F.P 1",
+    "1# 4(4) - Al - F.P 1",
+    "1# 2(2) - Al - F.P 1",
+    "1# 1/0 (2) - Al - F.P 1",
+    "1# 2/0 (2) - Al - F.P 1",
+    "3# 25 - Cu - F.P 1",
+    "3# 35 - Cu - F.P 1",
+    "2# 16(25) - Cu - F.P 1",
+    "2# 25(25) - Cu - F.P 1",
+    "2# 35(16) - Cu - F.P 1",
+    "2# 35(35) - Cu - F.P 1",
+    "1# 25(25) - Cu - F.P 1",
+    "1# 35(16) - Cu - F.P 1",
+    "1# 35(35) - Cu - F.P 1",
+    "3x150+1x80 - Al - F.P 0,8",
+    "3x95+1x54,6 - Al - F.P 0,8",
+    "3x50+1x54,6 - Al - F.P 0,8",
+    "3x50+1x50 - Al - F.P 0,8",
+    "3x35+1x54,6 - Al - F.P 0,8",
+    "3x35+1x35 - Al - F.P 0,8",
+    "3x35+1x50 - Al - F.P 0,8",
+    "3x70+1x70 - Al - F.P 0,8",
+    "3x95+1x70 - Al - F.P 0,8",
+    "3x95+1x50 - Al - F.P 0,8",
+    "3x35+35 (nú) - Al - F.P 0,8",
+    "3x50+50 (nú) - Al - F.P 0,8",
+    "3x70+70 (nú) - Al - F.P 0,8",
+    "3x120+70 (nú) - Al - F.P 0,8",
+    "3x150+70 - Al - F.P 0,8",
+    "2x16+25 - Al - F.P 0,8",
+    "Subterrâneo 16 - Al - F.P 0,8",
+    "Subterrâneo 25 - Al - F.P 0,8",
+    "Subterrâneo 50 - Al - F.P 0,8",
+    "Subterrâneo 95 - Al - F.P 0,8",
+    "Subterrâneo 150 - Al - F.P 0,8",
+    "Subterrâneo 240 - Al - F.P 0,8",
+    "Subterrâneo 400 - Al - F.P 0,8",
+    "3# 4 - Al - F.P 0,8",
+    "3# 2 - Al - F.P 0,8",
+    "3# 1/0 - Al - F.P 0,8",
+    "3# 2/0 - Al - F.P 0,8",
+    "3# 4/0 - Al - F.P 0,8",
+    "2# 4(4) - Al - F.P 0,8",
+    "2# 2(4) - Al - F.P 0,8",
+    "2# 2(2) - Al - F.P 0,8",
+    "2# 1/0(2) - Al - F.P 0,8",
+    "2# 2/0(2) - Al - F.P 0,8",
+    "1# 4(4) - Al - F.P 0,8",
+    "1# 2(2) - Al - F.P 0,8",
+    "1# 1/0 (2) - Al - F.P 0,8",
+    "1# 2/0 (2) - Al - F.P 0,8",
+    "3# 25 - Cu - F.P 0,8",
+    "3# 35 - Cu - F.P 0,8",
+    "2# 16(25) - Cu - F.P 0,8",
+    "2# 25(25) - Cu - F.P 0,8",
+    "2# 35(16) - Cu - F.P 0,8",
+    "2# 35(35) - Cu - F.P 0,8",
+    "1# 25(25) - Cu - F.P 0,8",
+    "1# 35(16) - Cu - F.P 0,8",
+    "1# 35(35) - Cu - F.P 0,8",
+]
+
+
+def load_cables_from_database(xlsm_path: Optional[str] = None) -> List[str]:
+    """Carrega a lista de condutores homologados da aba BASE DE DADOS com fallback completo."""
+    target_path = xlsm_path if (xlsm_path and os.path.exists(xlsm_path)) else get_default_template_path()
+    cables = list(DEFAULT_CABLES_BASE)
+
+    if target_path and os.path.exists(target_path):
+        try:
+            wb = openpyxl.load_workbook(target_path, data_only=True)
+            if 'BASE DE DADOS' in wb.sheetnames:
+                sheet = wb['BASE DE DADOS']
+                sheet_cables = []
+                for r in range(4, sheet.max_row + 1):
+                    val = sheet.cell(r, 1).value
+                    if val and str(val).strip():
+                        c_clean = str(val).strip()
+                        if c_clean not in sheet_cables:
+                            sheet_cables.append(c_clean)
+                if sheet_cables:
+                    return sheet_cables
+            wb.close()
+        except Exception:
+            pass
+
+    return cables
 
 
 def load_scenario_from_excel(xlsm_path: str, cenario: str) -> Dict:

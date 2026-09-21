@@ -20,6 +20,7 @@ for _d in [_curr_dir, _root_dir]:
 # Importa a camada de I/O e persistência Excel
 from cqt_excel_io import (
     DEFAULT_TEMPLATE_PATH,
+    get_default_template_path,
     load_cables_from_database,
     load_scenario_from_excel,
     load_all_scenarios_from_excel,
@@ -32,7 +33,9 @@ from cqt_scenario_tab import ScenarioTab
 
 class CQTManagerGUI:
     """Janela Principal e Orquestradora da Ferramenta CQT."""
-    def __init__(self, template_path: str = DEFAULT_TEMPLATE_PATH, cad_input_json: Optional[str] = None, initial_dest_path: Optional[str] = None):
+    def __init__(self, template_path: Optional[str] = None, cad_input_json: Optional[str] = None, initial_dest_path: Optional[str] = None):
+        if not template_path:
+            template_path = get_default_template_path()
         self.template_path = template_path
         self.cad_input_json = cad_input_json
         self.initial_dest_path = initial_dest_path
@@ -236,6 +239,15 @@ class CQTManagerGUI:
                 tr_list = cenarios[cid]
                 self.tabs[cid].set_trechos_data(tr_list)
                 resumo_cenarios.append(f"• {cid}: {len(tr_list)} trechos carregados")
+
+        # Recarrega e mescla cabos homologados a partir da planilha importada
+        novos_cabos = load_cables_from_database(file_path)
+        if novos_cabos:
+            for c in novos_cabos:
+                if c not in self.cables_list:
+                    self.cables_list.append(c)
+            for tab in self.tabs.values():
+                tab.update_cables_list(self.cables_list)
 
         self._recalcular_todas_abas()
 

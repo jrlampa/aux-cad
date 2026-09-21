@@ -27,6 +27,9 @@ const AppState = {
     potenciaTrafo: '45kVA'
 };
 
+// Exposto globalmente para módulos auxiliares (vias, ambiental, snap e traçado).
+window.AppState = AppState;
+
 // Funções de Gerenciamento de Multi-Estruturas
 function renderizarTagsEstruturas() {
     const cMt = document.getElementById('tagsEstruturasMt');
@@ -384,6 +387,7 @@ function atualizarPosicao(lat, lon) {
     AppState.currentX = utm.x;
     AppState.currentY = utm.y;
     AppState.fuso = fuso;
+    AppState.fusoUtm = fuso;
 
     document.getElementById('inputX').value = utm.x.toFixed(2);
     document.getElementById('inputY').value = utm.y.toFixed(2);
@@ -728,6 +732,8 @@ function inserirPosteNoCad() {
     const numero = document.getElementById('inputNumero').value.trim() || '01';
     const tipoPoste = document.getElementById('selectTipoPoste').value;
     const fuso = parseInt(document.getElementById('selectFuso').value, 10) || 23;
+    AppState.fuso = fuso;
+    AppState.fusoUtm = fuso;
 
     // Equipamentos selecionados
     const equipamentos = [];

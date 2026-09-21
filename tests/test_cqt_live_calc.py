@@ -6,6 +6,11 @@ def test_fator_condutor():
     assert get_fator_condutor("PR3#150(70)AL") == 0.0508
     assert get_fator_condutor("3x50+1x54,6 - Al - F.P 1") == 0.1784
     assert get_fator_condutor("PR3#35(54,6)AL") == 0.2416
+    assert get_fator_condutor("Subterrâneo 150 - Al - F.P 1") == 0.0573
+    assert get_fator_condutor("3# 25 - Cu - F.P 1") == 0.2200
+    assert get_fator_condutor("3x150+1x80 - Al - F.P 0,8") == 0.0566
+    assert get_fator_condutor("3x35+35 (nú) - Al - F.P 1") == 0.1793
+    assert get_fator_condutor("3x35+35 (nó) - Al - F.P 1") == 0.1793
 
 def test_calcular_cqt_topologia_normal():
     # Simula 2 trechos normais

@@ -13,9 +13,19 @@ from cqt_excel_io import (
 def test_load_cables_fallback():
     cables = load_cables_from_database("caminho_inexistente_123.xlsm")
     assert isinstance(cables, list)
-    assert len(cables) > 0
+    assert len(cables) >= 92
     assert "3x150+70 - Al - F.P 1" in cables
     assert "3x35+1x54,6 - Al - F.P 1" in cables
+    assert "Subterrâneo 150 - Al - F.P 1" in cables
+    assert "3# 25 - Cu - F.P 1" in cables
+    assert "3x150+1x80 - Al - F.P 0,8" in cables
+
+
+def test_get_default_template_path():
+    from cqt_excel_io import get_default_template_path
+    path = get_default_template_path()
+    assert os.path.exists(path)
+    assert path.endswith(".xlsm")
 
 
 def test_load_scenario_nonexistent():

@@ -172,7 +172,11 @@ class ScenarioTab(ttk.Frame):
         ent_comp.grid(row=row_num, column=3, padx=2, pady=2)
         ent_comp.insert(0, f"{float(initial_data.get('comprimento_m', 35.0)):.1f}" if initial_data else "35.0")
 
-        cb_cabo = ttk.Combobox(self.tbl_frame, values=self.cables_list, width=22)
+        init_cabo = initial_data.get("condutor") if initial_data else None
+        if init_cabo and str(init_cabo).strip() and str(init_cabo).strip() not in self.cables_list:
+            self.cables_list.append(str(init_cabo).strip())
+
+        cb_cabo = ttk.Combobox(self.tbl_frame, values=self.cables_list, width=24)
         cb_cabo.grid(row=row_num, column=4, padx=2, pady=2)
         default_cabo = "3x35+1x54,6 - Al - F.P 1"
         if idx == 0 and "3x150+70 - Al - F.P 1" in self.cables_list:
@@ -332,6 +336,17 @@ class ScenarioTab(ttk.Frame):
                 "ip250": row["ent_ip250"].get().strip(),
             })
         return trechos
+
+    def update_cables_list(self, new_cables: List[str]):
+        """Atualiza a lista de cabos disponíveis em todas as linhas da aba."""
+        self.cables_list = list(new_cables)
+        for row in self.trechos_rows:
+            cb = row.get("cb_cabo")
+            if cb:
+                cur_val = cb.get()
+                cb["values"] = self.cables_list
+                if cur_val:
+                    cb.set(cur_val)
 
     def set_trechos_data(self, trechos_list: List[Dict]):
         self.clear_all_trechos()

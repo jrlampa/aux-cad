@@ -564,12 +564,32 @@ function calcularLargurasVia(tags) {
     return { larguraPista, larguraCalcada };
 }
 
+function obterFusoAtual() {
+    const selectFuso = document.getElementById('selectFuso');
+    if (selectFuso) {
+        const fusoSelecionado = parseInt(selectFuso.value, 10);
+        if (!isNaN(fusoSelecionado) && fusoSelecionado > 0) {
+            return fusoSelecionado;
+        }
+    }
+
+    if (window.AppState && !isNaN(parseInt(window.AppState.fuso, 10))) {
+        return parseInt(window.AppState.fuso, 10);
+    }
+
+    if (window.AppState && !isNaN(parseInt(window.AppState.fusoUtm, 10))) {
+        return parseInt(window.AppState.fusoUtm, 10);
+    }
+
+    return 23;
+}
+
 /**
  * Converte coordenadas WGS84 para UTM e envia para o CAD via C#
  */
 function converterEEnviarParaCad(elementos) {
     if (!elementos) return;
-    const fuso = (window.AppState && window.AppState.fusoUtm) ? window.AppState.fusoUtm : 23;
+    const fuso = obterFusoAtual();
     const snyder = window.Snyder || (typeof Snyder !== 'undefined' ? Snyder : null);
     if (!snyder || typeof snyder.latLonToUtm !== 'function') {
         console.warn('[Vias CAD] Snyder geodésico indisponível para conversão UTM.');
