@@ -398,17 +398,19 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - **Regra Fundamental de Estrutura Independente do Croqui e Nomenclatura Dinâmica**:
     A criação da estrutura local e a obtenção do croqui são operações distintas. Seja por download automático, manual ou dispensa (`CROQUI = SEM_ARQUIVOS`), a Fase B obrigatoriamente cria `SOB_ROOT\CROQUI\`, copia `BASE_TEMPLATE` para `{BASE}_{SOB}_DESENHO.dwg` (ex.: `PE_A057350816_DESENHO.dwg`), valida o DWG e abre no AutoCAD.
   - Checklist operacional completo para determinar `CONCLUÍDO` vs `BLOQUEADO`.
-- `sob_cad_launcher.lsp` (211 linhas):
+- `sob_cad_launcher.lsp` (409 linhas):
   - Rotina AutoLISP com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`** e **`RECARREGAR_SOB`**.
   - Prompt da Base (`(getstring "\nInforme a Base (PE/CF/AN/RE/NI/MA/SG/TE) <PE>: ")`).
   - Derivação dinâmica de `{baseSigla}_{sobId}_DESENHO.dwg` e fallback com `(vl-directory-files sobRoot "*_DESENHO.dwg" 1)`.
+  - Inicialização estrita de `croquiDir` e blindagem completa contra valores `nil` em chamadas `strcat`.
+  - Resolução robusta de caminho em `sob-localizar-lsp` e comando `RECARREGAR_SOB` para recarregar sem reiniciar o CAD.
   - Função operacional `(sob-executar-fluxo sobInput destPath abrirCad baseInput)` com verificação estrita de abertura de DWG (`CURRENT_AUTOCAD_DWG == BASE_DWG`).
   - Apresentação no console e em diálogo do status de rollback e idempotência.
 - `sob_launcher_gui.py` (282 linhas):
   - Interface gráfica interativa para preparação autônoma de projetos SOB via Windows Explorer (`Abrir_SOB.bat`) ou através do Hub Central (`aux_cad_hub.py`).
   - Seleção visual de SOB, Base técnica (combobox Enel Rio/FABAO) e pasta de destino.
 - **Cobertura & Testes**:
-  - **281 testes unitários e de integração com 100% de aprovação (PASS)** em todo o projeto.
+  - **280 testes unitários e de integração com 100% de aprovação (PASS)** em todo o projeto.
   - **81% de cobertura global no módulo SOB** (89% em `sob_manager.py`, 88% em `sob_bases.py`, 85% em `sob_progress_gui.py`, 83% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_fallback_manual.py`, 81% em `sob_idempotencia.py`, 100% em `sob_logger.py`).
   - **Suíte global de não-regressão**: 100% dos testes passando sem falhas.
   - **Bateria de testes operacionais no AutoCAD 2026 Core Console**: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
