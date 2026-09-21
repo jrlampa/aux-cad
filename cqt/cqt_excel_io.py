@@ -7,8 +7,11 @@ e gravação atômica da planilha multi-cenários (.xlsm) preservando o template
 import os
 import shutil
 import sys
+import warnings
 from typing import Dict, List, Optional
 import openpyxl
+
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 _curr_dir = os.path.dirname(os.path.abspath(__file__))
 _root_dir = os.path.dirname(_curr_dir)
