@@ -371,12 +371,31 @@
 (defun c:NOVASOB () (c:SOB))
 (defun c:PREPARAR_SOB () (c:SOB))
 
+;; Localiza o arquivo AutoLISP do launcher SOB
+(defun sob-localizar-lsp (/ lspScript)
+  (setq lspScript nil)
+  (if (and (boundp '*aux-cad-root*) *aux-cad-root*)
+    (setq lspScript (findfile (strcat *aux-cad-root* "sob\\sob_cad_launcher.lsp")))
+  )
+  (if (not lspScript)
+    (setq lspScript (findfile "sob\\sob_cad_launcher.lsp"))
+  )
+  (if (not lspScript)
+    (setq lspScript (findfile "sob_cad_launcher.lsp"))
+  )
+  (if (not lspScript)
+    (setq lspScript (findfile "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\sob\\sob_cad_launcher.lsp"))
+  )
+  (if (not lspScript)
+    (setq lspScript "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\sob\\sob_cad_launcher.lsp")
+  )
+  lspScript
+)
+
 ;; Comando de Recarregamento Rápido
-(defun c:RECARREGAR_SOB ()
-  (setq _f (sob-localizar-script))
-  (setq _lsp (findfile "sob\\sob_cad_launcher.lsp"))
-  (if (not _lsp) (setq _lsp (findfile "sob_cad_launcher.lsp")))
-  (if _lsp
+(defun c:RECARREGAR_SOB (/ _lsp)
+  (setq _lsp (sob-localizar-lsp))
+  (if (and _lsp (findfile _lsp))
     (progn
       (load _lsp)
       (princ "\n[SUCESSO] Rotina SOB recarregada com sucesso!")
