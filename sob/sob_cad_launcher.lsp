@@ -92,6 +92,7 @@
       ;; 2. Derivação canônica dos caminhos (Seções 2, 3, 4 e 5)
       (setq destinationRoot (vl-string-right-trim "\\" (vl-string-trim " " destPath)))
       (setq sobRoot (strcat destinationRoot "\\" sobName))
+      (setq croquiDir (strcat sobRoot "\\CROQUI"))
       (if (not (boundp '*sob-base-padrao*))
         (setq *sob-base-padrao* "PE")
       )
@@ -100,12 +101,12 @@
                         "PE"))
       (setq baseDwg (strcat sobRoot "\\" baseSigla "_" sobId "_DESENHO.dwg"))
 
-      ;; Logs canônicos padronizados (Seção 9)
-      (princ (strcat "\n[INFO] SOB: " sobId))
-      (princ (strcat "\n[INFO] BASE: " baseSigla))
-      (princ (strcat "\n[INFO] SOB_ROOT: " sobRoot))
-      (princ (strcat "\n[INFO] CROQUI_DIR: " croquiDir))
-      (princ (strcat "\n[INFO] BASE_DWG: " baseDwg))
+      ;; Logs canônicos padronizados (Seção 9) - Protegidos contra nil
+      (princ (strcat "\n[INFO] SOB: " (if sobId sobId "")))
+      (princ (strcat "\n[INFO] BASE: " (if baseSigla baseSigla "")))
+      (princ (strcat "\n[INFO] SOB_ROOT: " (if sobRoot sobRoot "")))
+      (princ (strcat "\n[INFO] CROQUI_DIR: " (if croquiDir croquiDir "")))
+      (princ (strcat "\n[INFO] BASE_DWG: " (if baseDwg baseDwg "")))
 
       ;; 3. Proteção contra SOB Existente (NÃO SOBRESCREVER / NÃO APAGAR / NÃO MISTURAR)
       (if (vl-file-directory-p sobRoot)
@@ -230,11 +231,14 @@
                             (cons "BASE_DWG" baseDwg))
                     )
                     (progn
+                      (setq dwgNomeExib (if (and dwgTarget (/= dwgTarget ""))
+                                          (strcat (vl-filename-base dwgTarget) ".dwg")
+                                          "BASE_SOB_DESENHO.dwg"))
                       (sob-alert (strcat "Preparação de Projeto Concluída com Sucesso!\n\n"
-                                         "SOB_ID: " sobId "\n"
-                                         "SOB_NAME: " sobName "\n"
-                                         "SOB_ROOT: " sobRoot "\n"
-                                         "BASE_DWG: BASE_SOB_DESENHO.dwg\n\n"
+                                         "SOB_ID: " (if sobId sobId "") "\n"
+                                         "SOB_NAME: " (if sobName sobName "") "\n"
+                                         "SOB_ROOT: " (if sobRoot sobRoot "") "\n"
+                                         "BASE_DWG: " dwgNomeExib "\n\n"
                                          "O desenho foi aberto no AutoCAD."))
                       (list (cons "sucesso" t)
                             (cons "status" "CONCLUIDO")
