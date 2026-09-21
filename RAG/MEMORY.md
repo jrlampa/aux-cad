@@ -216,18 +216,20 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `ambiental\checklist_ambiental_manager.py`: 92%
   - `unifilar\arvore_parser.py`: 92%
   - `unifilar\arvore_database.py`: 92%
+  - `cqt\cqt_scenario_tab.py`: 93%
   - `cqt\cqt_live_calc.py`: 91%
   - `orcamento\orcamento_core.py`: 91%
   - `ambiental\app_buffer_generator.py`: 89%
   - `orcamento\orcamento_database.py`: 88%
   - `orcamento\orcamento_kits.py`: 84%
   - `ambiental\croqui_ambiental_generator.py`: 88%
-  - `cqt\cqt_quadros_generator.py`: 88%
+  - `cqt\cqt_quadros_generator.py`: 85%
   - `cpfc\cpfc_excel.py`: 88%
   - `unifilar\unifilar_manager.py`: 85%
   - `unifilar\arvore_client.py`: 82%
   - `ambiental\cad_to_kmz_exporter.py`: 86%
-  - `cqt\cqt_excel_io.py`: 88%
+  - `cqt\cqt_excel_io.py`: 87%
+  - `cqt (módulo global)`: 80%
   - `cpfc\cpfc_gui.py`: 85%
   - `cpfc\cpfc_manager.py`: 83%
   - `unifilar\arvore_client.py`: 82%
@@ -410,8 +412,8 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Interface gráfica interativa para preparação autônoma de projetos SOB via Windows Explorer (`Abrir_SOB.bat`) ou através do Hub Central (`aux_cad_hub.py`).
   - Seleção visual de SOB, Base técnica (combobox Enel Rio/FABAO) e pasta de destino.
 - **Cobertura & Testes**:
-  - **280 testes unitários e de integração com 100% de aprovação (PASS)** em todo o projeto.
-  - **81% de cobertura global no módulo SOB** (89% em `sob_manager.py`, 88% em `sob_bases.py`, 85% em `sob_progress_gui.py`, 83% em `sob_gomnet.py`, 82% em `sob_rollback.py`, 81% em `sob_fallback_manual.py`, 81% em `sob_idempotencia.py`, 100% em `sob_logger.py`).
+  - **284 testes unitários e de integração com 100% de aprovação (PASS)** em todo o projeto.
+  - **81% de cobertura global no módulo SOB** e **80% no módulo CQT**.
   - **Suíte global de não-regressão**: 100% dos testes passando sem falhas.
   - **Bateria de testes operacionais no AutoCAD 2026 Core Console**: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
 
