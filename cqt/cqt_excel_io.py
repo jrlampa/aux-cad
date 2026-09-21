@@ -139,7 +139,9 @@ def load_cables_from_database(xlsm_path: Optional[str] = None) -> List[str]:
 
     if target_path and os.path.exists(target_path):
         try:
-            wb = openpyxl.load_workbook(target_path, data_only=True)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                wb = openpyxl.load_workbook(target_path, data_only=True)
             if 'BASE DE DADOS' in wb.sheetnames:
                 sheet = wb['BASE DE DADOS']
                 sheet_cables = []
@@ -164,7 +166,9 @@ def load_scenario_from_excel(xlsm_path: str, cenario: str) -> Dict:
         return {}
 
     try:
-        wb = openpyxl.load_workbook(xlsm_path, data_only=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            wb = openpyxl.load_workbook(xlsm_path, data_only=True)
         sheet_cqt_name = f"CQT {cenario}"
         sheet_cargas_name = cenario
 
@@ -245,7 +249,9 @@ def load_all_scenarios_from_excel(xlsm_path: str) -> Dict:
     }
 
     try:
-        wb = openpyxl.load_workbook(xlsm_path, data_only=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            wb = openpyxl.load_workbook(xlsm_path, data_only=True)
         for cenario in ["ATUAL", "ATUAL+NC", "PROJETADO"]:
             data_cen = load_scenario_from_excel(xlsm_path, cenario)
             if data_cen and data_cen.get("trechos"):
@@ -278,7 +284,9 @@ def update_cqt_excel(template_path: str, dest_path: str, data: Dict) -> List[str
             os.makedirs(dest_dir, exist_ok=True)
         shutil.copy2(template_path, dest_path)
 
-    wb = openpyxl.load_workbook(dest_path, keep_vba=True, data_only=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        wb = openpyxl.load_workbook(dest_path, keep_vba=True, data_only=False)
 
     scenarios_dict = {}
     if "scenarios" in data:

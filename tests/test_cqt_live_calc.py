@@ -30,6 +30,10 @@ def test_calcular_cqt_alerta_normativo():
         {"letra": "A", "montante": "TRAFO", "comprimento_m": 500.0, "condutor": "PR3#35(54,6)AL", "mono": 0, "bi": 30, "tri": 0, "ip125": 10}
     ]
     res = calcular_cqt_topologia(trechos, potencia_trafo=45.0, dmdi=1.30)
+    assert res["pior_qt"] > LIMITE_NORMATIVO_QT
+    assert res["tem_alerta_normativo"] is True
+    assert "A" in res["trechos_em_alerta"]
+
 def test_calcular_dmdi():
     from cqt_live_calc import calcular_dmdi
     assert calcular_dmdi(0) == 1.30
