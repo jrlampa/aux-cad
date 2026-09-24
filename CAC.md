@@ -525,7 +525,59 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
   - `sob_sharepoint.py` (637 linhas): Driver Selenium headless, autenticação Microsoft Online, busca unívoca diretamente na pasta compartilhada de **Levantamentos de campo**, download da pasta inteira em ZIP com nivelamento para `CROQUI/`, verificação prévia de conteúdo (`validar_conteudo_disponivel`) e detecção de ambiguidade (`SobConflictError`).
   - `sob_manager.py` (747 linhas - mantido estritamente abaixo do soft limit de 750 linhas): Orquestrador de máquina de estados segregada em Fase A e Fase B, suporte ao parâmetro de base, integração com fallback manual, criação obrigatória de estrutura e modelo independente do croqui, rastreamento por `RUN_ID` e checklist operacional completo.
   - `sob_cad_launcher.lsp` (409 linhas): Ponto de entrada nativo no AutoCAD com comandos **`SOB`**, **`NOVASOB`**, **`PREPARAR_SOB`**, **`RECARREGAR_SOB`**, solicitação de Base com default `PE`, derivação dinâmica de `{baseSigla}_{sobId}_DESENHO.dwg`, fallback com busca de arquivo `*_DESENHO.dwg`, tratamento de status idempotente, inicialização estrita de `croquiDir`, blindagem de `strcat` contra `nil`, localização robusta e comando de recarga dinâmico sem reiniciar o CAD.
-- **Cobertura de Testes**: **288 testes unitários e de integração com 100% de sucesso (PASS)** em todo o projeto, **81% de cobertura global no módulo SOB** e **80% de cobertura global no módulo CQT** (`cqt_scenario_tab.py`: 93%, `cqt_live_calc.py`: 91%, `cqt_excel_io.py`: 87%, `cqt_quadros_generator.py`: 85%). Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários.
+  - **Cobertura de Testes**: **288 testes unitários e de integração com 100% de sucesso (PASS)** em todo o projeto, **81% de cobertura global no módulo SOB** e **80% de cobertura global no módulo CQT** (`cqt_scenario_tab.py`: 93%, `cqt_live_calc.py`: 91%, `cqt_excel_io.py`: 87%, `cqt_quadros_generator.py`: 85%). Bateria de testes operacionais no AutoCAD 2026 Core Console: **PASS** em todos os cenários.
+
+---
+
+## Registro de Investigação OSMPALETA - 2026-09-23
+
+### Escopo e decisões
+- Investigação iniciada por falha de desenho automático de ruas no AutoCAD ao inserir postes.
+- Escopo cobriu aquisição OSM, coordenadas/UTM, WebView2, AutoCAD .NET, `CadBridge` e múltiplas instâncias do AutoCAD.
+- Regra adotada: evidência operacional antes de qualquer correção funcional.
+- Não introduzir COM, ActiveX, IPC, Named Pipes, `accoreconsole`, proxy ou backend no fluxo OSMPALETA.
+
+### Aquisição OSM
+- API oficial OSM retornou HTTP 429 em execuções reais; fallbacks Overpass retornaram 429, timeout ou erro de rede.
+- Requisições originais não tinham User-Agent identificável, deduplicação in-flight ou política específica de 429.
+- A BBOX testada era pequena; não houve evidência de erro de fuso, UTM, Snyder ou inversão X/Y.
+- Correção mantida: User-Agent `OSMPALETA (CAD interno)`, deduplicação por BBOX, classificação de status, retry limitado, `Retry-After`, fallback somente para falhas transitórias e mensagens/logs de diagnóstico.
+
+### Evidência OSM/payload
+- Consulta real HTTP 200: 872 elementos, 91 ways, 595 nodes, 57 ways com highway, 35 vias, 22 calçadas, 13 obstruções e 417 vértices.
+- Payload WebView2 real: `vias=35`, `calcadas=22`, `obstrucoes=13`, `vertices=417`.
+- Outro payload real observado no CAD: `vias=6`, `calcadas=1`, `obstrucoes=0`, `verticesTotal=65`, `polylinesCriadas=31`.
+- O payload de 6 vias foi atribuído ao fluxo real `converterEEnviarParaCad` -> `window.chrome.webview.postMessage` -> `WebMessageReceived` -> `CadBridge`, não ao self-test artificial.
+
+### Evidência AutoCAD .NET
+- Self-test interno: `DocumentCount=1`, `MdiActiveDocument=TESTE_POSTE_E_VIAS.dwg`, Database/BlockTable/ModelSpace OK.
+- Transaction iniciou e commitou; Polyline persistida com `EntitiesBefore=177`, `EntitiesAfter=178`, `Delta=1`, `EntityExists=TRUE`.
+- A API CAD básica e a criação de entidades foram comprovadas dentro da instância real.
+
+### Diagnóstico WebView2
+- Lifecycle real: `MapaControl.Loaded` -> `CreateAsync` -> `EnsureCoreWebView2Async` -> configuração/registro de `WebMessageReceived` -> `Navigate`.
+- `PaletteHost.MostrarPaleta()` retorna antes da conclusão do lifecycle assíncrono.
+- `CoreWebView2=NULL` no self-test ocorreu porque o comando foi executado cedo demais.
+- Payload real posterior e logs CAD comprovam inicialização posterior do WebView2 e processamento pelo handler.
+- Classificação: **W2 - self-test antecipado em relação à inicialização assíncrona do WebView2**.
+
+### Limitação do teste artificial
+- Para uma entrada em `vias`, o `CadBridge` cria o eixo e quatro offsets; portanto uma via pode gerar 5 polylines, não 1.
+- O `CadBridge` não foi alterado para adaptar essa expectativa.
+- Comandos e instrumentações temporárias (`OSMPALETA_SELFTEST` e `OSMPALETA_WEBTEST`) foram removidos.
+
+### Validação final
+- Build Release `net8.0-windows` e `net48`: aprovados.
+- `node --check` de `vias_obstrucoes.js` e `app.js`: aprovados.
+- `pytest tests/test_mapa_paleta.py -q`: `16 passed`.
+- Nenhum diagnóstico temporário permaneceu no projeto.
+
+### Homologação da correção de prontidão WebView2 - 2026-09-23
+- `MapaControl.xaml.cs` passou a usar uma única task idempotente de inicialização (`_initializationTask`) como condição de prontidão.
+- A prontidão somente termina após `EnsureCoreWebView2Async`, configuração, registro de `WebMessageReceived` e `NavigationCompleted` bem-sucedido.
+- `BtnRecarregar_Click` e `EnviarMensagemWeb` aguardam a mesma task com `async/await`; não há `Sleep`, `.Wait()`, `.Result`, retry ou nova infraestrutura.
+- Falhas de inicialização são propagadas aos chamadores e exibidas no status; não há acesso prematuro silencioso a `CoreWebView2`.
+- Build/testes finais aprovados: `net48`, `net8.0-windows`, syntax checks JS e `16 passed`.
 
 
 

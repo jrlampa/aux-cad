@@ -17,7 +17,9 @@ const ViasObstrucoesState = {
     camadaVias: null,
     camadaCalcadas: null,
     camadaObstrucoes: null,
-    carregando: false
+    carregando: false,
+    inFlightRequests: new Map(),
+    ultimaFalha: null
 };
 
 /**
@@ -184,74 +186,154 @@ function converterOsmXmlParaJson(xmlDoc) {
  * Executa consulta de vias, passeios e obstruções com prioridade máxima para a API Oficial OSM
  * Zero bloqueio CORS (Access-Control-Allow-Origin: *), tempo de resposta inferior a 1s
  */
-async function executarConsultaOsm(bbox) {
-    if (!bbox) return null;
+function obterChaveConsultaOsm(bbox) {
+    return `vias-v1:${bbox.south.toFixed(6)},${bbox.west.toFixed(6)},${bbox.north.toFixed(6)},${bbox.east.toFixed(6)}`;
+}
 
-    // 1. API Oficial do OpenStreetMap (0.6 map.json)
+function aguardarOsm(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function obterRetryAfterMs(res) {
+    const valor = res.headers?.get('Retry-After');
+    if (!valor) return null;
+    const segundos = Number(valor);
+    if (Number.isFinite(segundos)) return Math.max(0, segundos * 1000);
+    const data = Date.parse(valor);
+    return Number.isFinite(data) ? Math.max(0, data - Date.now()) : null;
+}
+
+function resultadoOsm(status, detalhes = {}) {
+    return { status, data: detalhes.data || null, ...detalhes };
+}
+
+async function executarConsultaOsmInterna(bbox, requestKey) {
+    const inicio = performance.now();
     const urlOsm = `https://api.openstreetmap.org/api/0.6/map.json?bbox=${bbox.west.toFixed(6)},${bbox.south.toFixed(6)},${bbox.east.toFixed(6)},${bbox.north.toFixed(6)}`;
-    try {
-        const res = await fetch(urlOsm, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json, application/xml, text/xml, */*'
-            },
-            signal: AbortSignal.timeout(8000)
-        });
+    let ultimaFalha = null;
+    const maxTentativasOficial = 2;
 
-        if (res.ok) {
-            const rawText = await res.text();
-            if (rawText && rawText.trim().length > 0) {
-                const trimmed = rawText.trim();
-                if (trimmed.startsWith('<')) {
-                    const parser = new DOMParser();
-                    const xmlDoc = parser.parseFromString(trimmed, 'text/xml');
-                    const parsedData = converterOsmXmlParaJson(xmlDoc);
-                    if (parsedData && parsedData.elements && parsedData.elements.length > 0) {
-                        return parsedData;
+    for (let tentativa = 1; tentativa <= maxTentativasOficial; tentativa++) {
+        try {
+            console.info('[OSMPALETA][OSM][REQUEST]', { endpoint: urlOsm, bbox, requestKey, tentativa });
+            const res = await fetch(urlOsm, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json, application/xml, text/xml, */*' },
+                signal: AbortSignal.timeout(8000)
+            });
+            const elapsedMs = Math.round(performance.now() - inicio);
+            console.info('[OSMPALETA][OSM][RESPONSE]', { status: res.status, elapsedMs, endpoint: urlOsm });
+
+            if (res.status === 429) {
+                const retryAfterMs = obterRetryAfterMs(res);
+                console.warn('[OSMPALETA][OSM][429]', { status: res.status, retryAfter: retryAfterMs, tentativa, endpoint: urlOsm });
+                if (tentativa < maxTentativasOficial) {
+                    if (retryAfterMs !== null && retryAfterMs > 10000) {
+                        return resultadoOsm('RATE_LIMITED', { endpoint: urlOsm, attempts: tentativa, elapsedMs, retryAfterMs });
                     }
-                } else {
-                    const data = JSON.parse(trimmed);
-                    if (data && data.elements && Array.isArray(data.elements) && data.elements.length > 0) {
-                        return data;
-                    }
+                    const delayMs = retryAfterMs ?? 2000;
+                    console.info('[OSMPALETA][OSM][RETRY]', { attempt: tentativa + 1, delayMs });
+                    await aguardarOsm(delayMs);
+                    continue;
                 }
+                return resultadoOsm('RATE_LIMITED', { endpoint: urlOsm, attempts: tentativa, elapsedMs, retryAfterMs });
             }
+
+            if (!res.ok) {
+                ultimaFalha = resultadoOsm(res.status >= 500 ? 'SERVER_ERROR' : 'HTTP_ERROR', { endpoint: urlOsm, attempts: tentativa, elapsedMs, httpStatus: res.status });
+                break;
+            }
+
+            const rawText = (await res.text()).trim();
+            if (!rawText) return resultadoOsm('EMPTY_RESULT', { endpoint: urlOsm, attempts: tentativa, elapsedMs });
+            let data;
+            if (rawText.startsWith('<')) {
+                const xmlDoc = new DOMParser().parseFromString(rawText, 'text/xml');
+                data = converterOsmXmlParaJson(xmlDoc);
+            } else {
+                data = JSON.parse(rawText);
+            }
+            if (!data || !Array.isArray(data.elements)) return resultadoOsm('INVALID_RESPONSE', { endpoint: urlOsm, attempts: tentativa, elapsedMs });
+            if (data.elements.length === 0) return resultadoOsm('EMPTY_RESULT', { endpoint: urlOsm, attempts: tentativa, elapsedMs });
+            console.info('[OSMPALETA][OSM][FINAL]', { status: 'SUCCESS', endpoint: urlOsm, attempts: tentativa, elapsedMs });
+            return resultadoOsm('SUCCESS', { data, endpoint: urlOsm, attempts: tentativa, elapsedMs });
+        } catch (err) {
+            const elapsedMs = Math.round(performance.now() - inicio);
+            const status = err?.name === 'TimeoutError' || err?.name === 'AbortError' ? 'TIMEOUT' : 'NETWORK_ERROR';
+            ultimaFalha = resultadoOsm(status, { endpoint: urlOsm, attempts: tentativa, elapsedMs, error: err });
+            console.warn('[OSMPALETA][OSM][ERRO]', { status, endpoint: urlOsm, attempts: tentativa, elapsedMs });
+            break;
         }
-    } catch (err) {
-        console.warn('[Vias OSM] Falha ou timeout na API oficial OSM, tentando fallback Overpass...', err);
     }
 
-    // 2. Fallbacks Overpass API com endpoints resilientes
+    // Fallback somente para falhas transitórias; 429 não gera rajada em outros provedores.
+    if (!ultimaFalha || !['TIMEOUT', 'NETWORK_ERROR', 'SERVER_ERROR'].includes(ultimaFalha.status)) {
+        console.warn('[OSMPALETA][OSM][FINAL]', ultimaFalha || resultadoOsm('HTTP_ERROR', { endpoint: urlOsm }));
+        return ultimaFalha || resultadoOsm('HTTP_ERROR', { endpoint: urlOsm });
+    }
+
     const bboxStr = `${bbox.south.toFixed(5)},${bbox.west.toFixed(5)},${bbox.north.toFixed(5)},${bbox.east.toFixed(5)}`;
     const queryOverpass = `[out:json][timeout:15];(way["highway"](${bboxStr});way["building"](${bboxStr});way["barrier"](${bboxStr}););out body geom;>;out skel qt;`;
     const bodyData = 'data=' + encodeURIComponent(queryOverpass);
-
     const fallbackEndpoints = [
         'https://overpass.private.coffee/api/interpreter',
         'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
     ];
+    let fallbackRateLimited = false;
 
-    for (const ep of fallbackEndpoints) {
+    for (const endpoint of fallbackEndpoints) {
         try {
-            const res = await fetch(ep, {
+            console.info('[OSMPALETA][OSM][REQUEST]', { endpoint, bbox, requestKey });
+            const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'Accept': 'application/json'
                 },
                 body: bodyData,
                 signal: AbortSignal.timeout(12000)
             });
+            const elapsedMs = Math.round(performance.now() - inicio);
+            console.info('[OSMPALETA][OSM][RESPONSE]', { status: res.status, elapsedMs, endpoint });
+            if (res.status === 429) {
+                fallbackRateLimited = true;
+                console.warn('[OSMPALETA][OSM][429]', { status: res.status, retryAfter: obterRetryAfterMs(res), tentativa: 1, endpoint });
+                continue;
+            }
             if (!res.ok) continue;
             const data = await res.json();
-            if (data && data.elements && Array.isArray(data.elements) && data.elements.length > 0) {
-                return data;
+            if (data && Array.isArray(data.elements) && data.elements.length > 0) {
+                console.info('[OSMPALETA][OSM][FINAL]', { status: 'SUCCESS', endpoint, attempts: 1, elapsedMs });
+                return resultadoOsm('SUCCESS', { data, endpoint, attempts: 1, elapsedMs });
             }
         } catch (err) {
-            // Tenta próximo endpoint com fallback automático
+            console.warn('[OSMPALETA][OSM][ERRO]', { status: err?.name === 'TimeoutError' ? 'TIMEOUT' : 'NETWORK_ERROR', endpoint });
         }
     }
 
-    return null;
+    return resultadoOsm(fallbackRateLimited ? 'RATE_LIMITED' : 'NETWORK_ERROR', {
+        endpoint: ultimaFalha.endpoint,
+        attempts: ultimaFalha.attempts,
+        elapsedMs: Math.round(performance.now() - inicio)
+    });
+}
+
+async function executarConsultaOsm(bbox) {
+    if (!bbox) return resultadoOsm('INVALID_REQUEST');
+    const requestKey = obterChaveConsultaOsm(bbox);
+    const existente = ViasObstrucoesState.inFlightRequests.get(requestKey);
+    if (existente) {
+        console.info('[OSMPALETA][OSM][DEDUP] requisição já em andamento', requestKey);
+        console.info('[OSMPALETA][OSM][DEDUP] resultado compartilhado', requestKey);
+        return existente;
+    }
+
+    console.info('[OSMPALETA][OSM][DEDUP] nova requisição', requestKey);
+    const requisicao = executarConsultaOsmInterna(bbox, requestKey).finally(() => {
+        ViasObstrucoesState.inFlightRequests.delete(requestKey);
+    });
+    ViasObstrucoesState.inFlightRequests.set(requestKey, requisicao);
+    return requisicao;
 }
 
 /**
@@ -278,14 +360,20 @@ async function carregarContextoUrbano(lat, lon, raioMetros = 150, mapa = null, f
     const bbox = calcularBbox(lat, lon, raioMetros);
 
     ViasObstrucoesState.carregando = true;
-    const data = await executarConsultaOsm(bbox);
+    const resultado = await executarConsultaOsm(bbox);
     ViasObstrucoesState.carregando = false;
 
-    if (data && data.elements) {
+    if (resultado.status === 'SUCCESS' && resultado.data) {
         ViasObstrucoesState.cacheGrid.add(gridKey);
-        renderizarElementosOsm(data, ViasObstrucoesState.ativo ? mapa : null, querCad);
+        renderizarElementosOsm(resultado.data, ViasObstrucoesState.ativo ? mapa : null, querCad);
     } else {
-        console.warn('[Vias/Obstruções OSM] Falha temporária nos servidores OSM para a coordenada:', lat, lon);
+        ViasObstrucoesState.ultimaFalha = resultado;
+        console.warn('[OSMPALETA][OSM][ERRO]', { ...resultado, bbox });
+        if (typeof showToast === 'function') {
+            showToast(resultado.status === 'RATE_LIMITED'
+                ? 'O OpenStreetMap limitou temporariamente as consultas. Aguarde alguns segundos e tente novamente.'
+                : 'Não foi possível consultar os dados do OpenStreetMap neste momento.', 'warning');
+        }
     }
 }
 
@@ -360,17 +448,20 @@ async function desenharViasNoCad(forcarReconsulta = false, mapa = null) {
         return;
     }
 
-    const data = await executarConsultaOsm(bbox);
+    const resultado = await executarConsultaOsm(bbox);
 
-    if (data && data.elements) {
-        renderizarElementosOsm(data, map, true);
+    if (resultado.status === 'SUCCESS' && resultado.data) {
+        renderizarElementosOsm(resultado.data, map, true);
         const nVias = ViasObstrucoesState.elementosAcumulados.vias.length;
         if (typeof showToast === 'function') {
             showToast(`🛣️ ${nVias} trechos de vias/passeios desenhados no CAD!`, 'success');
         }
     } else {
+        console.warn('[OSMPALETA][OSM][ERRO]', { ...resultado, bbox });
         if (typeof showToast === 'function') {
-            showToast('Não foi possível obter os eixos de vias do OSM no momento.', 'warning');
+            showToast(resultado.status === 'RATE_LIMITED'
+                ? 'O OpenStreetMap limitou temporariamente as consultas. Aguarde alguns segundos e tente novamente.'
+                : 'Não foi possível obter os eixos de vias do OSM no momento.', 'warning');
         }
     }
 }
@@ -380,6 +471,20 @@ async function desenharViasNoCad(forcarReconsulta = false, mapa = null) {
  */
 function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
     if (!osmData || !osmData.elements) return;
+
+    const pipeline = {
+        elementosOsmRecebidos: osmData.elements.length,
+        waysEncontradas: 0,
+        waysComHighway: 0,
+        waysComNodes: 0,
+        waysComCoords: 0,
+        waysConvertidasUtm: 0,
+        viasPayload: 0,
+        calcadasPayload: 0,
+        obstrucoesPayload: 0,
+        totalVerticesPayload: 0,
+        descartes: {}
+    };
 
     // Indexa nós por ID
     const nodes = {};
@@ -398,8 +503,25 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
     osmData.elements.forEach(el => {
         if (el.type !== 'way') return;
 
-        // Evita reprocessar o mesmo way já desenhado no CAD/Leaflet
-        if (el.id && ViasObstrucoesState.waysProcessados.has(el.id)) return;
+        pipeline.waysEncontradas += 1;
+        const tags = el.tags || {};
+        const highway = tags.highway || null;
+
+        if (el.id && ViasObstrucoesState.waysProcessados.has(el.id)) {
+            pipeline.descartes[el.id] = 'way já processado';
+            console.log('[OSMPALETA][OSM][WAY]', {
+                id: el.id,
+                type: el.type,
+                tags: tags,
+                highway,
+                nodes: Array.isArray(el.nodes) ? el.nodes.length : 0,
+                coords: 0,
+                pontosUtm: 0,
+                status: 'DESCARTADO',
+                motivo: 'way já processado'
+            });
+            return;
+        }
         if (el.id) ViasObstrucoesState.waysProcessados.add(el.id);
 
         let coords = [];
@@ -408,10 +530,51 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
         } else if (el.nodes && Array.isArray(el.nodes)) {
             coords = el.nodes.map(nodeId => nodes[nodeId]).filter(Boolean);
         }
-        if (coords.length < 2) return;
 
+        const nodesCount = Array.isArray(el.nodes) ? el.nodes.length : 0;
+        const coordsCount = coords.length;
 
-        const tags = el.tags || {};
+        if (highway) pipeline.waysComHighway += 1;
+        if (nodesCount > 0) pipeline.waysComNodes += 1;
+        if (coordsCount >= 2) pipeline.waysComCoords += 1;
+
+        if (!highway && !tags.building && !tags.barrier && !(tags.footway === 'sidewalk' || tags.sidewalk || tags.highway === 'footway' || tags.highway === 'pedestrian')) {
+            console.log('[OSMPALETA][OSM][WAY]', {
+                id: el.id,
+                type: el.type,
+                tags: tags,
+                highway,
+                nodes: nodesCount,
+                coords: coordsCount,
+                pontosUtm: 0,
+                status: 'DESCARTADO',
+                motivo: 'sem tags relevantes (highway/building/barrier/footway)'
+            });
+            return;
+        }
+
+        if (coordsCount < 2) {
+            console.log('[OSMPALETA][OSM][WAY]', {
+                id: el.id,
+                type: el.type,
+                tags: tags,
+                highway,
+                nodes: nodesCount,
+                coords: coordsCount,
+                pontosUtm: 0,
+                status: 'DESCARTADO',
+                motivo: 'coords.length < 2'
+            });
+            return;
+        }
+
+        const tagsResumo = {
+            building: !!tags.building,
+            barrier: !!tags.barrier,
+            footway: tags.footway || null,
+            sidewalk: tags.sidewalk || null,
+            highway: tags.highway || null
+        };
 
         // 1. Edificações e Construções (Obstruções Físicas)
         if (tags.building) {
@@ -427,12 +590,23 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
                 ViasObstrucoesState.camadaObstrucoes.addLayer(poly);
             }
             novosElementos.obstrucoes.push({ tipo: 'EDIFICACAO', nome: nomeEdif, coords });
+            console.log('[OSMPALETA][OSM][WAY]', {
+                id: el.id,
+                type: el.type,
+                tags: tagsResumo,
+                highway,
+                nodes: nodesCount,
+                coords: coordsCount,
+                pontosUtm: 0,
+                status: 'ACEITO',
+                motivo: 'obstrução / building'
+            });
         }
         // 2. Muros e Barreiras (Obstruções Lineares)
         else if (tags.barrier) {
             if (mapa && ViasObstrucoesState.camadaObstrucoes) {
                 const barreiraLinha = L.polyline(coords, {
-                    color: '#dc2626', // Vermelho alerta
+                    color: '#dc2626',
                     weight: 2,
                     dashArray: '3, 4',
                     opacity: 0.8
@@ -441,12 +615,23 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
                 ViasObstrucoesState.camadaObstrucoes.addLayer(barreiraLinha);
             }
             novosElementos.obstrucoes.push({ tipo: 'BARREIRA', nome: tags.barrier, coords });
+            console.log('[OSMPALETA][OSM][WAY]', {
+                id: el.id,
+                type: el.type,
+                tags: tagsResumo,
+                highway,
+                nodes: nodesCount,
+                coords: coordsCount,
+                pontosUtm: 0,
+                status: 'ACEITO',
+                motivo: 'obstrução / barrier'
+            });
         }
         // 3. Calçadas e Passeios Públicos
         else if (tags.footway === 'sidewalk' || tags.sidewalk || tags.highway === 'footway' || tags.highway === 'pedestrian') {
             if (mapa && ViasObstrucoesState.camadaCalcadas) {
                 const calcadaLinha = L.polyline(coords, {
-                    color: '#d97706', // Âmbar claro para passeio público
+                    color: '#d97706',
                     weight: 2.5,
                     dashArray: '2, 3',
                     opacity: 0.85
@@ -455,6 +640,17 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
                 ViasObstrucoesState.camadaCalcadas.addLayer(calcadaLinha);
             }
             novosElementos.calcadas.push({ tipo: 'PASSEIO', coords });
+            console.log('[OSMPALETA][OSM][WAY]', {
+                id: el.id,
+                type: el.type,
+                tags: tagsResumo,
+                highway,
+                nodes: nodesCount,
+                coords: coordsCount,
+                pontosUtm: 0,
+                status: 'ACEITO',
+                motivo: 'calcada / sidewalk / footway'
+            });
         }
         // 4. Vias e Ruas (Pistas de Rolamento / Eixos)
         else if (tags.highway) {
@@ -463,7 +659,7 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
 
             if (mapa && ViasObstrucoesState.camadaVias) {
                 const viaLinha = L.polyline(coords, {
-                    color: '#334155', // Asfalto escuro
+                    color: '#334155',
                     weight: Math.min(8, Math.max(3, larguraPista * 0.8)),
                     opacity: 0.75
                 }).bindTooltip(`<b>🛣️ ${nomeRua}</b> (${tags.highway} - Pista: ${larguraPista.toFixed(1)}m, Passeio: ${larguraCalcada.toFixed(1)}m)`, { sticky: true });
@@ -477,8 +673,41 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
                 larguraPista, 
                 larguraCalcada 
             });
+            console.log('[OSMPALETA][OSM][WAY]', {
+                id: el.id,
+                type: el.type,
+                tags: tagsResumo,
+                highway,
+                nodes: nodesCount,
+                coords: coordsCount,
+                pontosUtm: 0,
+                status: 'ACEITO',
+                motivo: 'via / highway'
+            });
+        } else {
+            console.log('[OSMPALETA][OSM][WAY]', {
+                id: el.id,
+                type: el.type,
+                tags: tagsResumo,
+                highway,
+                nodes: nodesCount,
+                coords: coordsCount,
+                pontosUtm: 0,
+                status: 'DESCARTADO',
+                motivo: 'condição não mapeada'
+            });
         }
     });
+
+    const totalNulosUtm = novosElementos.vias.length + novosElementos.calcadas.length + novosElementos.obstrucoes.length;
+    pipeline.viasPayload = novosElementos.vias.length;
+    pipeline.calcadasPayload = novosElementos.calcadas.length;
+    pipeline.obstrucoesPayload = novosElementos.obstrucoes.length;
+    pipeline.totalVerticesPayload = novosElementos.vias.reduce((sum, item) => sum + (item.coords ? item.coords.length : 0), 0)
+        + novosElementos.calcadas.reduce((sum, item) => sum + (item.coords ? item.coords.length : 0), 0)
+        + novosElementos.obstrucoes.reduce((sum, item) => sum + (item.coords ? item.coords.length : 0), 0);
+
+    console.log('[OSMPALETA][PIPELINE]', pipeline);
 
     // Acumula elementos no estado global
     ViasObstrucoesState.elementosAcumulados.vias.push(...novosElementos.vias);
@@ -615,7 +844,16 @@ function converterEEnviarParaCad(elementos) {
     const obstrucoesUtm = converterLista(elementos.obstrucoes);
 
     const totalElementos = viasUtm.length + calcadasUtm.length + obstrucoesUtm.length;
-    if (totalElementos === 0) return;
+    if (totalElementos === 0) {
+        console.warn('[OSMPALETA][PAYLOAD] Nenhum elemento foi convertido para UTM; payload não enviado ao CAD.', {
+            fuso,
+            vias: viasUtm.length,
+            calcadas: calcadasUtm.length,
+            obstrucoes: obstrucoesUtm.length,
+            entradas: elementos
+        });
+        return;
+    }
 
     const payload = {
         action: 'desenhar_elementos_urbanos',
@@ -624,6 +862,20 @@ function converterEEnviarParaCad(elementos) {
         calcadas: calcadasUtm,
         obstrucoes: obstrucoesUtm
     };
+
+    console.log('[OSMPALETA][PAYLOAD]', {
+        action: payload.action,
+        fuso,
+        vias: payload.vias.length,
+        calcadas: payload.calcadas.length,
+        obstrucoes: payload.obstrucoes.length,
+        totalElementos,
+        totalVertices: payload.vias.reduce((s, item) => s + item.pontosUtm.length, 0)
+            + payload.calcadas.reduce((s, item) => s + item.pontosUtm.length, 0)
+            + payload.obstrucoes.reduce((s, item) => s + item.pontosUtm.length, 0),
+        amostraPrimeiraVia: payload.vias[0] ? payload.vias[0].pontosUtm.slice(0, 3) : [],
+        amostraPrimeiraCalcada: payload.calcadas[0] ? payload.calcadas[0].pontosUtm.slice(0, 3) : []
+    });
 
     if (window.chrome && window.chrome.webview) {
         window.chrome.webview.postMessage(payload);

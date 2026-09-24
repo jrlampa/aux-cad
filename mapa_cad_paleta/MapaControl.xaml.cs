@@ -12,7 +12,7 @@ namespace MapaCadPaleta
 {
     public partial class MapaControl : UserControl
     {
-        private bool _isInitialized = false;
+        private Task? _initializationTask;
 
         public MapaControl()
         {
@@ -25,8 +25,19 @@ namespace MapaCadPaleta
 
         private async void MapaControl_Loaded(object sender, RoutedEventArgs e)
         {
-            if (_isInitialized) return;
-            await InicializarWebViewAsync();
+            try
+            {
+                await GarantirWebViewProntoAsync();
+            }
+            catch
+            {
+                // O erro já foi refletido no status e permanece disponível para operações dependentes.
+            }
+        }
+
+        private Task GarantirWebViewProntoAsync()
+        {
+            return _initializationTask ??= InicializarWebViewAsync();
         }
 
         private async Task InicializarWebViewAsync()
@@ -52,6 +63,8 @@ namespace MapaCadPaleta
                 var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
 
                 await WebView.EnsureCoreWebView2Async(env);
+                WebView.CoreWebView2.Settings.UserAgent = "OSMPALETA (CAD interno)";
+                var navigationCompleted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
                 string webDir = Path.Combine(assemblyDir, "web");
 
@@ -83,6 +96,7 @@ namespace MapaCadPaleta
                         {
                             AtualizarStatus($"Status de navegação: {args.WebErrorStatus}");
                         }
+                        navigationCompleted.TrySetResult(args.IsSuccess);
                     };
 
                     try
@@ -107,12 +121,15 @@ namespace MapaCadPaleta
                         $"<p>Caminho esperado: {webDir}</p></body></html>");
                 }
 
-                _isInitialized = true;
+                if (!await navigationCompleted.Task.ConfigureAwait(true))
+                    throw new InvalidOperationException("A navegação do WebView2 não foi concluída com sucesso.");
+
             }
             catch (Exception ex)
             {
                 LoadingPanel.Visibility = Visibility.Collapsed;
                 AtualizarStatus($"Erro ao carregar WebView2: {ex.Message}");
+                throw;
             }
         }
 
@@ -218,22 +235,28 @@ namespace MapaCadPaleta
         private async void BtnRecarregar_Click(object sender, RoutedEventArgs e)
         {
             LoadingPanel.Visibility = Visibility.Visible;
-            if (WebView?.CoreWebView2 != null)
+            try
             {
+                await GarantirWebViewProntoAsync();
                 WebView.CoreWebView2.Reload();
             }
-            else
+            catch (Exception ex)
             {
-                await InicializarWebViewAsync();
+                AtualizarStatus($"Erro ao recarregar WebView2: {ex.Message}");
             }
         }
 
-        private void EnviarMensagemWeb(object obj)
+        private async void EnviarMensagemWeb(object obj)
         {
-            if (WebView?.CoreWebView2 != null)
+            try
             {
+                await GarantirWebViewProntoAsync();
                 string json = JsonSerializer.Serialize(obj);
                 WebView.CoreWebView2.PostWebMessageAsJson(json);
+            }
+            catch (Exception ex)
+            {
+                AtualizarStatus($"Erro ao enviar mensagem ao WebView2: {ex.Message}");
             }
         }
 

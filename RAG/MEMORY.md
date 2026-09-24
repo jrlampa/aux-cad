@@ -418,4 +418,28 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - **Suíte global de não-regressão**: 100% dos testes passando sem falhas.
   - **Bateria de testes operacionais no AutoCAD 2026 Core Console**: **PASS** em todos os cenários (AUTOCAD-01 a AUTOCAD-06).
 
+---
+
+## Memória de Sessão Consolidada - OSMPALETA (2026-09-23)
+
+- Problema inicial: vias OSM não apareciam no AutoCAD ao inserir postes.
+- Hipótese de fuso/UTM/Snyder foi descartada; conversões e zona 23S permaneceram coerentes.
+- Falha inicial de aquisição: OSM/Overpass retornaram 429/timeout; faltavam User-Agent, deduplicação in-flight e política específica de 429.
+- Correção mantida em `vias_obstrucoes.js`: request key por BBOX, compartilhamento de promises, classificação, retry limitado, `Retry-After` e fallback controlado.
+- Correção mantida em `MapaControl.xaml.cs`: User-Agent `OSMPALETA (CAD interno)` no WebView2.
+- Consulta real comprovada: HTTP 200, 872 elementos, 91 ways, 595 nodes, 35 vias, 22 calçadas, 13 obstruções e 417 vértices.
+- Payload real comprovado: 35 vias, 22 calçadas, 13 obstruções e 417 vértices.
+- Payload CAD real observado: 6 vias, 1 calçada, 0 obstruções, 65 vértices e 31 polylines; não confundir com o self-test artificial.
+- AutoCAD .NET comprovado internamente: `MdiActiveDocument=TESTE_POSTE_E_VIAS.dwg`, Database/ModelSpace/Transaction OK e delta de entidades 1.
+- Fluxo interno do OSMPALETA: AutoCAD .NET + `PaletteSet` + WPF + WebView2 + `WebMessageReceived`; COM/ActiveX não fazem parte dele.
+- Lifecycle WebView2: `Loaded` -> `CreateAsync` -> `EnsureCoreWebView2Async` -> registro do evento -> `Navigate`. O comando de self-test podia executar antes do lifecycle assíncrono terminar.
+- `CoreWebView2=NULL` no self-test não provou quebra; classificação final: W2, self-test antecipado.
+- O payload CAD real veio de `converterEEnviarParaCad` -> `window.chrome.webview.postMessage` -> `MapaControl` -> `CadBridge`.
+- Instrumentações/comandos temporários foram removidos; não permaneceram `OSMPALETA_SELFTEST` ou `OSMPALETA_WEBTEST`.
+- Validação final: builds Release `net8.0-windows`/`net48`, syntax checks JS e `16 passed` em `tests/test_mapa_paleta.py`.
+- Regra futura: aguardar lifecycle normal do WebView2 antes de testar `CoreWebView2`; não usar delays arbitrários, COM ou workarounds.
+- Homologação final: `MapaControl` agora compartilha uma única `_initializationTask`; readiness só conclui após `EnsureCoreWebView2Async`, registro do handler e `NavigationCompleted` bem-sucedido.
+- `BtnRecarregar_Click` e `EnviarMensagemWeb` aguardam a task com `async/await`; erros são propagados/tratados, sem `Sleep`, `.Wait()`, `.Result` ou retry artificial.
+- Validação após a correção: builds `net48`/`net8.0-windows` aprovados, `node --check` aprovado e `16 passed`.
+
 
