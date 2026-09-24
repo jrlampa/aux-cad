@@ -10,7 +10,7 @@ for _d in [_curr_dir, _root_dir]:
         sys.path.insert(0, _d)
 
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 from typing import Dict, List, Optional
 import docx
 from docx.shared import Pt, RGBColor
@@ -78,6 +78,83 @@ def salvar_preferencias(prefs: Dict[str, str]):
             json.dump(prefs, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+
+def is_safe_writable_dir(path: Optional[str]) -> bool:
+    """Verifica se o diretório existe, não é uma pasta protegida do SO e possui permissão de escrita."""
+    if not path or not isinstance(path, str):
+        return False
+    try:
+        clean = path.strip().strip('"').strip("'")
+        if not clean:
+            return False
+        abs_p = os.path.abspath(clean)
+        if not os.path.exists(abs_p) or not os.path.isdir(abs_p):
+            return False
+
+        p_lower = abs_p.lower()
+        win_dir = os.environ.get("WINDIR", r"C:\Windows").lower()
+        sys_drive = os.environ.get("SystemDrive", "C:").lower()
+        prog_files = os.environ.get("ProgramFiles", r"C:\Program Files").lower()
+        prog_files_x86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)").lower()
+
+        if p_lower.startswith(win_dir) or p_lower == sys_drive + "\\" or p_lower == sys_drive:
+            return False
+        if prog_files and p_lower.startswith(prog_files):
+            return False
+        if prog_files_x86 and p_lower.startswith(prog_files_x86):
+            return False
+
+        test_file = os.path.join(abs_p, f".test_perm_{os.getpid()}.tmp")
+        try:
+            with open(test_file, 'w', encoding='utf-8') as f:
+                f.write("ok")
+            os.remove(test_file)
+            return True
+        except (PermissionError, OSError):
+            return False
+    except Exception:
+        return False
+
+
+def determinar_pasta_saida(candidate: Optional[str] = None, template_path: Optional[str] = None) -> str:
+    """
+    Determina a pasta de saída ideal para salvar o Checklist e Memorial.
+    Prioridades:
+    1. Diretório informado pelo CAD (DWGPREFIX).
+    2. Diretório do template (se seguro e gravável, exceto se for System32/Windows).
+    3. Área de Trabalho (Desktop) do usuário.
+    4. Pasta Documentos do usuário.
+    5. C:\\Temp (garantidamente gravável para CAD/engenharia).
+    6. os.getcwd() (somente se seguro e gravável).
+    """
+    if candidate and is_safe_writable_dir(candidate):
+        return os.path.abspath(candidate.strip().strip('"').strip("'"))
+
+    if template_path:
+        clean_tpl = template_path.strip().strip('"').strip("'")
+        if clean_tpl:
+            tpl_dir = os.path.dirname(os.path.abspath(clean_tpl))
+            if is_safe_writable_dir(tpl_dir):
+                return tpl_dir
+
+    desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+    if is_safe_writable_dir(desktop):
+        return desktop
+
+    docs = os.path.join(os.path.expanduser("~"), "Documents")
+    if is_safe_writable_dir(docs):
+        return docs
+
+    c_temp = r"C:\Temp"
+    if os.path.exists(c_temp) and is_safe_writable_dir(c_temp):
+        return c_temp
+
+    cwd = os.getcwd()
+    if is_safe_writable_dir(cwd):
+        return os.path.abspath(cwd)
+
+    return os.path.abspath(os.path.expanduser("~"))
 
 
 def apply_formatted_text(p, new_text: str, default_font: str = "Arial", default_size_pt: float = 11.0):
@@ -212,11 +289,13 @@ def generate_docx_memorial(template_path: str, output_path: str, data: Dict[str,
 
 
 class MemorialGUI:
-    def __init__(self, template_path: str, pts_path: str, boxes_path: str, fuso: int = 23):
+    def __init__(self, template_path: str, pts_path: str, boxes_path: str, fuso: int = 23, candidate_out_dir: Optional[str] = None):
         self.template_path = template_path
         self.pts_path = pts_path
         self.boxes_path = boxes_path
         self.fuso = fuso
+        self.candidate_out_dir = candidate_out_dir
+        self.default_out_dir = determinar_pasta_saida(candidate_out_dir, template_path)
 
         # Extrai postes e coordenadas
         self.pts_list = []
@@ -337,6 +416,7 @@ class MemorialGUI:
         self.ent_polo = self._add_field(grp_proj, "Polo Operativo (Rodapé):", prefs.get("polo", "Angra dos Reis"), 6)
         self.ent_ano = self._add_field(grp_proj, "Ano (Rodapé):", str(datetime.now().year), 7)
         self.ent_tipo_area = self._add_field(grp_proj, "Classificação da Área:", prefs.get("tipo_area", "Área Rural"), 8)
+        self.ent_out_dir = self._add_dir_field(grp_proj, "Pasta de Destino (Salvar):", self.default_out_dir, 9)
 
         # CARD 2: Traçado da Rede Elétrica (MT e BT)
         grp_rede = self._criar_card("⚡ 2. Caminhamento da Rede Elétrica (MT / BT)", 1, 0)
@@ -515,6 +595,42 @@ class MemorialGUI:
         ent.insert(0, default_val)
         return ent
 
+    def _add_dir_field(self, parent, label_text: str, default_val: str, row: int) -> ttk.Entry:
+        lbl = tk.Label(parent, text=label_text, font=("Segoe UI", 9, "bold"), fg="#1E293B", bg="#FFFFFF")
+        lbl.grid(row=row, column=0, sticky="w", pady=3, padx=6)
+
+        f_dir = tk.Frame(parent, bg="#FFFFFF")
+        f_dir.grid(row=row, column=1, sticky="ew", pady=3, padx=6)
+        f_dir.columnconfigure(0, weight=1)
+
+        ent = ttk.Entry(f_dir, font=("Segoe UI", 9))
+        ent.grid(row=0, column=0, sticky="ew")
+        ent.insert(0, default_val)
+
+        btn = tk.Button(
+            f_dir,
+            text="Procurar...",
+            font=("Segoe UI", 8),
+            bg="#E2E8F0",
+            fg="#1E293B",
+            relief="groove",
+            bd=1,
+            padx=6,
+            pady=1,
+            cursor="hand2",
+            command=lambda: self._on_browse_dir(ent)
+        )
+        btn.grid(row=0, column=1, padx=(4, 0))
+        return ent
+
+    def _on_browse_dir(self, entry: ttk.Entry):
+        cur = entry.get().strip()
+        initial = cur if os.path.isdir(cur) else os.path.expanduser("~")
+        chosen = filedialog.askdirectory(parent=self.root, title="Selecionar Pasta de Destino", initialdir=initial)
+        if chosen:
+            entry.delete(0, tk.END)
+            entry.insert(0, os.path.normpath(chosen))
+
     def _on_gerar(self):
         num_proj = self.ent_projeto.get().strip()
         if not num_proj:
@@ -568,9 +684,30 @@ class MemorialGUI:
 
         safe_num = num_proj.replace('/', '_').replace('\\', '_')
         out_name = f"MEMORIAL_DESCRITIVO_{safe_num}.docx"
-        out_dir = os.path.dirname(self.template_path)
+
+        # Resolução e validação robusta da pasta de destino
+        out_dir = self.ent_out_dir.get().strip().strip('"').strip("'")
+        if not out_dir:
+            out_dir = self.default_out_dir
+
         if not os.path.exists(out_dir):
-            out_dir = os.getcwd()
+            try:
+                os.makedirs(out_dir, exist_ok=True)
+            except Exception:
+                pass
+
+        if not is_safe_writable_dir(out_dir):
+            fallback_dir = determinar_pasta_saida(None, None)
+            messagebox.showwarning(
+                "Pasta Sem Permissão de Escrita",
+                f"A pasta selecionada:\n{out_dir}\n\n"
+                f"não possui permissão de escrita ou é protegida pelo sistema operacional.\n"
+                f"Os arquivos serão salvos na pasta alternativa:\n{fallback_dir}"
+            )
+            out_dir = fallback_dir
+            self.ent_out_dir.delete(0, tk.END)
+            self.ent_out_dir.insert(0, out_dir)
+
         out_path = os.path.join(out_dir, out_name)
 
         # 1. Gera o Croqui / Ortofoto de Satélite Georreferenciado
@@ -599,7 +736,18 @@ class MemorialGUI:
             from checklist_ambiental_manager import preencher_checklist_ambiental, TEMPLATE_DEFAULT, TEMPLATE_FALLBACK
             chk_tpl = TEMPLATE_DEFAULT if os.path.exists(TEMPLATE_DEFAULT) else TEMPLATE_FALLBACK
             if os.path.exists(chk_tpl):
-                preencher_checklist_ambiental(chk_tpl, checklist_out_path, dados, boxes_txt_path=self.boxes_path)
+                try:
+                    preencher_checklist_ambiental(chk_tpl, checklist_out_path, dados, boxes_txt_path=self.boxes_path)
+                except PermissionError:
+                    ts = datetime.now().strftime("%H%M%S")
+                    checklist_out_name = f"CHECKLIST_{safe_num}_{ts}.xlsx"
+                    checklist_out_path = os.path.join(out_dir, checklist_out_name)
+                    preencher_checklist_ambiental(chk_tpl, checklist_out_path, dados, boxes_txt_path=self.boxes_path)
+                    messagebox.showinfo(
+                        "Aviso - Arquivo Aberto no Excel",
+                        f"O checklist anterior estava em uso no Excel.\n"
+                        f"Foi gerada uma nova cópia como:\n{checklist_out_name}"
+                    )
                 checklist_ok = True
         except Exception as e_chk:
             messagebox.showerror("Erro", f"Falha ao gerar o Checklist Ambiental: {e_chk}")
@@ -645,7 +793,18 @@ class MemorialGUI:
                     except Exception:
                         pass
                 return
-            generate_docx_memorial(self.template_path, out_path, dados)
+            try:
+                generate_docx_memorial(self.template_path, out_path, dados)
+            except PermissionError:
+                ts = datetime.now().strftime("%H%M%S")
+                out_name = f"MEMORIAL_DESCRITIVO_{safe_num}_{ts}.docx"
+                out_path = os.path.join(out_dir, out_name)
+                generate_docx_memorial(self.template_path, out_path, dados)
+                messagebox.showinfo(
+                    "Aviso - Arquivo Word Aberto",
+                    f"O arquivo Word anterior estava aberto.\n"
+                    f"Foi gerada uma nova cópia como:\n{out_name}"
+                )
         except Exception as e:
             messagebox.showerror("Erro", f"Falha ao gerar o Memorial Descritivo: {e}")
             return
@@ -683,6 +842,7 @@ if __name__ == '__main__':
     pts = r"C:\Temp\kmz_points_input.json"
     boxes = r"C:\Temp\kmz_boxes.txt"
     fuso = 23
+    out_dir = None
 
     if len(sys.argv) > 1:
         template = sys.argv[1]
@@ -695,6 +855,8 @@ if __name__ == '__main__':
             fuso = int(sys.argv[4])
         except ValueError:
             fuso = 23
+    if len(sys.argv) > 5:
+        out_dir = sys.argv[5]
 
-    app = MemorialGUI(template, pts, boxes, fuso)
+    app = MemorialGUI(template, pts, boxes, fuso, candidate_out_dir=out_dir)
     app.run()

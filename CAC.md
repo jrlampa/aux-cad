@@ -579,6 +579,41 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
 - Falhas de inicialização são propagadas aos chamadores e exibidas no status; não há acesso prematuro silencioso a `CoreWebView2`.
 - Build/testes finais aprovados: `net48`, `net8.0-windows`, syntax checks JS e `16 passed`.
 
+### Auditoria Técnica Integral — Todos os Módulos e Comandos da Raiz (2026-09-23)
+- **Inventário Completo**: Mapeados 445 arquivos, 13 módulos funcionais, 102 comandos AutoLISP (`c:...`), 5 comandos C# .NET (`[CommandMethod]`), scripts de automação, executáveis e arquivos de modelo.
+- **Auditoria AutoLISP**: 30 arquivos `.lsp` inspecionados estaticamente; 100% com parênteses balanceados e sem erros de sintaxe.
+- **Auditoria JavaScript**: Todos os scripts inspecionados via `node --check` com 100% de aprovação.
+- **Auditoria C# / .NET**: `dotnet build mapa_cad_paleta/MapaCadPaleta.csproj -c Release` aprovado com 0 erros para ambos os targets (`net48` e `net8.0-windows`).
+- **Problema P1 Comprovado e Corrigido**:
+  - `sob/sob_fallback_manual.py:245`: Importava `SobNotFoundError` de `sob_core` (que não o define), provocando falha em 10 testes de fallback manual e orquestração.
+  - Correção cirúrgica: importação redirecionada para `sob_sharepoint` e prefixo de mensagem de falha padronizado para `[FALHA]`.
+- **Validação de Testes**: Suíte completa executada com **296 passed, 2 skipped** (100% dos testes executáveis aprovados).
+- **Classificação**: **HOMOLOGÁVEL**.
+
+### Validação Operacional Final — Fechamento da Homologação (2026-09-24)
+- **GOMNET (Fases A e B)**: **100% PASS OPERACIONAL** com conexão real ao host corporativo (`gomnet-rj.enelint.global`). Autenticação real com sessão ASP.NET, consulta real de SOBs com anexos identificados (`A057349839` e `A057219996`), download atômico real validado fisicamente (`CHECKLIST_A057349839.xlsx` com 18.777 bytes e cabeçalho OpenXML), idempotência confirmada e falhas controladas sem vazamento de credenciais.
+- **SGT Caminho Elétrico**: Host corporativo alcançado; resposta HTTP 401 aciona o fallback resiliente transparente para a base local SQLite (`arvore_cache.sqlite3`), retornando a proteção a montante com sucesso em 0.26s.
+- **AutoCAD 2026 Core Console**: `acaddoc.lsp` carregado em ambiente headless sem erros; 100% dos comandos testados disponíveis (`CQTCAD`, `SOB`, `AUTOPRANCHA`, `UNIFILAR`, `KMZCHECK`, `ORCAMENTO`, `CPFC`); criação física de entidades no ModelSpace validada.
+- **Suíte Automatizada**: 296 PASS, 2 SKIP (dependência de drive G: externo não montado), 0 FAIL, 0 ERROR.
+- **Classificação Final**: **HOMOLOGADO**.
+
+### Correção Operacional — Módulo Ambiental / Permissão de Escrita (2026-09-24)
+- **Incidente**: Popup de erro fatal `[Errno 13] Permission denied: 'C:\Windows\System32\CHECKLIST_A057383730.xlsx'` ao gerar Checklist Ambiental.
+- **Diagnóstico**: Quando o modelo `.docx` não estava no drive `G:`, `docx_template` recebia string vazia `""`. `os.path.dirname("")` resultava em `""`, e o script caía no fallback `os.getcwd()`. O AutoCAD invocou o `cmd.exe` sem working directory, herdando `C:\Windows\System32`, onde a escrita é bloqueada pelo UAC do Windows.
+- **Ações Implementadas**:
+  1. `kmz_point_layer_report.lsp`: captura `(getvar "DWGPREFIX")`, limpa trailing backslash com `vl-string-right-trim`, define o working directory com `cd /d "<dwg_dir>"` e passa `dwg_dir` como 5º argumento CLI.
+  2. `memorial_ambiental_generator.py`:
+     - Implementadas funções `is_safe_writable_dir(path)` e `determinar_pasta_saida(candidate, template_path)`.
+     - Blindagem com rejeição estrita de pastas de sistema (`Windows`, `System32`, `Program Files`, raiz do disco).
+     - Adicionado campo visual editável na GUI: "📁 Pasta de Destino (Salvar):" com botão "Procurar..." (`filedialog.askdirectory`), dando visibilidade e escolha ao projetista.
+     - Resiliência contra concorrência/lock de arquivos: se o arquivo já estiver aberto no Microsoft Excel, salva automaticamente com sufixo de timestamp (`CHECKLIST_{SOB}_{HHMMSS}.xlsx`), alertando o usuário sem travar o processo.
+  3. `tests/test_checklist_ambiental.py`: novos testes `test_is_safe_writable_dir` e `test_determinar_pasta_saida` (6/6 PASS).
+- **Validação Global**: Suíte global com 300 testes (296 PASS, 0 FAIL, 4 SKIP).
+
+
+
+
+
 
 
 

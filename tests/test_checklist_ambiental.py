@@ -143,3 +143,43 @@ def test_regra_negocio_omissao_memorial(tmp_path):
     tem_restricao = analise_restricao["em_app"] or analise_restricao["em_uc"] or analise_restricao["em_exclusao"]
     assert tem_restricao is True
 
+
+def test_is_safe_writable_dir(tmp_path):
+    from memorial_ambiental_generator import is_safe_writable_dir
+
+    # Diretório temporário válido e gravável
+    assert is_safe_writable_dir(str(tmp_path)) is True
+
+    # Entradas inválidas
+    assert is_safe_writable_dir(None) is False
+    assert is_safe_writable_dir("") is False
+    assert is_safe_writable_dir("   ") is False
+    assert is_safe_writable_dir("C:\\CaminhoInexistente_12345XYZ") is False
+
+    # Diretórios protegidos do sistema operacional
+    win_dir = os.environ.get("WINDIR", r"C:\Windows")
+    assert is_safe_writable_dir(win_dir) is False
+    assert is_safe_writable_dir(os.path.join(win_dir, "System32")) is False
+
+
+def test_determinar_pasta_saida(tmp_path):
+    from memorial_ambiental_generator import determinar_pasta_saida
+
+    # 1. Candidato válido é respeitado
+    candidato = str(tmp_path)
+    res = determinar_pasta_saida(candidate=candidato)
+    assert res == os.path.abspath(candidato)
+
+    # 2. Candidato perigoso (System32) é rejeitado e substituído por pasta segura
+    win_dir = os.environ.get("WINDIR", r"C:\Windows")
+    sys32 = os.path.join(win_dir, "System32")
+    res_perigoso = determinar_pasta_saida(candidate=sys32)
+    assert not res_perigoso.lower().startswith(win_dir.lower())
+    assert os.path.exists(res_perigoso)
+
+    # 3. Template vazio ou inexistente não causa retorno de System32
+    res_sem_template = determinar_pasta_saida(candidate="", template_path="")
+    assert not res_sem_template.lower().startswith(win_dir.lower())
+    assert os.path.exists(res_sem_template)
+
+
