@@ -1,15 +1,19 @@
 # CAC.md - Contexto de Arquitetura e Decisões (aux cad)
 
+> **Versão Oficial Atual: v0.9.0** | Fonte de verdade: [`VERSION`](file:///c:/Users/jonat/OneDrive%20-%20IM3%20Brasil/aux%20cad/VERSION) | Histórico de releases: [`CHANGELOG.md`](file:///c:/Users/jonat/OneDrive%20-%20IM3%20Brasil/aux%20cad/CHANGELOG.md)
+
 ## Arquitetura de Diretórios e Modularidade
 A pasta raiz `aux cad` adota uma arquitetura modular por domínios de engenharia (DDD / Separação de Responsabilidades), mantendo na raiz apenas os pontos de entrada compartilhados e ferramentas universais do AutoCAD.
 
 ```text
 aux cad/
+├── VERSION                         # Fonte única oficial da versão do projeto (0.9.0)
+├── CHANGELOG.md                    # Histórico oficial de versões (Keep a Changelog / SemVer)
 ├── acaddoc.lsp                     # Carregador universal do AutoCAD (inclusão dinâmica de SupportPath)
 ├── aux_cad_toolbar.lsp             # Barra de ferramentas global (AUXCADBAR)
 ├── aux_cad_menu.mnu / .cuix / .mnr # Menu nativo do AutoCAD (AUXCAD)
 ├── modelos/                        # Templates e modelos compartilhados (checklist, cpfc, etc.)
-├── tests/                          # Full suite de testes unitários (281 testes, 100% passing)
+├── tests/                          # Full suite de testes unitários (300 testes coletados)
 ├── pytest.ini                      # Resolução de paths para testes (cqt, ambiental, orcamento, cpfc, sob...)
 ├── Abrir_AUXCAD.bat                # Central Unificada Hub de Engenharia e Diagnóstico
 ├── Abrir_SOB.bat                   # Atalho de 2 cliques na raiz para Preparação de SOB
@@ -609,6 +613,47 @@ O arquivo `acaddoc.lsp` atua como o ponto central de inicialização e orquestra
      - Resiliência contra concorrência/lock de arquivos: se o arquivo já estiver aberto no Microsoft Excel, salva automaticamente com sufixo de timestamp (`CHECKLIST_{SOB}_{HHMMSS}.xlsx`), alertando o usuário sem travar o processo.
   3. `tests/test_checklist_ambiental.py`: novos testes `test_is_safe_writable_dir` e `test_determinar_pasta_saida` (6/6 PASS).
 - **Validação Global**: Suíte global com 300 testes (296 PASS, 0 FAIL, 4 SKIP).
+
+---
+
+## Política Oficial de Versionamento e Ciclo de Releases
+
+### 1. Fonte Única da Versão
+O arquivo [`VERSION`](file:///c:/Users/jonat/OneDrive%20-%20IM3%20Brasil/aux%20cad/VERSION) na raiz do projeto é a **fonte oficial única de verdade** da versão do AUX CAD, adotando Semantic Versioning (`MAJOR.MINOR.PATCH`):
+- **MAJOR**: Mudanças estruturais incompatíveis ou quebra do modelo operacional.
+- **MINOR**: Novas funcionalidades, novos módulos ou comandos compatíveis.
+- **PATCH**: Correções de bugs, pequenas melhorias ou ajustes internos sem quebra de contrato.
+
+### 2. Convenção de Commits (Conventional Commits)
+Commits a partir da v0.9.0 devem seguir o padrão:
+- `feat(<escopo>)`: Nova funcionalidade ou comando.
+- `fix(<escopo>)`: Correção de bug.
+- `refactor(<escopo>)`: Refatoração sem alteração funcional.
+- `docs(<escopo>)`: Alterações exclusivamente em documentação.
+- `test(<escopo>)`: Adição ou ajuste de testes automatizados.
+- `build(<escopo>)`: Alterações em dependências, `.csproj`, scripts de build ou versão.
+- `chore(<escopo>)`: Tarefas de manutenção rotineira.
+- `perf(<escopo>)`: Otimizações de desempenho comprovadas.
+
+### 3. Fluxo de Release
+```text
+branch dev
+    ↓
+desenvolvimento
+    ↓
+testes automatizados (pytest, .NET Release, node --check)
+    ↓
+validação operacional (AutoCAD Core Console / GUI)
+    ↓
+atualização do arquivo VERSION
+    ↓
+atualização do CHANGELOG.md
+    ↓
+commit de release (ex: "chore(release): v0.9.0")
+    ↓
+tag Git anotada (ex: git tag -a v0.9.0 -m "Release v0.9.0")
+```
+
 
 
 

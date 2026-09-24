@@ -1,5 +1,7 @@
 # MEMORY.md - Contexto do Projeto aux cad
 
+> **Versão Oficial Atual: v0.9.0** | Fonte de verdade: [`VERSION`](file:///c:/Users/jonat/OneDrive%20-%20IM3%20Brasil/aux%20cad/VERSION) | Releases: [`CHANGELOG.md`](file:///c:/Users/jonat/OneDrive%20-%20IM3%20Brasil/aux%20cad/CHANGELOG.md)
+
 ## Visão Geral
 Este projeto contém utilitários e rotinas AutoLISP/Python para automação CAD no AutoCAD/Civil 3D, com foco em geoprocessamento, relatórios ambientais, geração de memoriais descritivos e cálculo automatizado de Queda de Tensão (CQT) em Baixa Tensão (BT).
 
@@ -8,10 +10,12 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 ## Arquitetura de Pastas e Módulos
 
 ### 1. Raiz Compartilhada (Comum a Todos os Projetos)
+- `VERSION`: Fonte única oficial da versão do projeto (`0.9.0`).
+- `CHANGELOG.md`: Registro oficial de mudanças seguindo o padrão Keep a Changelog.
 - `acaddoc.lsp`: Carregador automático nativo do AutoCAD que registra as subpastas no SupportPath e carrega as rotinas modulares a cada desenho aberto.
 - `aux_cad_toolbar.lsp` & `aux_cad_menu.mnu` (`.cuix`, `.mnr`): Barra de ferramentas visual (`AUXCADBAR`) e menu do AutoCAD com atalhos de 1 clique para todos os módulos.
 - `modelos/`: Templates e modelos de planilhas e documentos (`checklist_modelo.xlsx`, `cpfc_modelo.xlsx`, etc.).
-- `tests/`: Suíte completa de 281 testes unitários e de integração cobrindo todos os módulos (100% passing).
+- `tests/`: Suíte completa de 300 testes unitários e de integração cobrindo todos os módulos.
 - `pytest.ini`: Configuração com `pythonpath = . cqt ambiental orcamento topografia mapa_postes dados_tecnicos cpfc unifilar prancha sob`.
 - `Abrir_AUXCAD.bat`: Central Executiva Hub de Engenharia e Diagnóstico do Sistema.
 - `Abrir_SOB.bat`: Atalho na raiz para abrir a interface gráfica de preparação da SOB com 2 cliques.
@@ -490,6 +494,26 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
      - Tratamento de concorrência/lock de arquivos: se o arquivo já estiver aberto no Microsoft Excel, salva automaticamente com sufixo de timestamp (`CHECKLIST_{SOB}_{HHMMSS}.xlsx`), alertando o usuário sem travar o processo.
   3. `tests/test_checklist_ambiental.py`: novos testes `test_is_safe_writable_dir` e `test_determinar_pasta_saida`.
 - **Validação**: 6/6 testes em `test_checklist_ambiental.py` e 300 testes na suíte global (296 PASS, 0 FAIL, 4 SKIP).
+
+---
+
+## Memória de Sessão - Institucionalização do Versionamento Oficial (v0.9.0) (2026-09-24)
+
+- **Versão Oficial**: `0.9.0` (SemVer: `MAJOR.MINOR.PATCH`).
+- **Artefatos Oficiais de Versionamento Criados**:
+  - `VERSION`: Arquivo na raiz do projeto com o conteúdo estrito `0.9.0`, estabelecido como **fonte oficial única de verdade**.
+  - `CHANGELOG.md`: Registro histórico oficial baseado em Keep a Changelog.
+  - `mapa_cad_paleta/MapaCadPaleta.csproj`: Integradas as propriedades MSBuild `<Version>0.9.0</Version>`, `<AssemblyVersion>0.9.0.0</AssemblyVersion>`, `<FileVersion>0.9.0.0</FileVersion>` e `<InformationalVersion>0.9.0</InformationalVersion>`, propagando o versionamento para ambos os targets `.NET` (`net48` e `net8.0-windows`).
+- **Política de Versionamento e Releases Documentada**:
+  - Semantic Versioning: `PATCH` para correções/ajustes; `MINOR` para novos recursos/comandos compatíveis; `MAJOR` para quebras de compatibilidade ou alterações estruturais.
+  - Padrão de Commits: Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `build:`, `chore:`, `perf:`).
+  - Ciclo de Releases: branch `dev` $\rightarrow$ validação $\rightarrow$ atualização de `VERSION` e `CHANGELOG.md` $\rightarrow$ commit de release $\rightarrow$ tag `vX.Y.Z`.
+- **Validações Executadas**:
+  - `pytest`: 300 testes coletados (297 PASS, 3 SKIP, 0 FAIL).
+  - .NET Build: Release `net48` e `net8.0-windows` aprovados com 0 erros.
+  - JavaScript: 43 arquivos com `node --check` (0 erros).
+  - AutoCAD 2026 Core Console: 10 comandos críticos confirmados.
+
 
 
 
