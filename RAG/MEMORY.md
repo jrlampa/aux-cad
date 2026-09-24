@@ -512,7 +512,22 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `pytest`: 300 testes coletados (297 PASS, 3 SKIP, 0 FAIL).
   - .NET Build: Release `net48` e `net8.0-windows` aprovados com 0 erros.
   - JavaScript: 43 arquivos com `node --check` (0 erros).
-  - AutoCAD 2026 Core Console: 10 comandos críticos confirmados.
+  ## Memória de Sessão - Núcleo Funcional do Workspace da SOB/Projeto (2026-09-24)
+
+- **Objetivo**: Desenvolver o primeiro núcleo funcional do Workspace da SOB/Projeto como camada de coordenação e detecção central de contexto.
+- **Componentes Implementados**:
+  - `workspace/workspace_core.py`: Domínio com `ProjectWorkspace`, `ProjectArtifact` e enum `ArtifactStatus` (`EXISTE`, `NAO_EXISTE`, `NAO_APLICAVEL`).
+  - `workspace/workspace_scanner.py`: Scanner analítico não-destrutivo para detecção de DWG (`{BASE}_{SOB}_DESENHO.dwg`), pasta de croqui de campo (`CROQUI/`), documentos/anexos (`CROQUI/ANEXOS/`, `DOCUMENTOS/`), ambiental (`CHECKLIST_{SOB}.xlsx`, `MEMORIAL_DESCRITIVO_{SOB}.docx`, `CROQUI_AMBIENTAL_{SOB}.png`), `CQT_{SOB}.xlsm`, `ORCAMENTO_{SOB}.xlsx`, `CPFC_{SOB}.xlsx` e `UNIFILAR_{SOB}.json`.
+  - `workspace/workspace_cli.py`: CLI formatada em pt-BR e interface visual desktop Tkinter (`WorkspaceGUI`) com botão de navegação, atualização e abertura direta no Explorer.
+  - `workspace/workspace_cad.lsp`: Comandos do AutoCAD **`WORKSPACE`** e **`SOBWORKSPACE`** acionando o contexto do DWG ativo (`DWGPREFIX`).
+  - `Abrir_Workspace.bat`: Atalho executável de 2 cliques na raiz.
+  - `tests/test_workspace.py`: 16 testes unitários cobrindo inicialização, identificação de SOB, detecção física, múltiplos candidatos, ausência de artefatos, diretório inexistente, determinismo e CLI.
+- **Validações**:
+  - `pytest`: 316 testes coletados (314 PASS, 2 SKIP, 0 FAIL, 0 ERROR).
+  - .NET Build: Release `net48` e `net8.0-windows` aprovados com 0 erros.
+  - JavaScript: 0 erros em `node --check`.
+  - Integridade: Todas as alterações locais anteriores foram rigorosamente preservadas.
+
 
 
 

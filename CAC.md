@@ -652,7 +652,20 @@ atualização do CHANGELOG.md
 commit de release (ex: "chore(release): v0.9.0")
     ↓
 tag Git anotada (ex: git tag -a v0.9.0 -m "Release v0.9.0")
-```
+### 18. Módulo Workspace da SOB / Projeto (`workspace/`)
+- **Finalidade**: Camada central de coordenação e detecção de contexto para uma SOB/projeto, reunindo e identificando os artefatos de engenharia produzidos pelos módulos existentes sem duplicar lógica ou estruturas de persistência.
+- **Estrutura**:
+  - `workspace_core.py` (145 linhas): Modelo de domínio com `ProjectWorkspace`, `ProjectArtifact` e enum `ArtifactStatus` (`EXISTE`, `NAO_EXISTE`, `NAO_APLICAVEL`).
+  - `workspace_scanner.py` (275 linhas): Motor analítico 100% somente leitura para varredura e detecção de DWG, pasta de croqui, anexos de documentos, checklist/memorial/croqui ambiental, planilha CQT, orçamento, CPFC e diagrama unifilar.
+  - `workspace_cli.py` (215 linhas): Interface desktop visual em Tkinter e ponto de entrada CLI (com suporte a `--json` e formatação de texto pt-BR).
+  - `workspace_cad.lsp`: Comandos nativos do AutoCAD **`WORKSPACE`** e **`SOBWORKSPACE`** para inspeção instantânea do desenho ativo a partir do `DWGPREFIX`.
+  - `Abrir_Workspace.bat`: Atalho executável de 2 cliques na raiz.
+- **Entrada**: Identificador puro da SOB (`A057349839`), caminho da pasta de destino ou arquivo DWG aberto no CAD.
+- **Saída**: Contexto unificado e determinístico contendo o status físico de cada artefato e metadados de engenharia.
+- **Relação com SOB**: Reutiliza integralmente a raiz canônica `SOB_{SOB_ID}` e o desenho `{BASE}_{SOB}_DESENHO.dwg` definidos pelo módulo `sob/`.
+- **Módulos Integrados**: `sob`, `ambiental`, `cqt`, `orcamento`, `cpfc` e `unifilar`.
+- **Limitações Atuais**: Foco no núcleo funcional de contexto, detecção analítica e visualização de estado; o disparo em lote de alterações nos módulos de engenharia continua sob demanda individual do projetista.
+
 
 
 
