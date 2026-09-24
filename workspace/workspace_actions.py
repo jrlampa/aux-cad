@@ -243,6 +243,39 @@ class WorkspaceActionDispatcher:
         cmd = cls.montar_comando_cpfc(workspace=workspace, base_dir=base_dir)
         return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR)
 
+    @classmethod
+    def montar_comando_sob(
+        cls,
+        workspace: Optional[ProjectWorkspace] = None,
+        base_dir: Optional[Path] = None,
+    ) -> List[str]:
+        """
+        Monta a lista de argumentos de execução do preparador oficial SOB conforme
+        o contrato de sob/sob_launcher_gui.py.
+        """
+        raiz = Path(base_dir or BASE_DIR)
+        sob_script = raiz / "sob" / "sob_launcher_gui.py"
+        if not sob_script.exists():
+            raise FileNotFoundError(f"Launcher oficial da SOB não encontrado em: {sob_script}")
+
+        return [
+            sys.executable,
+            str(sob_script),
+        ]
+
+    @classmethod
+    def executar_sob(
+        cls,
+        workspace: Optional[ProjectWorkspace] = None,
+        base_dir: Optional[Path] = None,
+    ) -> subprocess.Popen:
+        """
+        Inicia o diálogo interativo do Preparador de SOB oficial em subprocesso desacoplado,
+        sem bloquear a interface do Workspace.
+        """
+        cmd = cls.montar_comando_sob(workspace=workspace, base_dir=base_dir)
+        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR)
+
     @staticmethod
     def _lancar_processo(cmd: List[str], cwd: Optional[Path] = None) -> subprocess.Popen:
         """
@@ -257,3 +290,4 @@ class WorkspaceActionDispatcher:
                 kwargs["creationflags"] = creation_flag
 
         return subprocess.Popen(cmd, **kwargs)
+

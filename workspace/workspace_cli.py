@@ -179,6 +179,20 @@ class WorkspaceGUI(tk.Tk):
         lbl_modulos = tk.Label(bot_bar, text="Executar Módulo:", font=("Segoe UI", 9, "bold"), bg="#F8FAFC", fg="#334155")
         lbl_modulos.pack(side="left", padx=(0, 6))
 
+        btn_sob = tk.Button(
+            bot_bar,
+            text="📁 Preparar SOB",
+            font=("Segoe UI", 9, "bold"),
+            bg="#0D9488",
+            fg="#FFFFFF",
+            relief="flat",
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=self._on_executar_sob
+        )
+        btn_sob.pack(side="left", padx=(0, 4))
+
         btn_cqt = tk.Button(
             bot_bar,
             text="⚡ CQT",
@@ -357,6 +371,18 @@ class WorkspaceGUI(tk.Tk):
                 messagebox.showinfo("Módulo CPFC", f"Módulo CPFC (REN 1.059) iniciado para a SOB {self.workspace.sob_id}.")
         except Exception as ex:
             messagebox.showerror("Erro ao Iniciar CPFC", f"Não foi possível iniciar o módulo CPFC:\n{ex}")
+
+    def _on_executar_sob(self):
+        """Dispara a interface oficial do Preparador de Projeto SOB."""
+        try:
+            ws = self.workspace if hasattr(self, "workspace") else None
+            proc = WorkspaceActionDispatcher.executar_sob(workspace=ws)
+            if proc:
+                messagebox.showinfo("Preparador SOB", "Preparador de Projeto SOB iniciado.")
+        except FileNotFoundError as fnf:
+            messagebox.showerror("Launcher Não Encontrado", f"O launcher oficial da SOB não foi encontrado:\n{fnf}")
+        except Exception as ex:
+            messagebox.showerror("Erro ao Iniciar Preparador SOB", f"Não foi possível iniciar o preparador da SOB:\n{ex}")
 
     def _abrir_pasta_atual(self):
         """Abre a pasta raiz da SOB no Explorer via Dispatcher."""
