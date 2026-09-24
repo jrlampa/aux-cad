@@ -657,14 +657,20 @@ tag Git anotada (ex: git tag -a v0.9.0 -m "Release v0.9.0")
 - **Estrutura**:
   - `workspace_core.py` (145 linhas): Modelo de domínio com `ProjectWorkspace`, `ProjectArtifact` e enum `ArtifactStatus` (`EXISTE`, `NAO_EXISTE`, `NAO_APLICAVEL`).
   - `workspace_scanner.py` (275 linhas): Motor analítico 100% somente leitura para varredura e detecção de DWG, pasta de croqui, anexos de documentos, checklist/memorial/croqui ambiental, planilha CQT, orçamento, CPFC e diagrama unifilar.
-  - `workspace_cli.py` (215 linhas): Interface desktop visual em Tkinter e ponto de entrada CLI (com suporte a `--json` e formatação de texto pt-BR).
+  - `workspace_cli.py` (285 linhas): Interface desktop visual em Tkinter e ponto de entrada CLI (com suporte a `--json` e formatação de texto pt-BR), integrada ao `WorkspaceActionDispatcher` com botões "Abrir", "Localizar", atalho de duplo clique e lançadores para CQT, Orçamento e CPFC.
+  - `workspace_actions.py` (210 linhas): Despachante único e centralizado de ações (`WorkspaceActionDispatcher`), implementando abertura nativa (`abrir_artefato`), localização com seleção no Explorer (`localizar_artefato`) e acionamento desacoplado contextual dos módulos CQT, Orçamento e CPFC.
   - `workspace_cad.lsp`: Comandos nativos do AutoCAD **`WORKSPACE`** e **`SOBWORKSPACE`** para inspeção instantânea do desenho ativo a partir do `DWGPREFIX`.
   - `Abrir_Workspace.bat`: Atalho executável de 2 cliques na raiz.
 - **Entrada**: Identificador puro da SOB (`A057349839`), caminho da pasta de destino ou arquivo DWG aberto no CAD.
-- **Saída**: Contexto unificado e determinístico contendo o status físico de cada artefato e metadados de engenharia.
+- **Saída**: Contexto unificado e determinístico contendo o status físico de cada artefato e metadados de engenharia, com capacidade de despacho de ações para o SO ou módulos existentes.
 - **Relação com SOB**: Reutiliza integralmente a raiz canônica `SOB_{SOB_ID}` e o desenho `{BASE}_{SOB}_DESENHO.dwg` definidos pelo módulo `sob/`.
 - **Módulos Integrados**: `sob`, `ambiental`, `cqt`, `orcamento`, `cpfc` e `unifilar`.
-- **Limitações Atuais**: Foco no núcleo funcional de contexto, detecção analítica e visualização de estado; o disparo em lote de alterações nos módulos de engenharia continua sob demanda individual do projetista.
+- **Ações Habilitadas na Interface (v1)**:
+  - `ABRIR`: Execução direta no aplicativo associado do Windows via `os.startfile` para o artefato selecionado ou via duplo clique na tabela.
+  - `LOCALIZAR`: Foco no Windows Explorer com `/select,"<arquivo>"` ou abertura de pasta.
+  - `EXECUTAR CQT`: Inicialização de `cqt/cqt_excel_manager.py` com preenchimento contextual de template, cad_json e destino `CQT_{SOB}.xlsm`.
+  - `EXECUTAR ORÇAMENTO`: Inicialização de `orcamento/orcamento_manager.py` com preenchimento contextual de `--projeto <SOB>` e `--json`.
+  - `EXECUTAR CPFC`: Inicialização de `cpfc/cpfc_manager.py` com preenchimento contextual de `root_dir` e `sob_id`.
 
 
 

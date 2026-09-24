@@ -13,6 +13,7 @@ from workspace.workspace_core import (
     ProjectWorkspace,
 )
 from workspace.workspace_scanner import WorkspaceScanner
+from workspace.workspace_actions import WorkspaceActionDispatcher
 
 
 def carregar_workspace(
@@ -68,6 +69,7 @@ __all__ = [
     "ProjectArtifact",
     "ProjectWorkspace",
     "WorkspaceScanner",
+    "WorkspaceActionDispatcher",
     "carregar_workspace",
     "abrir_workspace_dwg",
     "detectar_workspace_diretorio",

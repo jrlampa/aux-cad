@@ -522,11 +522,33 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `workspace/workspace_cad.lsp`: Comandos do AutoCAD **`WORKSPACE`** e **`SOBWORKSPACE`** acionando o contexto do DWG ativo (`DWGPREFIX`).
   - `Abrir_Workspace.bat`: Atalho executável de 2 cliques na raiz.
   - `tests/test_workspace.py`: 16 testes unitários cobrindo inicialização, identificação de SOB, detecção física, múltiplos candidatos, ausência de artefatos, diretório inexistente, determinismo e CLI.
-- **Validações**:
-  - `pytest`: 316 testes coletados (314 PASS, 2 SKIP, 0 FAIL, 0 ERROR).
-  - .NET Build: Release `net48` e `net8.0-windows` aprovados com 0 erros.
-  - JavaScript: 0 erros em `node --check`.
-  - Integridade: Todas as alterações locais anteriores foram rigorosamente preservadas.
+  ## Memória de Sessão - Camada de Ações do Workspace da SOB (2026-09-24)
+
+- **Objetivo**: Implementar a primeira camada de ações (v1) do Workspace da SOB/Projeto sem duplicar lógicas de negócio dos módulos especializados.
+- **Componentes Implementados**:
+  - `workspace/workspace_actions.py`: Implementação do `WorkspaceActionDispatcher` com métodos estáticos para:
+    - `abrir_artefato`: Abertura não-bloqueante no aplicativo padrão via `os.startfile` (arquivo/diretório).
+    - `localizar_artefato`: Abertura no Windows Explorer com seleção (`explorer.exe /select,"<caminho>"`) ou abertura de pasta.
+    - `montar_comando_cqt` / `executar_cqt`: Derivação contextual de destino (`CQT_{SOB}.xlsm` ou planilha existente) e disparo desacoplado de `cqt/cqt_excel_manager.py`.
+    - `montar_comando_orcamento` / `executar_orcamento`: Passagem de `--projeto <SOB>` e `--json` (quando detectado) para `orcamento/orcamento_manager.py`.
+    - `montar_comando_cpfc` / `executar_cpfc`: Passagem de `root_dir` e `sob_id` para `cpfc/cpfc_manager.py`.
+  - `workspace/__init__.py`: Exportação oficial de `WorkspaceActionDispatcher`.
+  - `tests/test_workspace_actions.py`: 25 testes unitários dedicados cobrindo 99% do código de ações, incluindo mocks de `os.startfile`, `subprocess.Popen`, fallbacks e tratamento de exceções.
+  ## Memória de Sessão - Integração Visual Workspace Actions v1 (2026-09-24)
+
+- **Objetivo**: Integrar visualmente a `WorkspaceGUI` em `workspace/workspace_cli.py` ao `WorkspaceActionDispatcher`, eliminando a lacuna entre apresentação e despacho de ações.
+- **Componentes Conectados**:
+  - `workspace/workspace_cli.py`:
+    - Adicionado seletor de artefato via `_get_selected_artifact()` utilizando o `iid` da Treeview sincronizado ao `ProjectArtifact`.
+    - Botão **"📂 Abrir"** e atalho de duplo clique (`<Double-1>`) disparando `_on_abrir_artefato()`.
+    - Botão **"🔍 Localizar"** disparando `_on_localizar_artefato()` via Explorer.
+    - Botões lançadores de módulos especialistas: **"⚡ CQT"**, **"📊 Orçamento"** e **"📐 CPFC"** disparando `WorkspaceActionDispatcher.executar_*`.
+    - Botão **"📁 Pasta SOB"** redirecionado para `WorkspaceActionDispatcher.localizar_artefato()`.
+  - `tests/test_workspace_cli_actions.py`: 17 novos testes unitários cobrindo seleção, avisos de não-seleção, artefatos inexistentes, despacho de ações e tratamento de exceções.
+- **Validações Consolidadas**:
+  - `pytest`: 358 testes coletados (**356 PASS**, 2 SKIP, 0 FAIL) em toda a suíte.
+  - Cobertura do pacote `workspace`: 88% no total (99% em `workspace_actions.py`, 89% em `workspace_cli.py`, 95% em `workspace_core.py`, 80% em `workspace_scanner.py`).
+  - Preservação estrita: Zero alterações em módulos especialistas e sem commits/tags.
 
 
 

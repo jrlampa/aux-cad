@@ -19,18 +19,19 @@ for _d in [_curr_dir, _root_dir]:
     if _d not in sys.path:
         sys.path.insert(0, _d)
 
-from workspace.workspace_core import ArtifactStatus, ProjectWorkspace
+from workspace.workspace_core import ArtifactStatus, ProjectArtifact, ProjectWorkspace
 from workspace.workspace_scanner import WorkspaceScanner
+from workspace.workspace_actions import WorkspaceActionDispatcher
 
 
 class WorkspaceGUI(tk.Tk):
-    """Interface visual simples e ergonômica para inspeção do Workspace da SOB."""
+    """Interface visual simples e ergonômica para inspeção e ações do Workspace da SOB."""
 
     def __init__(self, root_dir: Optional[str] = None, sob_id: Optional[str] = None):
         super().__init__()
         self.title("AUX CAD — Workspace da SOB / Projeto")
-        self.geometry("780x640")
-        self.minsize(700, 520)
+        self.geometry("860x640")
+        self.minsize(780, 520)
         self.configure(bg="#F8FAFC")
 
         self.current_dir = Path(root_dir).resolve() if root_dir else Path.cwd()
@@ -136,23 +137,103 @@ class WorkspaceGUI(tk.Tk):
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
+        self.tree.bind("<Double-1>", lambda event: self._on_abrir_artefato())
 
         # 5. Barra Inferior de Ações
-        bot_bar = tk.Frame(self, bg="#F8FAFC", pady=4)
+        bot_bar = tk.Frame(self, bg="#F8FAFC", pady=6)
         bot_bar.pack(fill="x", padx=12, pady=(0, 8))
 
-        btn_abrir_pasta = tk.Button(
+        # Ações do Item Selecionado
+        lbl_acoes_item = tk.Label(bot_bar, text="Item Selecionado:", font=("Segoe UI", 9, "bold"), bg="#F8FAFC", fg="#334155")
+        lbl_acoes_item.pack(side="left", padx=(0, 6))
+
+        btn_abrir = tk.Button(
             bot_bar,
-            text="📂 Abrir Pasta no Explorer",
+            text="📂 Abrir",
+            font=("Segoe UI", 9, "bold"),
+            bg="#2563EB",
+            fg="#FFFFFF",
+            relief="flat",
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=self._on_abrir_artefato
+        )
+        btn_abrir.pack(side="left", padx=(0, 4))
+
+        btn_localizar = tk.Button(
+            bot_bar,
+            text="🔍 Localizar",
             font=("Segoe UI", 9),
             bg="#E2E8F0",
             fg="#1E293B",
             relief="flat",
-            padx=12,
-            pady=4,
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=self._on_localizar_artefato
+        )
+        btn_localizar.pack(side="left", padx=(0, 16))
+
+        # Lançadores de Módulos Especialistas
+        lbl_modulos = tk.Label(bot_bar, text="Executar Módulo:", font=("Segoe UI", 9, "bold"), bg="#F8FAFC", fg="#334155")
+        lbl_modulos.pack(side="left", padx=(0, 6))
+
+        btn_cqt = tk.Button(
+            bot_bar,
+            text="⚡ CQT",
+            font=("Segoe UI", 9, "bold"),
+            bg="#0284C7",
+            fg="#FFFFFF",
+            relief="flat",
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=self._on_executar_cqt
+        )
+        btn_cqt.pack(side="left", padx=(0, 4))
+
+        btn_orc = tk.Button(
+            bot_bar,
+            text="📊 Orçamento",
+            font=("Segoe UI", 9, "bold"),
+            bg="#059669",
+            fg="#FFFFFF",
+            relief="flat",
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=self._on_executar_orcamento
+        )
+        btn_orc.pack(side="left", padx=(0, 4))
+
+        btn_cpfc = tk.Button(
+            bot_bar,
+            text="📐 CPFC",
+            font=("Segoe UI", 9, "bold"),
+            bg="#7C3AED",
+            fg="#FFFFFF",
+            relief="flat",
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=self._on_executar_cpfc
+        )
+        btn_cpfc.pack(side="left", padx=(0, 16))
+
+        btn_abrir_pasta = tk.Button(
+            bot_bar,
+            text="📁 Pasta SOB",
+            font=("Segoe UI", 9),
+            bg="#E2E8F0",
+            fg="#1E293B",
+            relief="flat",
+            padx=10,
+            pady=3,
+            cursor="hand2",
             command=self._abrir_pasta_atual
         )
-        btn_abrir_pasta.pack(side="left")
+        btn_abrir_pasta.pack(side="right")
 
     def _on_browse_dir(self):
         escolhida = filedialog.askdirectory(parent=self, title="Selecionar Pasta da SOB / Projeto", initialdir=str(self.current_dir))
@@ -182,9 +263,9 @@ class WorkspaceGUI(tk.Tk):
                 fg="#B45309"
             )
 
-        # Atualiza lista
+        # Atualiza lista mantendo a chave como iid
         self.tree.delete(*self.tree.get_children())
-        for art in workspace.artefatos.values():
+        for chave, art in workspace.artefatos.items():
             if art.status == ArtifactStatus.EXISTE:
                 st_txt = "✔ EXISTE"
             elif art.status == ArtifactStatus.NAO_EXISTE:
@@ -196,14 +277,92 @@ class WorkspaceGUI(tk.Tk):
             if art.detalhes and "total_arquivos" in art.detalhes:
                 detalhe += f" ({art.detalhes['total_arquivos']} arquivos)"
 
-            self.tree.insert("", "end", values=(art.rotulo, st_txt, detalhe))
+            self.tree.insert("", "end", iid=chave, values=(art.rotulo, st_txt, detalhe))
+
+    def _get_selected_artifact(self) -> Optional[ProjectArtifact]:
+        """Recupera o objeto ProjectArtifact correspondente à linha selecionada na Treeview."""
+        sel = self.tree.selection()
+        if not sel:
+            return None
+        chave = sel[0]
+        if hasattr(self, "workspace") and self.workspace:
+            return self.workspace.obter_artefato(chave)
+        return None
+
+    def _on_abrir_artefato(self):
+        """Abre o artefato selecionado no aplicativo padrão do Windows."""
+        art = self._get_selected_artifact()
+        if not art:
+            messagebox.showinfo("Aviso", "Nenhum artefato selecionado na lista.")
+            return
+
+        if not art.existe or not art.caminho or not art.caminho.exists():
+            messagebox.showwarning("Artefato Inexistente", f"O artefato '{art.rotulo}' ainda não foi gerado ou não existe no disco.")
+            return
+
+        sucesso = WorkspaceActionDispatcher.abrir_artefato(art)
+        if not sucesso:
+            messagebox.showerror("Erro ao Abrir", f"Não foi possível abrir o artefato '{art.rotulo}'.")
+
+    def _on_localizar_artefato(self):
+        """Evidencia e seleciona o artefato no Windows Explorer."""
+        art = self._get_selected_artifact()
+        if not art:
+            messagebox.showinfo("Aviso", "Nenhum artefato selecionado na lista.")
+            return
+
+        if not art.existe or not art.caminho or not art.caminho.exists():
+            messagebox.showwarning("Artefato Inexistente", f"O artefato '{art.rotulo}' ainda não foi gerado ou não existe no disco.")
+            return
+
+        sucesso = WorkspaceActionDispatcher.localizar_artefato(art)
+        if not sucesso:
+            messagebox.showerror("Erro ao Localizar", f"Não foi possível localizar o artefato '{art.rotulo}' no Explorer.")
+
+    def _on_executar_cqt(self):
+        """Dispara a interface do módulo CQT contextualizada para a SOB atual."""
+        if not hasattr(self, "workspace") or not self.workspace:
+            messagebox.showwarning("Aviso", "Contexto de Workspace não disponível.")
+            return
+
+        try:
+            proc = WorkspaceActionDispatcher.executar_cqt(self.workspace)
+            if proc:
+                messagebox.showinfo("Módulo CQT", f"Módulo de Queda de Tensão (CQT) iniciado para a SOB {self.workspace.sob_id}.")
+        except Exception as ex:
+            messagebox.showerror("Erro ao Iniciar CQT", f"Não foi possível iniciar o módulo CQT:\n{ex}")
+
+    def _on_executar_orcamento(self):
+        """Dispara a interface do módulo de Orçamento contextualizada para a SOB atual."""
+        if not hasattr(self, "workspace") or not self.workspace:
+            messagebox.showwarning("Aviso", "Contexto de Workspace não disponível.")
+            return
+
+        try:
+            proc = WorkspaceActionDispatcher.executar_orcamento(self.workspace)
+            if proc:
+                messagebox.showinfo("Módulo Orçamento", f"Módulo de Orçamento e Materiais iniciado para a SOB {self.workspace.sob_id}.")
+        except Exception as ex:
+            messagebox.showerror("Erro ao Iniciar Orçamento", f"Não foi possível iniciar o módulo de Orçamento:\n{ex}")
+
+    def _on_executar_cpfc(self):
+        """Dispara a interface do módulo CPFC (REN 1.059) contextualizada para a SOB atual."""
+        if not hasattr(self, "workspace") or not self.workspace:
+            messagebox.showwarning("Aviso", "Contexto de Workspace não disponível.")
+            return
+
+        try:
+            proc = WorkspaceActionDispatcher.executar_cpfc(self.workspace)
+            if proc:
+                messagebox.showinfo("Módulo CPFC", f"Módulo CPFC (REN 1.059) iniciado para a SOB {self.workspace.sob_id}.")
+        except Exception as ex:
+            messagebox.showerror("Erro ao Iniciar CPFC", f"Não foi possível iniciar o módulo CPFC:\n{ex}")
 
     def _abrir_pasta_atual(self):
-        if self.current_dir.exists():
-            if os.name == "nt":
-                os.startfile(str(self.current_dir))
-            else:
-                subprocess.Popen(["xdg-open", str(self.current_dir)])
+        """Abre a pasta raiz da SOB no Explorer via Dispatcher."""
+        alvo = self.workspace.root_dir if (hasattr(self, "workspace") and self.workspace and self.workspace.root_dir) else self.current_dir
+        if not WorkspaceActionDispatcher.localizar_artefato(alvo):
+            messagebox.showwarning("Aviso", "A pasta selecionada não foi encontrada no disco.")
 
 
 def main():
