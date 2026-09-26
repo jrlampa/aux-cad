@@ -368,3 +368,167 @@ def test_gomnet_rollback_em_falha_parcial(tmp_path):
     # Confirma que a pasta da SOB foi limpa sem deixar resíduos
     sob_root = destino_root / "SOB_A057219996"
     assert not sob_root.exists()
+
+
+def test_gomnet_falha_autenticacao_perguntar_usuario_continuar_sucesso(tmp_path):
+    """
+    Testa que erro ao autenticar no GOMNET não causa rollback se o usuário
+    optar por continuar a preparação da SOB sem o fluxo do GOMNET.
+    """
+    destino_root = tmp_path / "Projetos"
+    destino_root.mkdir()
+
+    base_tpl = tmp_path / "prancha.dwg"
+    base_tpl.write_bytes(b"AC1032" + b"\x00" * 200)
+
+    mock_gomnet = MagicMock(spec=GomnetClient)
+    mock_gomnet.autenticar.side_effect = GomnetAuthError("Falha de conexão / timeout com GOMNET")
+
+    orchestrator = SobOrchestrator(
+        origem_base=base_tpl,
+        sharepoint_client=None,
+        gomnet_client=mock_gomnet,
+    )
+
+    # Simula callback onde o usuário escolhe CONTINUAR (True)
+    mock_cb = MagicMock()
+    mock_cb.cancelamento_solicitado.return_value = False
+    mock_cb.perguntar_continuar_sem_gomnet.return_value = True
+
+    resultado = orchestrator.executar(
+        sob_raw="A057219996",
+        destino_dir=str(destino_root),
+        baixar_croqui_sp=False,
+        consultar_gomnet=True,
+        callback_progresso=mock_cb,
+    )
+
+    # O processo NÃO deve ter feito rollback; deve ter concluído com sucesso
+    assert resultado["status"] == "CONCLUÍDO"
+    assert resultado["sucesso"] is True
+    assert resultado.get("GOMNET_IGNORADO") is True
+    assert mock_cb.perguntar_continuar_sem_gomnet.called
+
+    sob_root = destino_root / "SOB_A057219996"
+    assert sob_root.is_dir()
+    dwg_file = sob_root / "PE_A057219996_DESENHO.dwg"
+    assert dwg_file.is_file()
+
+
+def test_gomnet_falha_download_perguntar_usuario_continuar_sucesso(tmp_path):
+    """
+    Testa que erro ao baixar anexos do GOMNET não causa rollback se o usuário
+    optar por continuar a preparação da SOB sem os anexos do GOMNET.
+    """
+    destino_root = tmp_path / "Projetos"
+    destino_root.mkdir()
+
+    base_tpl = tmp_path / "prancha.dwg"
+    base_tpl.write_bytes(b"AC1032" + b"\x00" * 200)
+
+    mock_gomnet = MagicMock(spec=GomnetClient)
+    mock_gomnet.autenticado = True
+    anexo_1 = GomnetAnexo("1", "ok.pdf", "OUT", "PROJ", "", "", "", "http://dl/1")
+    mock_gomnet.localizar_sob_e_listar_anexos.return_value = [anexo_1]
+    mock_gomnet.baixar_anexo_atomico.side_effect = GomnetDownloadError("Erro de rede no download")
+
+    orchestrator = SobOrchestrator(
+        origem_base=base_tpl,
+        sharepoint_client=None,
+        gomnet_client=mock_gomnet,
+    )
+
+    # Simula callback onde o usuário escolhe CONTINUAR (True)
+    mock_cb = MagicMock()
+    mock_cb.cancelamento_solicitado.return_value = False
+    mock_cb.perguntar_continuar_sem_gomnet.return_value = True
+
+    resultado = orchestrator.executar(
+        sob_raw="A057219996",
+        destino_dir=str(destino_root),
+        baixar_croqui_sp=False,
+        consultar_gomnet=True,
+        callback_progresso=mock_cb,
+    )
+
+    # O processo NÃO deve ter feito rollback; deve ter concluído com sucesso
+    assert resultado["status"] == "CONCLUÍDO"
+    assert resultado["sucesso"] is True
+    assert resultado.get("GOMNET_DOWNLOAD_IGNORADO") is True
+    assert mock_cb.perguntar_continuar_sem_gomnet.called
+
+    sob_root = destino_root / "SOB_A057219996"
+    assert sob_root.is_dir()
+    dwg_file = sob_root / "PE_A057219996_DESENHO.dwg"
+    assert dwg_file.is_file()
+
+
+def test_gomnet_falha_perguntar_usuario_escolhe_rollback(tmp_path):
+    """
+    Testa que se o usuário for perguntado e optar por NÃO continuar (False),
+    o rollback é executado e o processo é bloqueado.
+    """
+    destino_root = tmp_path / "Projetos"
+    destino_root.mkdir()
+
+    base_tpl = tmp_path / "prancha.dwg"
+    base_tpl.write_bytes(b"AC1032" + b"\x00" * 200)
+
+    mock_gomnet = MagicMock(spec=GomnetClient)
+    mock_gomnet.autenticado = True
+    anexo_1 = GomnetAnexo("1", "falha.pdf", "OUT", "PROJ", "", "", "", "http://dl/1")
+    mock_gomnet.localizar_sob_e_listar_anexos.return_value = [anexo_1]
+    mock_gomnet.baixar_anexo_atomico.side_effect = GomnetDownloadError("Erro no download")
+
+    orchestrator = SobOrchestrator(
+        origem_base=base_tpl,
+        sharepoint_client=None,
+        gomnet_client=mock_gomnet,
+    )
+
+    # Simula callback onde o usuário escolhe FAZER ROLLBACK (False)
+    mock_cb = MagicMock()
+    mock_cb.cancelamento_solicitado.return_value = False
+    mock_cb.perguntar_continuar_sem_gomnet.return_value = False
+
+    resultado = orchestrator.executar(
+        sob_raw="A057219996",
+        destino_dir=str(destino_root),
+        baixar_croqui_sp=False,
+        consultar_gomnet=True,
+        callback_progresso=mock_cb,
+    )
+
+    assert resultado["status"] == "BLOQUEADO"
+    assert resultado["rollback"] == "ROLLBACK_CONCLUÍDO"
+
+    # Confirma que a pasta da SOB foi removida pelo rollback
+    sob_root = destino_root / "SOB_A057219996"
+    assert not sob_root.exists()
+
+
+def test_progresso_observer_perguntar_continuar_sem_gomnet():
+    """Testa o método perguntar_continuar_sem_gomnet do ProgressoObserver."""
+    from sob.sob_progress_gui import ProgressoObserver
+
+    obs = ProgressoObserver()
+    dados_teste = {"erro": "Conexão recusada"}
+
+    # Responde em outra thread para desbloquear
+    import threading
+    def _responder():
+        import time
+        time.sleep(0.05)
+        obs.responder_intervencao(True)
+
+    t = threading.Thread(target=_responder)
+    t.start()
+
+    resp = obs.perguntar_continuar_sem_gomnet(dados_teste)
+    t.join()
+
+    assert resp is True
+    ev = obs.obter_evento()
+    assert ev["tipo"] == "PROGRESSO"
+    assert ev["etapa"] == "INTERVENCAO_GOMNET"
+

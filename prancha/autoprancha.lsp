@@ -1,23 +1,22 @@
 ;;; ==========================================================================
 ;;; Módulo: autoprancha.lsp
-;;; Responsabilidade Única: Enquadramento automático e inserção de pranchas
-;;; diretamente no ModelSpace (Padrão Enel / HBT Engenharia).
+;;; Responsabilidade Única: Enquadramento inteligente e inserção de pranchas
+;;; oficiais (PRANCHA / PRANCHA_A4) diretamente no ModelSpace com carimbo IM3.
 ;;; Comandos: AUTOPRANCHA, PRANCHA, ENQUADRAR, FOLHA, RECARREGAR_PRANCHA
 ;;; ==========================================================================
 
 (vl-load-com)
 
 ;; --------------------------------------------------------------------------
-;; Definição dos Formatos ABNT / NBR 10068 e Margens (em milímetros)
+;; Tabela de Formatos Normativos e Margens ABNT (milímetros)
 ;; --------------------------------------------------------------------------
 (defun prancha-get-tabela-formatos ()
-  ;; Retorna: (Nome Larg_mm Alt_mm Marg_Esq Marg_Dir Marg_Sup Marg_Inf)
+  ;; Retorna: (Nome Larg_mm Alt_mm Marg_Esq Marg_Dir Marg_Sup Marg_Inf Bloco)
   '(
-    ("A0" 1189.0 841.0 25.0 10.0 10.0 10.0)
-    ("A1"  841.0 594.0 25.0 10.0 10.0 10.0)
-    ("A2"  594.0 420.0 25.0 10.0 10.0 10.0)
-    ("A3"  420.0 297.0 25.0 10.0 10.0 10.0)
-    ("A4"  297.0 210.0 25.0 10.0 10.0 10.0)
+    ("A1"  841.0 594.0 25.0 10.0 10.0 10.0 "PRANCHA")
+    ("A2"  594.0 420.0 25.0 10.0 10.0 10.0 "PRANCHA")
+    ("A3"  420.0 297.0 25.0 10.0 10.0 10.0 "PRANCHA")
+    ("A4"  297.0 210.0 25.0 10.0 10.0 10.0 "PRANCHA_A4")
    )
 )
 
@@ -26,18 +25,18 @@
 )
 
 ;; --------------------------------------------------------------------------
-;; Funções Auxiliares de Cálculo de Enquadramento
+;; Motor Matemático de Enquadramento Ótimo
 ;; --------------------------------------------------------------------------
 (defun prancha-calcular-melhor-opcao (dx dy esc-fixa fmt-fixo / 
-                                      tbl-fmt escalas melhor-res menor-area-sobra
+                                      tbl-fmt escalas melhor-res menor-sobra
                                       dx-nec dy-nec)
-  ;; Adiciona folga de respiro de 10%
+  ;; Margem de segurança de 10%
   (setq dx-nec (* dx 1.10)
         dy-nec (* dy 1.10)
         tbl-fmt (prancha-get-tabela-formatos)
         escalas (if esc-fixa (list esc-fixa) (prancha-escalas-normativas))
         melhor-res nil
-        menor-area-sobra 1.0e15)
+        menor-sobra 1.0e15)
 
   (if fmt-fixo
     (setq tbl-fmt (vl-remove-if-not '(lambda (f) (= (car f) (strcase fmt-fixo))) tbl-fmt))
@@ -51,6 +50,7 @@
           mdir  (nth 4 f)
           msup  (nth 5 f)
           minf  (nth 6 f)
+          bname (nth 7 f)
           lu-mm (- flarg (+ mesq mdir))
           au-mm (- falt  (+ msup minf)))
 
@@ -66,150 +66,284 @@
           (setq area-util (* lu-m au-m)
                 area-proj (* dx dy)
                 sobra     (- area-util area-proj))
-          ;; Bônus de preferência para escala 1:1000 e formato A1 (padrão Enel)
+          ;; Prioridade para escala padrão 1:1000 e folha A1
           (if (= esc 1000) (setq sobra (- sobra (* area-proj 0.15))))
           (if (= fname "A1") (setq sobra (- sobra (* area-proj 0.20))))
 
-          (if (< sobra menor-area-sobra)
-            (setq menor-area-sobra sobra
-                  melhor-res (list fname esc fator lf-m af-m lu-m au-m mesq minf flarg falt))
+          (if (< sobra menor-sobra)
+            (setq menor-sobra sobra
+                  melhor-res (list fname esc fator lf-m af-m lu-m au-m mesq minf flarg falt bname))
           )
         )
       )
     )
   )
 
-  ;; Fallback para A0 1:2000 caso o projeto seja gigantesco
+  ;; Fallback para A1 1:2000 se o projeto for muito extenso
   (if (null melhor-res)
-    (setq melhor-res (list "A0" 2000 2.0 (* 1189.0 2.0) (* 841.0 2.0) (* 1154.0 2.0) (* 821.0 2.0) 25.0 10.0 1189.0 841.0))
+    (setq melhor-res (list "A1" 2000 2.0 (* 841.0 2.0) (* 594.0 2.0) (* 806.0 2.0) (* 574.0 2.0) 25.0 10.0 841.0 594.0 "PRANCHA"))
   )
   melhor-res
 )
 
 ;; --------------------------------------------------------------------------
-;; Criação de Camadas (Layers) Padrão
+;; Carregamento de Metadados Cadastrais da SOB
 ;; --------------------------------------------------------------------------
-(defun prancha-garantir-layers ()
-  (setvar "CMDECHO" 0)
-  (if (null (tblsearch "layer" "A-PRANCHA"))
-    (command "_.layer" "_m" "A-PRANCHA" "_c" "7" "" "_lw" "0.15" "" "")
+(defun prancha-carregar-contexto (/ dwg-dir cand cand-temp)
+  (setq dwg-dir (getvar "DWGPREFIX"))
+  (setq cand (strcat dwg-dir "prancha_contexto.lsp"))
+  (setq cand-temp (strcat (getenv "TEMP") "\\prancha_contexto.lsp"))
+  (cond
+    ((findfile cand) (load cand))
+    ((findfile cand-temp) (load cand-temp))
   )
-  (if (null (tblsearch "layer" "A-PRANCHA-MARGEM"))
-    (command "_.layer" "_m" "A-PRANCHA-MARGEM" "_c" "4" "" "_lw" "0.50" "" "")
+)
+
+(defun prancha-extrair-sob-dwg (/ base-dwg m-pos)
+  (setq base-dwg (vl-filename-base (getvar "DWGNAME")))
+  (setq m-pos (vl-string-search "_" base-dwg))
+  (if m-pos
+    (setq base-dwg (substr base-dwg (+ m-pos 2)))
   )
-  (if (null (tblsearch "layer" "A-PRANCHA-DOBRA"))
-    (command "_.layer" "_m" "A-PRANCHA-DOBRA" "_c" "8" "" "_lw" "0.09" "" "")
+  (setq m-pos (vl-string-search "_" base-dwg))
+  (if m-pos
+    (setq base-dwg (substr base-dwg 1 m-pos))
   )
-  (if (null (tblsearch "layer" "A-PRANCHA-CARIMBO"))
-    (command "_.layer" "_m" "A-PRANCHA-CARIMBO" "_c" "7" "" "_lw" "0.25" "" "")
+  (if (and base-dwg (/= base-dwg ""))
+    base-dwg
+    "-"
   )
-  (setvar "CMDECHO" 1)
-  (princ)
 )
 
 ;; --------------------------------------------------------------------------
-;; Desenho da Borda Externa e Margem Interna (LWPOLYLINE)
+;; Validação e Garantia da Definição dos Blocos Oficiais
 ;; --------------------------------------------------------------------------
-(defun prancha-desenhar-retangulo (pmin pmax layer lweight / x1 y1 x2 y2 p1 p2 p3 p4)
-  (setq x1 (car pmin)  y1 (cadr pmin)
-        x2 (car pmax)  y2 (cadr pmax)
-        p1 (list x1 y1)
-        p2 (list x2 y1)
-        p3 (list x2 y2)
-        p4 (list x1 y2))
-  (entmake
-    (list
-      '(0 . "LWPOLYLINE")
-      '(100 . "AcDbEntity")
-      (cons 8 layer)
-      '(100 . "AcDbPolyline")
-      '(90 . 4)
-      '(70 . 1) ; Fechada
-      (cons 43 (if lweight lweight 0.0))
-      (cons 10 p1)
-      (cons 10 p2)
-      (cons 10 p3)
-      (cons 10 p4)
+(defun prancha-validar-compatibilidade-bloco (blk-name / blk-def ent edata etype txt pt
+                                                         is-a4 has-folha has-escala has-data has-bairro
+                                                         has-marcador-resp)
+  (setq blk-def (tblsearch "block" blk-name))
+  (if (null blk-def)
+    'NAO_EXISTE
+    (progn
+      (setq is-a4 (= (strcase blk-name) "PRANCHA_A4"))
+      (setq ent (cdr (assoc -2 blk-def)))
+      (while ent
+        (setq edata (entget ent)
+              etype (cdr (assoc 0 edata)))
+        (if (or (= etype "TEXT") (= etype "MTEXT"))
+          (progn
+            (setq txt (cdr (assoc 1 edata))
+                  pt  (cdr (assoc 10 edata)))
+            (if is-a4
+              (progn
+                ;; A4 Folha (261.11, 30.24)
+                (if (and (vl-string-search "Folha" txt)
+                         (<= (distance (list (car pt) (cadr pt)) '(261.11 30.24)) 4.0))
+                  (setq has-folha T))
+                ;; A4 Escala (261.09, 25.46)
+                (if (and (vl-string-search "Escala" txt)
+                         (<= (distance (list (car pt) (cadr pt)) '(261.09 25.46)) 4.0))
+                  (setq has-escala T))
+                ;; A4 DATA (210.42, 15.76)
+                (if (and (vl-string-search "DATA" txt)
+                         (<= (distance (list (car pt) (cadr pt)) '(210.42 15.76)) 4.0))
+                  (setq has-data T))
+                ;; A4 BAIRRO (179.22, 15.73)
+                (if (and (vl-string-search "BAIRRO" txt)
+                         (<= (distance (list (car pt) (cadr pt)) '(179.22 15.73)) 4.0))
+                  (setq has-bairro T))
+                ;; A4 Projetista Oficial IM3 (160.03, 10.55)
+                (if (and (vl-string-search "JONATAS LAMPA" txt)
+                         (<= (distance (list (car pt) (cadr pt)) '(160.03 10.55)) 4.0))
+                  (setq has-marcador-resp T))
+              )
+              (progn
+                ;; PRANCHA Folha (-35.89, 30.24)
+                (if (and (vl-string-search "Folha" txt)
+                         (<= (distance (list (car pt) (cadr pt)) '(-35.89 30.24)) 4.0))
+                  (setq has-folha T))
+                ;; PRANCHA Escala (-35.91, 25.46)
+                (if (and (vl-string-search "Escala" txt)
+                         (<= (distance (list (car pt) (cadr pt)) '(-35.91 25.46)) 4.0))
+                  (setq has-escala T))
+                ;; PRANCHA DATA (-86.58, 15.76)
+                (if (and (vl-string-search "DATA" txt)
+                         (<= (distance (list (car pt) (cadr pt)) '(-86.58 15.76)) 4.0))
+                  (setq has-data T))
+                ;; PRANCHA BAIRRO (-117.78, 15.73)
+                (if (and (vl-string-search "BAIRRO" txt)
+                         (<= (distance (list (car pt) (cadr pt)) '(-117.78 15.73)) 4.0))
+                  (setq has-bairro T))
+                ;; PRANCHA HBT Engenharia (-138.45, 24.87)
+                (if (and (vl-string-search "HBT" txt)
+                         (<= (distance (list (car pt) (cadr pt)) '(-138.45 24.87)) 4.0))
+                  (setq has-marcador-resp T))
+              )
+            )
+          )
+        )
+        (setq ent (entnext ent))
+      )
+      (if (and has-folha has-escala has-data has-bairro has-marcador-resp)
+        'COMPATIVEL
+        'INCOMPATIVEL
+      )
+    )
+  )
+)
+
+(defun prancha-garantir-bloco (blk-name / status model-path temp-src e-before e-after post-status)
+  (setq status (prancha-validar-compatibilidade-bloco blk-name))
+  (cond
+    ((eq status 'COMPATIVEL)
+      (princ (strcat "\n[AUTOPRANCHA] Bloco oficial '" blk-name "' existente e compativel. Reutilizando definicao."))
+      T
+    )
+    ((eq status 'INCOMPATIVEL)
+      (princ (strcat "\n[ERRO CRITICO AUTOPRANCHA] O bloco '" blk-name "' ja existe no desenho, mas e INCOMPATIVEL com o modelo oficial IM3."))
+      (princ "\n[ERRO CRITICO AUTOPRANCHA] Operacao abortada para proteger a integridade do desenho contra blocos legados.")
+      nil
+    )
+    (T ;; 'NAO_EXISTE: Realizar importacao oficial do modelo
+      (princ (strcat "\n[AUTOPRANCHA] Bloco oficial '" blk-name "' nao encontrado no desenho."))
+      (princ "\n[AUTOPRANCHA] Importando definicao do modelo corporativo prancha.dwg...")
+      
+      (setq model-path "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\models\\prancha.dwg")
+      (if (null (findfile model-path))
+        (setq model-path (strcat (getvar "DWGPREFIX") "modelos\\prancha.dwg"))
+      )
+      
+      (if (findfile model-path)
+        (progn
+          (setvar "CMDECHO" 0)
+          (setvar "ATTREQ" 0)
+          (setvar "ATTDIA" 0)
+          (setq temp-src (strcat (getenv "TEMP") "\\temp_prancha_source.dwg"))
+          (vl-file-copy model-path temp-src)
+          (if (findfile temp-src)
+            (progn
+              (setq e-before (entlast))
+              (command ".-insert" temp-src '(0.0 0.0 0.0) 1.0 1.0 0.0)
+              (setq e-after (entlast))
+              (if (and e-after (not (equal e-before e-after)))
+                (entdel e-after)
+              )
+              (vl-file-delete temp-src)
+            )
+          )
+          (setvar "CMDECHO" 1)
+        )
+        (princ (strcat "\n[ERRO AUTOPRANCHA] Arquivo modelo nao encontrado: " model-path))
+      )
+      
+      (setq post-status (prancha-validar-compatibilidade-bloco blk-name))
+      (if (eq post-status 'COMPATIVEL)
+        (progn
+          (princ (strcat "\n[AUTOPRANCHA] Bloco oficial '" blk-name "' importado e validado com sucesso."))
+          T
+        )
+        (progn
+          (princ (strcat "\n[ERRO AUTOPRANCHA] Falha ao validar bloco apos importacao: '" blk-name "'."))
+          nil
+        )
+      )
     )
   )
 )
 
 ;; --------------------------------------------------------------------------
-;; Inserção e Desenho do Carimbo Enel / HBT no Canto Inferior Direito
+;; Atualização Determinística dos Campos Cadastrais V1 no Bloco Oficial
 ;; --------------------------------------------------------------------------
-(defun prancha-desenhar-carimbo (p-canto-dir fator esc data-str /
-                                 c-larg c-alt p-min-c p-max-c txt-h)
-  ;; Carimbo: 185 mm de largura x 60 mm de altura x fator de escala
-  (setq c-larg (* 185.0 fator)
-        c-alt  (* 60.0  fator)
-        p-min-c (list (- (car p-canto-dir) c-larg) (cadr p-canto-dir))
-        p-max-c (list (car p-canto-dir) (+ (cadr p-canto-dir) c-alt))
-        txt-h   (* 2.2 fator))
+(defun prancha-atualizar-campos-carimbo (blk-name sob esc folha data-str tit mun bai end-str /
+                                         blk-def ent edata etype txt pt is-a4 x-base)
+  (setq blk-def (tblsearch "block" blk-name))
+  (if blk-def
+    (progn
+      (setq is-a4 (= (strcase blk-name) "PRANCHA_A4"))
+      (setq x-base (if is-a4 297.0 0.0))
+      (setq ent (cdr (assoc -2 blk-def)))
 
-  ;; Contorno do Carimbo
-  (prancha-desenhar-retangulo p-min-c p-max-c "A-PRANCHA-CARIMBO" 0.0)
+      (while ent
+        (setq edata (entget ent)
+              etype (cdr (assoc 0 edata)))
 
-  ;; Linhas divisórias horizontais do carimbo
-  (setvar "CMDECHO" 0)
-  (command "_.line" "_none" (list (car p-min-c) (+ (cadr p-min-c) (* 20.0 fator)))
-                    "_none" (list (car p-max-c) (+ (cadr p-min-c) (* 20.0 fator))) "")
-  (command "_.line" "_none" (list (car p-min-c) (+ (cadr p-min-c) (* 40.0 fator)))
-                    "_none" (list (car p-max-c) (+ (cadr p-min-c) (* 40.0 fator))) "")
+        (if (or (= etype "TEXT") (= etype "MTEXT"))
+          (progn
+            (setq txt (cdr (assoc 1 edata))
+                  pt  (cdr (assoc 10 edata)))
 
-  ;; Linha divisória vertical inferior (Escala / Data / Folha)
-  (command "_.line" "_none" (list (+ (car p-min-c) (* 60.0 fator)) (cadr p-min-c))
-                    "_none" (list (+ (car p-min-c) (* 60.0 fator)) (+ (cadr p-min-c) (* 20.0 fator))) "")
-  (command "_.line" "_none" (list (+ (car p-min-c) (* 125.0 fator)) (cadr p-min-c))
-                    "_none" (list (+ (car p-min-c) (* 125.0 fator)) (+ (cadr p-min-c) (* 20.0 fator))) "")
+            ;; 1. SOB: PRANCHA (-115.35, 7.44) / PRANCHA_A4 (179.39, 9.74)
+            (if (or (and (not is-a4) (<= (distance pt (list (+ x-base -115.35) 7.44)) 2.0))
+                    (and is-a4 (<= (distance pt '(179.39 9.74)) 2.0)))
+              (progn
+                (setq edata (subst (cons 1 sob) (assoc 1 edata) edata))
+                (entmod edata)
+              )
+            )
 
-  ;; Textos do Carimbo
-  (command "_.text" "_none" (list (+ (car p-min-c) (* 5.0 fator)) (+ (cadr p-min-c) (* 50.0 fator)))
-           (* 3.0 fator) "0" "ENEL BRASIL")
-  (command "_.text" "_none" (list (+ (car p-min-c) (* 5.0 fator)) (+ (cadr p-min-c) (* 43.0 fator)))
-           (* 2.2 fator) "0" "DISTRIBUICAO DE ENERGIA")
+            ;; 2. ESCALA: (-22.90, 25.57) / PRANCHA_A4 (274.10, 25.57)
+            (if (and (or (= txt "1/1000") (= txt "X ") (= (substr txt 1 2) "1:"))
+                     (<= (distance pt (list (+ x-base -22.90) 25.57)) 2.0))
+              (progn
+                (setq edata (subst (cons 1 (strcat "1:" (itoa esc))) (assoc 1 edata) edata))
+                (entmod edata)
+              )
+            )
 
-  (command "_.text" "_none" (list (+ (car p-min-c) (* 5.0 fator)) (+ (cadr p-min-c) (* 31.0 fator)))
-           (* 2.8 fator) "0" "PROJETO DE REDE DE DISTRIBUICAO")
-  (command "_.text" "_none" (list (+ (car p-min-c) (* 5.0 fator)) (+ (cadr p-min-c) (* 23.0 fator)))
-           (* 2.0 fator) "0" "HBT ENGENHARIA - PROJETOS ELETRICOS")
+            ;; 3. FOLHA: (-23.41, 30.22) / PRANCHA_A4 (273.59, 30.22)
+            (if (and (or (= txt "1 de 1") (= txt "X ") (= txt "1 / 1"))
+                     (<= (distance pt (list (+ x-base -23.41) 30.22)) 2.0))
+              (progn
+                (setq edata (subst (cons 1 folha) (assoc 1 edata) edata))
+                (entmod edata)
+              )
+            )
 
-  ;; Bloco de rodapé: Escala, Data e Folha
-  (command "_.text" "_none" (list (+ (car p-min-c) (* 5.0 fator)) (+ (cadr p-min-c) (* 13.0 fator)))
-           (* 1.8 fator) "0" "ESCALA:")
-  (command "_.text" "_none" (list (+ (car p-min-c) (* 5.0 fator)) (+ (cadr p-min-c) (* 5.0 fator)))
-           (* 2.5 fator) "0" (strcat "1:" (itoa esc)))
+            ;; 4. DATA: (-79.21, 15.52)
+            (if (and (not is-a4) (<= (distance pt (list (+ x-base -79.21) 15.52)) 2.0))
+              (progn
+                (setq edata (subst (cons 1 data-str) (assoc 1 edata) edata))
+                (entmod edata)
+              )
+            )
 
-  (command "_.text" "_none" (list (+ (car p-min-c) (* 65.0 fator)) (+ (cadr p-min-c) (* 13.0 fator)))
-           (* 1.8 fator) "0" "DATA:")
-  (command "_.text" "_none" (list (+ (car p-min-c) (* 65.0 fator)) (+ (cadr p-min-c) (* 5.0 fator)))
-           (* 2.2 fator) "0" data-str)
+            ;; 5. TÍTULO: (-115.49, 32.71) / PRANCHA_A4 (181.51, 32.71)
+            (if (<= (distance pt (list (+ x-base -115.49) 32.71)) 2.0)
+              (progn
+                (setq edata (subst (cons 1 tit) (assoc 1 edata) edata))
+                (entmod edata)
+              )
+            )
 
-  (command "_.text" "_none" (list (+ (car p-min-c) (* 130.0 fator)) (+ (cadr p-min-c) (* 13.0 fator)))
-           (* 1.8 fator) "0" "PRANCHA:")
-  (command "_.text" "_none" (list (+ (car p-min-c) (* 130.0 fator)) (+ (cadr p-min-c) (* 5.0 fator)))
-           (* 2.5 fator) "0" "01 / 01")
+            ;; 6. MUNICÍPIO: (-104.46, 20.28) / PRANCHA_A4 (192.54, 20.28)
+            (if (<= (distance pt (list (+ x-base -104.46) 20.28)) 2.0)
+              (progn
+                (setq edata (subst (cons 1 mun) (assoc 1 edata) edata))
+                (entmod edata)
+              )
+            )
 
-  (setvar "CMDECHO" 1)
-  (princ)
-)
+            ;; 7. BAIRRO: (-107.70, 15.69) / PRANCHA_A4 (189.30, 15.69)
+            (if (<= (distance pt (list (+ x-base -107.70) 15.69)) 2.0)
+              (progn
+                (setq edata (subst (cons 1 bai) (assoc 1 edata) edata))
+                (entmod edata)
+              )
+            )
 
-;; --------------------------------------------------------------------------
-;; Marcas de Dobra da Folha (Padrão ABNT 185mm / 210mm)
-;; --------------------------------------------------------------------------
-(defun prancha-desenhar-marcas-dobra (pmin pmax fator flarg / xmin ymin xmax ymax mlen x-dobra)
-  (setq xmin (car pmin)  ymin (cadr pmin)
-        xmax (car pmax)  ymax (cadr pmax)
-        mlen (* 5.0 fator)) ; Linhas discretas de 5mm
-  (setvar "CMDECHO" 0)
-  ;; Marcas de dobra a partir da borda direita (módulos de 185mm no papel)
-  (setq x-dobra (- xmax (* 185.0 fator)))
-  (while (> x-dobra (+ xmin (* 210.0 fator)))
-    (command "_.line" "_none" (list x-dobra ymin) "_none" (list x-dobra (+ ymin mlen)) "")
-    (command "_.line" "_none" (list x-dobra ymax) "_none" (list x-dobra (- ymax mlen)) "")
-    (setq x-dobra (- x-dobra (* 185.0 fator)))
+            ;; 8. ENDEREÇO: (-115.38, 25.52) / PRANCHA_A4 (181.62, 25.52)
+            (if (<= (distance pt (list (+ x-base -115.38) 25.52)) 2.0)
+              (progn
+                (setq edata (subst (cons 1 end-str) (assoc 1 edata) edata))
+                (entmod edata)
+              )
+            )
+          )
+        )
+        (setq ent (entnext ent))
+      )
+    )
   )
-  (setvar "CMDECHO" 1)
-  (princ)
 )
 
 ;; --------------------------------------------------------------------------
@@ -217,15 +351,13 @@
 ;; --------------------------------------------------------------------------
 (defun c:AUTOPRANCHA (/ pt1 pt2 xmin xmax ymin ymax dx dy cx cy
                         modo esc-fixa fmt-fixo res fname esc fator
-                        lf-m af-m lu-m au-m mesq minf flarg falt
-                        f-xmin f-ymin f-xmax f-ymax
-                        m-xmin m-ymin m-xmax m-ymax
-                        pmin-f pmax-f pmin-m pmax-m
-                        data-str conf)
+                        lf-m af-m lu-m au-m mesq minf flarg falt bname
+                        f-xmin f-ymin f-xmax f-ymax x-ins y-ins
+                        data-str conf sob tit mun bai end-str folha ins-ref)
   (setvar "CMDECHO" 0)
   (princ "\n=======================================================")
-  (princ "\n [AUTOPRANCHA] Enquadramento Inteligente de Prancha")
-  (princ "\n Posicionamento direto no ModelSpace (Padrão Enel / HBT)")
+  (princ "\n [AUTOPRANCHA V1] Enquadramento Inteligente de Prancha ")
+  (princ "\n Inserção dos Blocos Oficiais IM3 Brasil no ModelSpace ")
   (princ "\n=======================================================")
 
   ;; 1. Captura da área em diagonal com retângulo elástico dinâmico
@@ -262,8 +394,8 @@
      (if (null esc-fixa) (setq esc-fixa 1000))
     )
     ((= modo "Formato")
-     (initget "A3 A2 A1 A0")
-     (setq fmt-fixo (getkword "\nInforme o formato desejado [A3 / A2 / A1 / A0] <A1>: "))
+     (initget "A1 A2 A3 A4")
+     (setq fmt-fixo (getkword "\nInforme o formato desejado [A1 / A2 / A3 / A4] <A1>: "))
      (if (null fmt-fixo) (setq fmt-fixo "A1"))
     )
   )
@@ -280,71 +412,84 @@
         mesq  (nth 7 res)
         minf  (nth 8 res)
         flarg (nth 9 res)
-        falt  (nth 10 res))
+        falt  (nth 10 res)
+        bname (nth 11 res))
 
   ;; 5. Apresentação do Resumo ao Usuário
   (princ "\n-------------------------------------------------------")
-  (princ (strcat "\n ENQUADRAMENTO CALCULADO (ENEL / HBT):"))
-  (princ (strcat "\n - Área da rede selecionada : " (rtos dx 2 1) "m x " (rtos dy 2 1) "m"))
-  (princ (strcat "\n - Formato de papel sugerido: " fname " (" (rtos flarg 2 0) " x " (rtos falt 2 0) " mm)"))
-  (princ (strcat "\n - Escala de projeto        : 1:" (itoa esc)))
-  (princ (strcat "\n - Dimensão da folha (Model): " (rtos lf-m 2 1) "m x " (rtos af-m 2 1) "m"))
-  (princ (strcat "\n - Área útil de desenho     : " (rtos lu-m 2 1) "m x " (rtos au-m 2 1) "m"))
+  (princ "\n ENQUADRAMENTO CALCULADO (IM3 BRASIL):")
+  (princ (strcat "\n - Área selecionada       : " (rtos dx 2 1) "m x " (rtos dy 2 1) "m"))
+  (princ (strcat "\n - Formato de papel       : " fname " (" (rtos flarg 2 0) " x " (rtos falt 2 0) " mm)"))
+  (princ (strcat "\n - Escala de projeto      : 1:" (itoa esc)))
+  (princ (strcat "\n - Bloco oficial aplicado : " bname))
+  (princ (strcat "\n - Dimensão da folha      : " (rtos lf-m 2 1) "m x " (rtos af-m 2 1) "m"))
+  (princ (strcat "\n - Área útil de desenho   : " (rtos lu-m 2 1) "m x " (rtos au-m 2 1) "m"))
   (princ "\n-------------------------------------------------------")
 
   (initget "Sim Nao")
-  (setq conf (getkword "\nConfirmar inserção da prancha no ModelSpace? [Sim / Não] <Sim>: "))
+  (setq conf (getkword "\nConfirmar inserção do bloco oficial no ModelSpace? [Sim / Não] <Sim>: "))
   (if (or (null conf) (= conf "Sim"))
     (progn
-      ;; 6. Garantir camadas
-      (prancha-garantir-layers)
+      ;; 6. Garantir bloco oficial no desenho
+      (if (null (prancha-garantir-bloco bname))
+        (progn
+          (princ (strcat "\n[ERRO CRÍTICO] Bloco oficial " bname " não está disponível no desenho e não pôde ser importado."))
+          (exit)
+        )
+      )
 
-      ;; 7. Calcular coordenadas exatas no ModelSpace
-      ;; Centro útil coincide perfeitamente com o centro da rede (cx, cy)
+      ;; 7. Carregar dados cadastrais da SOB do contexto do Workspace
+      (setq *prancha-sob* nil *prancha-titulo* nil *prancha-municipio* nil
+            *prancha-bairro* nil *prancha-endereco* nil *prancha-folha* nil
+            *prancha-data* nil)
+      (prancha-carregar-contexto)
+
+      (setq sob (if *prancha-sob* *prancha-sob* (prancha-extrair-sob-dwg)))
+      (setq tit (if (and *prancha-titulo* (/= *prancha-titulo* "")) *prancha-titulo* "-"))
+      (setq mun (if *prancha-municipio* *prancha-municipio* "-"))
+      (setq bai (if *prancha-bairro* *prancha-bairro* "-"))
+      (setq end-str (if *prancha-endereco* *prancha-endereco* "-"))
+      (setq folha (if *prancha-folha* *prancha-folha* "1 de 1"))
+      (setq data-str (menucmd "M=$(edtime,$(getvar,date),DD/MO/YYYY)"))
+      (if (and *prancha-data* (/= *prancha-data* "")) (setq data-str *prancha-data*))
+
+      ;; 8. Calcular coordenadas exatas no ModelSpace
       (setq f-xmin (- cx (* (+ mesq (/ (- flarg (+ mesq 10.0)) 2.0)) fator))
             f-ymin (- cy (* (+ minf (/ (- falt  (+ minf 10.0)) 2.0)) fator))
             f-xmax (+ f-xmin lf-m)
-            f-ymax (+ f-ymin af-m)
-            m-xmin (+ f-xmin (* mesq fator))
-            m-ymin (+ f-ymin (* minf fator))
-            m-xmax (- f-xmax (* 10.0 fator))
-            m-ymax (- f-ymax (* 10.0 fator))
-            pmin-f (list f-xmin f-ymin)
-            pmax-f (list f-xmax f-ymax)
-            pmin-m (list m-xmin m-ymin)
-            pmax-m (list m-xmax m-ymax))
+            f-ymax (+ f-ymin af-m))
 
-      ;; 8. Desenhar Borda Externa (A-PRANCHA)
-      (prancha-desenhar-retangulo pmin-f pmax-f "A-PRANCHA" nil)
-
-      ;; 9. Desenhar Margem Interna (A-PRANCHA-MARGEM)
-      (prancha-desenhar-retangulo pmin-m pmax-m "A-PRANCHA-MARGEM" (* 0.50 fator))
-
-      ;; 10. Desenhar Marcas de Dobra (A-PRANCHA-DOBRA)
-      (prancha-desenhar-marcas-dobra pmin-f pmax-f fator flarg)
-
-      ;; 11. Data formatada para o carimbo
-      (setq data-str (menucmd "M=$(edtime,$(getvar,date),DD/MO/YYYY)"))
-      (if (or (null data-str) (= data-str ""))
-        (setq data-str "12/09/2026")
+      ;; 9. Determinar ponto de inserção oficial conforme a ancoragem do bloco:
+      ;; PRANCHA (A1/A2/A3): Canto inferior direito (f-xmax, f-ymin)
+      ;; PRANCHA_A4 (A4): Canto inferior esquerdo (f-xmin, f-ymin)
+      (if (= (strcase bname) "PRANCHA")
+        (setq x-ins f-xmax y-ins f-ymin)
+        (setq x-ins f-xmin y-ins f-ymin)
       )
 
-      ;; 12. Desenhar Carimbo no Canto Inferior Direito da Margem
-      (prancha-desenhar-carimbo (list m-xmax m-ymin) fator esc data-str)
+      ;; 10. Atualizar campos do carimbo determinísticamente
+      (prancha-atualizar-campos-carimbo bname sob esc folha data-str tit mun bai end-str)
 
-      ;; 13. Zoom na folha inserida
-      (command "_.zoom" "_w" "_none" pmin-f "_none" pmax-f)
+      ;; 11. Inserir bloco oficial no ModelSpace
+      (setvar "ATTREQ" 0)
+      (setvar "ATTDIA" 0)
+      (command ".-insert" bname (list x-ins y-ins 0.0) fator fator 0.0)
+      (setq ins-ref (entlast))
 
-      (princ (strcat "\n[AUTOPRANCHA] Prancha " fname " (1:" (itoa esc) ") inserida e enquadrada com sucesso no ModelSpace!"))
+      ;; 12. Zoom na folha inserida
+      (command "_.zoom" "_w" "_none" (list f-xmin f-ymin) "_none" (list f-xmax f-ymax))
+
+      (princ (strcat "\n[AUTOPRANCHA] Sucesso! Bloco " bname " (1:" (itoa esc) ") inserido no ModelSpace."))
+      (princ (strcat "\n[AUTOPRANCHA] SOB " sob " | Folha " folha " | Escala 1:" (itoa esc) " | Data " data-str))
     )
-    (princ "\n[AUTOPRANCHA] Operação cancelada.")
+    (princ "\n[AUTOPRANCHA] Operação cancelada pelo usuário.")
   )
   (setvar "CMDECHO" 1)
   (princ)
 )
 
 ;; --------------------------------------------------------------------------
-;; Comandos e Atalhos Alternativos
+;; Atalhos e Comandos Auxiliares
 ;; --------------------------------------------------------------------------
 (defun c:PRANCHA () (c:AUTOPRANCHA))
 (defun c:ENQUADRAR () (c:AUTOPRANCHA))

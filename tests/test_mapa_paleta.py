@@ -688,4 +688,25 @@ def test_osm_api_oficial_e_snyder_syntax():
     assert "inserirNome" in bridge_conteudo
 
 
+def test_deduplicacao_consulta_contexto_urbano_tracado():
+    """Valida a eliminação da chamada redundante (P2) para o poste em tracado.js e preservação do vão."""
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    tracado_js = os.path.join(raiz, "mapa_cad_paleta", "web", "tracado.js")
+    app_js = os.path.join(raiz, "mapa_cad_paleta", "web", "app.js")
+
+    with open(tracado_js, "r", encoding="utf-8") as f:
+        tracado_conteudo = f.read()
+
+    with open(app_js, "r", encoding="utf-8") as f:
+        app_conteudo = f.read()
+
+    # tracado.js NÃO deve duplicar a consulta do novo poste (120m)
+    assert "carregarContextoUrbano(novoPoste.lat" not in tracado_conteudo
+    # tracado.js DEVE manter a consulta para o ponto médio do vão
+    assert "carregarContextoUrbano(midLat, midLon" in tracado_conteudo
+    # app.js DEVE manter a consulta unificada autoritativa para o novo poste com raio 140m
+    assert "carregarContextoUrbano(pLat, pLon, 140, AppState.map, true)" in app_conteudo
+
+
+
 

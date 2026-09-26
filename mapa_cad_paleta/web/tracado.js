@@ -76,16 +76,16 @@ function registrarPosteTracado(novoPoste, mapa) {
 
     TracadoState.pontos.push(novoPoste);
 
-    // Carrega e renderiza vias, calçadas e obstruções no entorno do novo poste e ao longo do vão
+    // Carrega e renderiza vias, calçadas e obstruções ao longo do vão
+    // (O entorno do novo poste é carregado de forma unificada por inserirPosteNoCad com raio 140m)
     const chkViasTracado = document.getElementById('chkTracadoViasCad') || document.getElementById('chkAutoViasCad');
     const desenharVias = chkViasTracado ? chkViasTracado.checked : (window.ViasObstrucoesState && window.ViasObstrucoesState.desenharNoCad);
 
-    if (desenharVias && typeof window.carregarContextoUrbano === 'function' && novoPoste.lat && novoPoste.lon) {
+    if (desenharVias && typeof window.carregarContextoUrbano === 'function') {
         if (window.ViasObstrucoesState) window.ViasObstrucoesState.desenharNoCad = true;
-        window.carregarContextoUrbano(novoPoste.lat, novoPoste.lon, 120, mapa);
 
-        // Cobre também o ponto médio do vão para capturar a extensão completa da via no AutoCAD
-        if (anterior && anterior.lat && anterior.lon) {
+        // Cobre o ponto médio do vão para capturar a extensão completa da via no AutoCAD
+        if (anterior && anterior.lat && anterior.lon && novoPoste.lat && novoPoste.lon) {
             const midLat = (anterior.lat + novoPoste.lat) / 2.0;
             const midLon = (anterior.lon + novoPoste.lon) / 2.0;
             const distVao = Math.hypot(novoPoste.x - anterior.x, novoPoste.y - anterior.y);

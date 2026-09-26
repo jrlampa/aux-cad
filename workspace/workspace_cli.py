@@ -28,7 +28,10 @@ class WorkspaceGUI(tk.Tk):
     """Interface visual simples e ergonômica para inspeção e ações do Workspace da SOB."""
 
     def __init__(self, root_dir: Optional[str] = None, sob_id: Optional[str] = None):
-        super().__init__()
+        try:
+            super().__init__()
+        except tk.TclError:
+            super().__init__()
         self.title("AUX CAD — Workspace da SOB / Projeto")
         self.geometry("860x640")
         self.minsize(780, 520)
@@ -233,7 +236,50 @@ class WorkspaceGUI(tk.Tk):
             cursor="hand2",
             command=self._on_executar_cpfc
         )
-        btn_cpfc.pack(side="left", padx=(0, 16))
+        btn_cpfc.pack(side="left", padx=(0, 4))
+
+        btn_amb = tk.Button(
+            bot_bar,
+            text="🌿 Ambiental",
+            font=("Segoe UI", 9, "bold"),
+            bg="#15803D",
+            fg="#FFFFFF",
+            relief="flat",
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=self._on_executar_ambiental
+        )
+        btn_amb.pack(side="left", padx=(0, 4))
+
+        btn_unifilar = tk.Button(
+            bot_bar,
+            text="⚡ Unifilar",
+            font=("Segoe UI", 9, "bold"),
+            bg="#D97706",
+            fg="#FFFFFF",
+            relief="flat",
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=self._on_abrir_unifilar
+        )
+        btn_unifilar.pack(side="left", padx=(0, 4))
+
+        btn_prancha = tk.Button(
+            bot_bar,
+            text="📐 Prancha",
+            font=("Segoe UI", 9, "bold"),
+            bg="#475569",
+            fg="#FFFFFF",
+            relief="flat",
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=self._on_executar_prancha
+        )
+        btn_prancha.pack(side="left", padx=(0, 16))
+
 
         btn_abrir_pasta = tk.Button(
             bot_bar,
@@ -311,6 +357,9 @@ class WorkspaceGUI(tk.Tk):
             return
 
         if not art.existe or not art.caminho or not art.caminho.exists():
+            if art.chave == "UNIFILAR":
+                self._on_abrir_unifilar()
+                return
             messagebox.showwarning("Artefato Inexistente", f"O artefato '{art.rotulo}' ainda não foi gerado ou não existe no disco.")
             return
 
@@ -383,6 +432,64 @@ class WorkspaceGUI(tk.Tk):
             messagebox.showerror("Launcher Não Encontrado", f"O launcher oficial da SOB não foi encontrado:\n{fnf}")
         except Exception as ex:
             messagebox.showerror("Erro ao Iniciar Preparador SOB", f"Não foi possível iniciar o preparador da SOB:\n{ex}")
+
+    def _on_executar_ambiental(self):
+        """Dispara o formulário do módulo Ambiental direcionado para a SOB atual."""
+        if not hasattr(self, "workspace") or not self.workspace:
+            messagebox.showwarning("Aviso", "Contexto de Workspace não disponível.")
+            return
+
+        try:
+            proc = WorkspaceActionDispatcher.executar_ambiental(self.workspace)
+            if proc:
+                messagebox.showinfo("Módulo Ambiental", f"Módulo Ambiental iniciado para a SOB {self.workspace.sob_id}.")
+        except FileNotFoundError as fnf:
+            messagebox.showerror("Arquivo Não Encontrado", f"Não foi possível localizar componente do Ambiental:\n{fnf}")
+        except Exception as ex:
+            messagebox.showerror("Erro ao Iniciar Ambiental", f"Não foi possível iniciar o módulo Ambiental:\n{ex}")
+
+    def _on_abrir_unifilar(self):
+        """Abre o DWG principal da SOB no AutoCAD e orienta a execução do Unifilar."""
+        if not hasattr(self, "workspace") or not self.workspace:
+            messagebox.showwarning("Aviso", "Contexto de Workspace não disponível.")
+            return
+
+        dwg = self.workspace.dwg_principal
+        if not dwg or not dwg.exists():
+            messagebox.showwarning(
+                "DWG Não Encontrado",
+                f"O desenho DWG principal da SOB {self.workspace.sob_id} não foi encontrado no disco.\n\n"
+                "O módulo Unifilar requer um desenho DWG ativo no AutoCAD para seleção gráfica e inserção do diagrama."
+            )
+            return
+
+        sucesso = WorkspaceActionDispatcher.abrir_artefato(dwg)
+        if sucesso:
+            msg = (
+                f"O DWG principal da SOB {self.workspace.sob_id} foi aberto no AutoCAD:\n"
+                f"{dwg.name}\n\n"
+                "Após a abertura do desenho, utilize os comandos no AutoCAD:\n"
+                "  • UNIFILAR ou PROTECAO (localiza proteção a montante e desenha o diagrama)\n"
+                "  • ARVORE (consulta o caminho elétrico)\n\n"
+                "A geração do diagrama permanece sendo executada pelo módulo Unifilar dentro do AutoCAD."
+            )
+            messagebox.showinfo("Diagrama Unifilar (AutoCAD)", msg)
+        else:
+            messagebox.showerror("Erro ao Abrir", f"Não foi possível abrir o arquivo DWG:\n{dwg}")
+
+    def _on_executar_prancha(self):
+        """Dispara o módulo AutoPranche direcionado para a SOB atual."""
+        if not hasattr(self, "workspace") or not self.workspace:
+            messagebox.showwarning("Aviso", "Contexto de Workspace não disponível.")
+            return
+
+        try:
+            proc = WorkspaceActionDispatcher.executar_prancha(self.workspace)
+            if proc:
+                messagebox.showinfo("AutoPranche", f"AutoPranche iniciado com sucesso para a SOB {self.workspace.sob_id}.")
+        except Exception as ex:
+            messagebox.showerror("Erro ao Iniciar AutoPranche", f"Não foi possível iniciar o módulo AutoPranche:\n{ex}")
+
 
     def _abrir_pasta_atual(self):
         """Abre a pasta raiz da SOB no Explorer via Dispatcher."""

@@ -10,7 +10,7 @@ from pathlib import Path
 import queue
 import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, Optional
 
 
@@ -65,6 +65,26 @@ class ProgressoObserver:
         )
         self._intervencao_event.wait()
         return self._resposta_intervencao
+
+    def perguntar_continuar_sem_gomnet(self, dados: Dict[str, Any]) -> bool:
+        """Bloqueia a thread trabalhadora aguardando decisão do usuário sobre falha no GOMNET."""
+        self._intervencao_event.clear()
+        self._resposta_intervencao = None
+        erro_txt = dados.get("erro", "Falha de conexão com o GOMNET")
+        self.notificar(
+            etapa="INTERVENCAO_GOMNET",
+            descricao=f"Falha de acesso ao GOMNET ({erro_txt}). Decisão do usuário necessária.",
+            estado="INTERVENCAO_GOMNET",
+            detalhes=dados,
+        )
+        self._intervencao_event.wait()
+        if isinstance(self._resposta_intervencao, bool):
+            return self._resposta_intervencao
+        if isinstance(self._resposta_intervencao, dict):
+            return bool(self._resposta_intervencao.get("continuar_sem_gomnet", False))
+        if isinstance(self._resposta_intervencao, str):
+            return self._resposta_intervencao.strip().lower() in ("sim", "s", "true", "continuar")
+        return False
 
     def responder_intervencao(self, resposta: Any):
         """Chamado pela interface quando o usuário toma uma ação de intervenção."""
@@ -149,8 +169,8 @@ class SobProgressGUI:
     def _centralizar_janela(self):
         """Centraliza a janela na tela."""
         self.root.update_idletasks()
-        w = 540
-        h = 440
+        w = 560
+        h = 490
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         x = (sw - w) // 2
@@ -288,17 +308,17 @@ class SobProgressGUI:
 
         self.lbl_aviso_intervencao = tk.Label(
             self.frame_intervencao,
-            text="Múltiplas ocorrências encontradas no SharePoint.\n"
-                 "A ocorrência correta deve ser determinada pelo usuário.",
+            text="Localização manual necessária no SharePoint.\n"
+                 "Abra o link, copie o link da pasta correta e cole abaixo:",
             font=("Segoe UI", 9, "bold"),
             bg="#F1F5F9",
             fg=self.COR_TEXTO,
             justify="left",
         )
-        self.lbl_aviso_intervencao.pack(anchor="w", pady=(0, 6))
+        self.lbl_aviso_intervencao.pack(anchor="w", pady=(0, 4))
 
         frame_linha_sp = tk.Frame(self.frame_intervencao, bg="#F1F5F9")
-        frame_linha_sp.pack(fill="x", pady=(0, 6))
+        frame_linha_sp.pack(fill="x", pady=(0, 4))
 
         self.btn_abrir_sp = tk.Button(
             frame_linha_sp,
@@ -315,30 +335,78 @@ class SobProgressGUI:
         )
         self.btn_abrir_sp.pack(side="left")
 
-        self.btn_sel_pasta = tk.Button(
+        lbl_dica_sp = tk.Label(
             frame_linha_sp,
-            text="📁 Selecionar Pasta...",
-            font=("Segoe UI", 9),
+            text="(Abre a pasta de levantamentos)",
+            font=("Segoe UI", 8),
+            bg="#F1F5F9",
+            fg=self.COR_SUBTEXTO,
+        )
+        lbl_dica_sp.pack(side="left", padx=(6, 0))
+
+        # Campo para colar link da pasta do SharePoint
+        frame_link_sp = tk.Frame(self.frame_intervencao, bg="#F1F5F9")
+        frame_link_sp.pack(fill="x", pady=(2, 4))
+
+        lbl_link_tit = tk.Label(
+            frame_link_sp,
+            text="🔗 Cole o link da pasta da SOB no SharePoint:",
+            font=("Segoe UI", 8, "bold"),
+            bg="#F1F5F9",
+            fg=self.COR_TEXTO,
+            anchor="w",
+        )
+        lbl_link_tit.pack(fill="x", pady=(0, 2))
+
+        frame_input_link = tk.Frame(frame_link_sp, bg="#F1F5F9")
+        frame_input_link.pack(fill="x")
+
+        self.ent_link_sp = ttk.Entry(frame_input_link, font=("Segoe UI", 9))
+        self.ent_link_sp.pack(side="left", fill="x", expand=True, padx=(0, 4))
+
+        self.btn_colar_link = tk.Button(
+            frame_input_link,
+            text="📋 Colar",
+            font=("Segoe UI", 8),
             bg="#E2E8F0",
             fg=self.COR_TEXTO,
             activebackground="#CBD5E1",
             relief="flat",
-            padx=10,
-            pady=3,
+            padx=6,
+            pady=2,
+            cursor="hand2",
+            command=self._colar_link_clipboard,
+        )
+        self.btn_colar_link.pack(side="right")
+
+        # Opção alternativa: selecionar pasta local se o usuário já baixou manualmente
+        frame_pasta_local = tk.Frame(self.frame_intervencao, bg="#F1F5F9")
+        frame_pasta_local.pack(fill="x", pady=(2, 6))
+
+        self.btn_sel_pasta = tk.Button(
+            frame_pasta_local,
+            text="📁 Ou Selecionar Pasta Local...",
+            font=("Segoe UI", 8),
+            bg="#E2E8F0",
+            fg=self.COR_TEXTO,
+            activebackground="#CBD5E1",
+            relief="flat",
+            padx=8,
+            pady=2,
             cursor="hand2",
             command=self._selecionar_pasta_dialog,
         )
-        self.btn_sel_pasta.pack(side="left", padx=(8, 0))
+        self.btn_sel_pasta.pack(side="left")
 
         self.lbl_caminho_pasta = tk.Label(
-            self.frame_intervencao,
+            frame_pasta_local,
             text=f"Pasta: {self._pasta_selecionada}",
             font=("Segoe UI", 8),
             bg="#F1F5F9",
             fg=self.COR_SUBTEXTO,
             anchor="w",
         )
-        self.lbl_caminho_pasta.pack(fill="x", pady=(0, 8))
+        self.lbl_caminho_pasta.pack(side="left", padx=(6, 0), fill="x", expand=True)
 
         # Botões de decisão da intervenção
         frame_acoes_intervencao = tk.Frame(self.frame_intervencao, bg="#F1F5F9")
@@ -439,10 +507,25 @@ class SobProgressGUI:
             self._pasta_selecionada = Path(pasta).resolve()
             self.lbl_caminho_pasta.configure(text=f"Pasta: {self._pasta_selecionada}")
 
+    def _colar_link_clipboard(self):
+        """Cola o texto da área de transferência no campo do link do SharePoint."""
+        try:
+            texto = self.root.clipboard_get()
+            if texto and hasattr(self, "ent_link_sp"):
+                self.ent_link_sp.delete(0, "end")
+                self.ent_link_sp.insert(0, texto.strip())
+        except Exception:
+            pass
+
     def _confirmar_intervencao(self):
-        """Dispara a validação dos arquivos manuais na pasta selecionada."""
-        self.lbl_detalhes.configure(text="Validando arquivos manuais...")
-        self.observer.responder_intervencao({"caminho": str(self._pasta_selecionada)})
+        """Dispara a validação: prioriza link do SharePoint se informado, senão pasta local."""
+        link_digitado = self.ent_link_sp.get().strip() if hasattr(self, "ent_link_sp") else ""
+        if link_digitado and (link_digitado.startswith("http") or "sharepoint.com" in link_digitado):
+            self.lbl_detalhes.configure(text="Link do SharePoint recebido. Baixando conteúdo...")
+            self.observer.responder_intervencao({"url_sharepoint": link_digitado})
+        else:
+            self.lbl_detalhes.configure(text="Validando arquivos manuais...")
+            self.observer.responder_intervencao({"caminho": str(self._pasta_selecionada)})
 
     def _confirmar_sem_croqui(self):
         """Confirma a continuidade da operação sem arquivos de croqui (CROQUI = SEM_ARQUIVOS)."""
@@ -550,6 +633,18 @@ class SobProgressGUI:
                 self._pasta_selecionada = Path(detalhes["pasta_sugerida"])
                 self.lbl_caminho_pasta.configure(text=f"Pasta: {self._pasta_selecionada}")
 
+            motivo = detalhes.get("motivo", "")
+            if "NÃO_ENCONTRADA" in motivo:
+                self.lbl_aviso_intervencao.configure(
+                    text="SOB não localizada automaticamente no SharePoint.\n"
+                         "Abra o SharePoint, copie o link da pasta correta e cole abaixo:"
+                )
+            else:
+                self.lbl_aviso_intervencao.configure(
+                    text="Múltiplas ocorrências encontradas no SharePoint.\n"
+                         "Abra o SharePoint, copie o link da pasta correta e cole abaixo:"
+                )
+
             self.frame_intervencao.pack(fill="x", pady=(8, 0))
             self.btn_cancelar.pack_forget()
             self.progresso_bar.stop()
@@ -564,6 +659,28 @@ class SobProgressGUI:
                 text=f"Nenhum arquivo válido encontrado para SOB {self.sob_id}. "
                      f"Selecione a pasta correta ou tente novamente."
             )
+        elif estado == "INTERVENCAO_GOMNET":
+            self.lbl_etapa_badge.configure(text="Aviso: GOMNET", bg="#FEF3C7", fg=self.COR_AMBAR)
+            erro_msg = detalhes.get("erro", "Falha de comunicação com o GOMNET.")
+            self.lbl_descricao.configure(text="● Falha ao acessar o GOMNET")
+            self.lbl_detalhes.configure(text=f"Aviso: {erro_msg}")
+            self.progresso_bar.stop()
+
+            # Pergunta ao usuário se deseja continuar sem o fluxo do GOMNET ou fazer rollback
+            try:
+                resposta = messagebox.askyesno(
+                    title="GOMNET - Continuar ou Rollback?",
+                    message=(
+                        f"Ocorreu um erro ao acessar o GOMNET:\n\n{erro_msg}\n\n"
+                        "Deseja continuar a preparação da SOB sem o fluxo do GOMNET?\n\n"
+                        "• Sim: Continuar a preparação sem os dados/anexos do GOMNET\n"
+                        "• Não: Cancelar a operação e fazer Rollback"
+                    ),
+                    parent=self.root,
+                )
+            except Exception:
+                resposta = False
+            self.observer.responder_intervencao(resposta)
         else:
             # Em fluxo normal, esconde painel de intervenção
             self.frame_intervencao.pack_forget()

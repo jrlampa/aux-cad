@@ -14,10 +14,13 @@ from sob_core import (
     SobCancellationRequestedError,
     SobConflictError,
 )
+from sob_sharepoint import SobNotFoundError
 from sob_fallback_manual import (
     gerar_url_busca_sharepoint,
     copiar_para_clipboard,
     abrir_busca_sharepoint_navegador,
+    validar_url_sharepoint,
+    limpar_url_sharepoint,
     validar_arquivos_manuais,
     copiar_arquivos_manuais_para_croqui,
     executar_fallback_intervencao_manual,
@@ -78,6 +81,23 @@ class TestFallbackUrlEClipboard:
             mock_wb.assert_called_once()
             mock_clip.assert_called_once_with("A057349839")
             assert "A057349839" in url
+
+    def test_validar_e_limpar_url_sharepoint(self):
+        url_valida_1 = "https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/IgALh51uFX0fRovCUeVsprYWAWYGyn7GwehC6BrYpg9KcFc?e=ltJeMr"
+        url_valida_2 = "https://company.sharepoint.com/sites/Sul/Shared%20Documents/SOB"
+        url_valida_3 = "https://1drv.ms/u/s!Alkj23"
+
+        assert validar_url_sharepoint(url_valida_1) is True
+        assert validar_url_sharepoint(url_valida_2) is True
+        assert validar_url_sharepoint(url_valida_3) is True
+
+        assert validar_url_sharepoint("https://google.com") is False
+        assert validar_url_sharepoint("C:\\Downloads\\pasta") is False
+        assert validar_url_sharepoint("") is False
+        assert validar_url_sharepoint(None) is False
+
+        suja = "  \"https://hbtengenharia1.sharepoint.com/:f:/s/teste\"  "
+        assert limpar_url_sharepoint(suja) == "https://hbtengenharia1.sharepoint.com/:f:/s/teste"
 
 
 # =============================================================================
@@ -231,6 +251,44 @@ class TestOrquestracaoFallbackIntervencao:
         assert res["sem_croqui"] is False
         assert len(res["arquivos"]) == 1
         assert res["status_croqui"] == "DOWNLOAD_MANUAL_VALIDADO"
+
+    def test_continuar_com_link_sharepoint(self):
+        observer = ProgressoObserver()
+        url_sp = "https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/IgALh51uFX0fRovCUeVsprYWAWYGyn7GwehC6BrYpg9KcFc?e=ltJeMr"
+
+        def _responder_link():
+            observer.responder_intervencao({"url_sharepoint": url_sp})
+
+        import threading
+        t = threading.Timer(0.1, _responder_link)
+        t.start()
+
+        res = executar_fallback_intervencao_manual(
+            sob_id="A057349839",
+            ocorrencias=[],
+            url_busca="",
+            callback_progresso=observer,
+            abrir_navegador=False,
+            motivo="SOB_NÃO_ENCONTRADA_SHAREPOINT",
+        )
+        t.join()
+
+        assert res["sucesso"] is True
+        assert res["sem_croqui"] is False
+        assert res["url_sharepoint"] == url_sp
+        assert res["status_croqui"] == "DOWNLOAD_AUTOMATICO_POR_LINK"
+
+    def test_falha_em_modo_headless_sob_nao_encontrada(self):
+        with pytest.raises(SobNotFoundError) as exc:
+            executar_fallback_intervencao_manual(
+                sob_id="A057349839",
+                ocorrencias=[],
+                url_busca="",
+                callback_progresso=None,
+                abrir_navegador=False,
+                motivo="SOB_NÃO_ENCONTRADA_SHAREPOINT",
+            )
+        assert "não encontrada no SharePoint" in str(exc.value)
 
 
 # =============================================================================
@@ -406,3 +464,65 @@ class TestEstruturaProjetoIndependenteDoCroqui:
         # Nada foi criado no destino!
         pastas_criadas = list(temp_workspace["destino"].iterdir())
         assert len(pastas_criadas) == 0
+
+    def test_sob_nao_encontrada_com_link_sharepoint_baixa_e_conclui(self, temp_workspace):
+        """
+        Cenário chave do usuário:
+        A busca automática não encontra a pasta (SobNotFoundError).
+        O usuário abre o SharePoint, copia o link da pasta e cola na UI.
+        O sistema prossegue baixando a pasta do link e preparando o DWG com sucesso.
+        """
+        mock_sp = MagicMock()
+        mock_sp.autenticar.return_value = True
+        mock_sp.localizar_pasta_sob.side_effect = SobNotFoundError("SOB não encontrada no SharePoint")
+
+        def _fake_baixar(pasta_info, destino_croqui):
+            p = Path(destino_croqui) / "A057349839_croqui.dwg"
+            p.write_bytes(b"AC1032" + b"\x02" * 100)
+            return [p]
+
+        mock_sp.baixar_croqui.side_effect = _fake_baixar
+        mock_sp.validar_conteudo_disponivel.return_value = True
+        mock_sp.validar_download.return_value = True
+
+        observer = ProgressoObserver()
+        url_sp = "https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/IgALh51uFX0fRovCUeVsprYWAWYGyn7GwehC6BrYpg9KcFc?e=ltJeMr"
+
+        def _responder():
+            observer.responder_intervencao({"url_sharepoint": url_sp})
+
+        import threading
+        t = threading.Timer(0.2, _responder)
+        t.start()
+
+        orch = SobOrchestrator(
+            origem_base=temp_workspace["modelo"],
+            sharepoint_client=mock_sp,
+        )
+
+        with patch("sob_fallback_manual.abrir_busca_sharepoint_navegador"):
+            res = orch.executar(
+                sob_raw="A057349839",
+                destino_dir=temp_workspace["destino"],
+                baixar_croqui_sp=True,
+                abrir_cad=False,
+                callback_progresso=observer,
+                verificador_cancelamento=observer,
+            )
+        t.join()
+
+        assert res["sucesso"] is True
+        assert res["status"] == "CONCLUÍDO"
+        assert res["CROQUI"] == "DOWNLOAD_AUTOMATICO_POR_LINK"
+
+        # Verifica criação dos arquivos físicos
+        sob_root = Path(res["SOB_ROOT"])
+        assert sob_root.is_dir()
+        croqui_dir = Path(res["CROQUI_DIR"])
+        assert croqui_dir.is_dir()
+        assert (croqui_dir / "A057349839_croqui.dwg").exists()
+
+        base_dwg = Path(res["BASE_DWG"])
+        assert base_dwg.is_file()
+        assert base_dwg.name == "PE_A057349839_DESENHO.dwg"
+        assert base_dwg.stat().st_size > 0

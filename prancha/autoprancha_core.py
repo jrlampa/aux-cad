@@ -6,8 +6,195 @@ Permite selecionar a melhor combinação de formato de papel (A0, A1, A2, A3, A4
 e escala normativa de distribuição (1:500, 1:750, 1:1000, 1:1250, 1:1500, 1:2000).
 """
 
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass, field
+from datetime import datetime
+import json
+import os
+from pathlib import Path
+import sys
+from typing import Any, Dict, List, Optional, Tuple
+
+# Modelo corporativo imutável
+PROJETISTA_OFICIAL_IM3: str = "JONATAS LAMPA"
+
+
+@dataclass
+class MetadadosPranchaV1:
+    """Metadados cadastrais normativos da Prancha V1 (IM3 / Enel)."""
+    sob_id: str
+    titulo: str
+    municipio: str
+    bairro: str = "-"
+    endereco: str = "-"
+    folha: str = "1 de 1"
+    data: str = field(default_factory=lambda: datetime.now().strftime("%d/%m/%Y"))
+    projetista: str = PROJETISTA_OFICIAL_IM3
+
+    def para_dicionario(self) -> Dict[str, str]:
+        """Exporta os campos do carimbo V1 estruturados."""
+        return {
+            "SOB": self.sob_id,
+            "TITULO": self.titulo,
+            "MUNICIPIO": self.municipio,
+            "BAIRRO": self.bairro,
+            "ENDERECO": self.endereco,
+            "FOLHA": self.folha,
+            "DATA": self.data,
+            "PROJETISTA": self.projetista,
+        }
+
+    def gravar_json(self, destino: Path) -> Path:
+        """Salva os metadados em arquivo JSON e LSP para intercâmbio com AutoLISP."""
+        p = Path(destino)
+        d = self.para_dicionario()
+        p.write_text(json.dumps(d, indent=2, ensure_ascii=False), encoding="utf-8")
+
+        # Gera simultaneamente o contexto .lsp correspondente
+        p_lsp = p.with_suffix(".lsp")
+        linhas_lsp = [
+            ";;; Contexto da Prancha gerado pelo Workspace / AutoPranche",
+            f'(setq *prancha-sob* "{d["SOB"]}")',
+            f'(setq *prancha-titulo* "{d["TITULO"]}")',
+            f'(setq *prancha-municipio* "{d["MUNICIPIO"]}")',
+            f'(setq *prancha-bairro* "{d["BAIRRO"]}")',
+            f'(setq *prancha-endereco* "{d["ENDERECO"]}")',
+            f'(setq *prancha-folha* "{d["FOLHA"]}")',
+            f'(setq *prancha-data* "{d["DATA"]}")',
+            f'(setq *prancha-projetista* "{d["PROJETISTA"]}")',
+        ]
+        p_lsp.write_text("\n".join(linhas_lsp), encoding="utf-8")
+        return p
+
+
+
+# Assinatura de entidades mínimas e coordenadas relativas para validação de compatibilidade
+MARCADORES_COMPATIBILIDADE_BLOCO: Dict[str, list] = {
+    "PRANCHA": [
+        {"texto": "Folha", "x": -35.89, "y": 30.24, "tol": 4.0},
+        {"texto": "Escala", "x": -35.91, "y": 25.46, "tol": 4.0},
+        {"texto": "DATA", "x": -86.58, "y": 15.76, "tol": 4.0},
+        {"texto": "BAIRRO", "x": -117.78, "y": 15.73, "tol": 4.0},
+        {"texto": "HBT", "x": -138.45, "y": 24.87, "tol": 4.0},
+    ],
+    "PRANCHA_A4": [
+        {"texto": "Folha", "x": 261.11, "y": 30.24, "tol": 4.0},
+        {"texto": "Escala", "x": 261.09, "y": 25.46, "tol": 4.0},
+        {"texto": "DATA", "x": 210.42, "y": 15.76, "tol": 4.0},
+        {"texto": "BAIRRO", "x": 179.22, "y": 15.73, "tol": 4.0},
+        {"texto": "JONATAS LAMPA", "x": 160.03, "y": 10.55, "tol": 4.0},
+    ],
+}
+
+
+def validar_assinatura_bloco(nome_bloco: str, entidades: list) -> str:
+    """Valida a compatibilidade da definição do bloco com base nos marcadores oficiais IM3.
+
+    Retorna 'COMPATIVEL' se todos os marcadores estiverem presentes nas coordenadas locais,
+    ou 'INCOMPATIVEL' caso contrário.
+    """
+    nome_norm = nome_bloco.strip().upper()
+    marcadores = MARCADORES_COMPATIBILIDADE_BLOCO.get(nome_norm)
+    if not marcadores:
+        return "INCOMPATIVEL"
+
+    for m in marcadores:
+        encontrado = False
+        for ent in entidades:
+            txt = ent.get("texto", "")
+            if m["texto"].upper() in txt.upper():
+                x = ent.get("x", 0.0)
+                y = ent.get("y", 0.0)
+                dist = ((x - m["x"]) ** 2 + (y - m["y"]) ** 2) ** 0.5
+                if dist <= m["tol"]:
+                    encontrado = True
+                    break
+        if not encontrado:
+            return "INCOMPATIVEL"
+
+    return "COMPATIVEL"
+
+
+def resolver_metadados_prancha(workspace: Any) -> MetadadosPranchaV1:
+    """Resolve os metadados cadastrais V1 a partir do ProjectWorkspace de forma controlada.
+
+    Regras V1 (Contrato Estrito):
+    - sob_id: obrigatório (workspace.sob_id). Erro controlado se ausente ou inválido.
+    - titulo: metadados do workspace ou fallback determinístico '-'.
+    - municipio: metadados do workspace ou fallback '-'.
+    - bairro: metadados do workspace ou fallback '-'.
+    - endereco: metadados do workspace ou fallback '-'.
+    - folha: '1 de 1'.
+    - data: data local DD/MM/AAAA.
+    - projetista: 'JONATAS LAMPA' (inalterado).
+    """
+    if not workspace or not getattr(workspace, "sob_id", None):
+        raise ValueError("Contexto de Workspace inválido: sob_id obrigatório ausente.")
+
+    sob_id = str(workspace.sob_id).strip().upper()
+    if not sob_id or sob_id in ("DESCONHECIDO", "SOB-DESCONHECIDA"):
+        raise ValueError("Contexto de Workspace inválido: sob_id obrigatório ausente.")
+
+    meta = getattr(workspace, "metadados", {}) or {}
+
+    # 1. Título: Sem fallback arbitrário de 'REDE DE DISTRIBUICAO - {sob_id}'
+    titulo_raw = meta.get("titulo") or meta.get("TITULO")
+    if not titulo_raw or not str(titulo_raw).strip():
+        titulo = "-"
+    else:
+        titulo = str(titulo_raw).strip().upper()
+
+    # 2. Município
+    mun_raw = meta.get("municipio") or meta.get("MUNICIPIO") or meta.get("cidade") or meta.get("CIDADE")
+    if not mun_raw or not str(mun_raw).strip():
+        municipio = "-"
+    else:
+        municipio = str(mun_raw).strip().upper()
+
+    # 3. Bairro
+    bairro_raw = meta.get("bairro") or meta.get("BAIRRO")
+    if not bairro_raw or not str(bairro_raw).strip():
+        bairro = "-"
+    else:
+        bairro = str(bairro_raw).strip().upper()
+
+    # 4. Endereço
+    end_raw = meta.get("endereco") or meta.get("ENDERECO") or meta.get("logradouro")
+    if not end_raw or not str(end_raw).strip():
+        endereco = "-"
+    else:
+        endereco = str(end_raw).strip().upper()
+
+    # Fallback estruturado adicional em arquivos JSON se disponíveis no root_dir
+    root_dir = getattr(workspace, "root_dir", None)
+    if root_dir and Path(root_dir).exists():
+        p_root = Path(root_dir)
+        info_json = p_root / "prancha_dados.json"
+        if info_json.exists():
+            try:
+                dados_extras = json.loads(info_json.read_text(encoding="utf-8"))
+                if titulo == "-" and dados_extras.get("titulo"):
+                    titulo = str(dados_extras["titulo"]).strip().upper()
+                if municipio == "-" and dados_extras.get("municipio"):
+                    municipio = str(dados_extras["municipio"]).strip().upper()
+                if bairro == "-" and dados_extras.get("bairro"):
+                    bairro = str(dados_extras["bairro"]).strip().upper()
+                if endereco == "-" and dados_extras.get("endereco"):
+                    endereco = str(dados_extras["endereco"]).strip().upper()
+            except Exception:
+                pass
+
+    return MetadadosPranchaV1(
+        sob_id=sob_id,
+        titulo=titulo,
+        municipio=municipio,
+        bairro=bairro,
+        endereco=endereco,
+        folha="1 de 1",
+        data=datetime.now().strftime("%d/%m/%Y"),
+        projetista=PROJETISTA_OFICIAL_IM3,
+    )
+
+
 
 # Dimensões nominais dos formatos de papel em milímetros (largura x altura)
 # Padrão ABNT NBR 10068 / Padrão Enel & HBT
@@ -28,12 +215,22 @@ MARGENS_PADRAO_MM: Dict[str, Tuple[float, float, float, float]] = {
     "A4": (25.0, 10.0, 10.0, 10.0),
 }
 
-# Dimensões da reserva de Carimbo + Legenda Enel/HBT no canto inferior direito (mm)
-LARGURA_CARIMBO_MM: float = 185.0
-ALTURA_CARIMBO_MM: float = 60.0
+# Dimensões da reserva de Carimbo oficial IM3 no canto inferior direito (mm)
+# Medição física no modelo oficial prancha.dwg
+LARGURA_CARIMBO_MM: float = 297.0
+ALTURA_CARIMBO_MM: float = 64.27
 
 # Escalas normativas recomendadas em projetos de distribuição aérea (1:N)
 ESCALAS_NORMATIVAS: List[int] = [500, 750, 1000, 1250, 1500, 2000]
+
+# Mapeamento do bloco oficial por formato de folha
+BLOCO_POR_FORMATO: Dict[str, str] = {
+    "A1": "PRANCHA",
+    "A2": "PRANCHA",
+    "A3": "PRANCHA",
+    "A4": "PRANCHA_A4",
+    "A0": "PRANCHA",  # Fallback
+}
 
 
 @dataclass
@@ -52,13 +249,18 @@ class EnquadramentoResultado:
     folga_y_perc: float
     reserva_carimbo_largura_m: float
     reserva_carimbo_altura_m: float
-    # Ponto de inserção (canto inferior esquerdo da folha no ModelSpace)
+    # Limites da folha no ModelSpace
     x_folha_min: float
     y_folha_min: float
     x_folha_max: float
     y_folha_max: float
     centro_projeto_x: float
     centro_projeto_y: float
+    # Ponto de inserção CAD oficial conforme ancoragem do bloco
+    bloco_nome: str = "PRANCHA"
+    x_insercao: float = 0.0
+    y_insercao: float = 0.0
+
 
 
 def obter_area_util_mm(formato: str) -> Tuple[float, float]:
@@ -189,6 +391,17 @@ def calcular_enquadramento(
     folga_x = ((lu_m - dx) / dx) * 100.0 if dx > 0 else 0.0
     folga_y = ((au_m - dy) / dy) * 100.0 if dy > 0 else 0.0
 
+    # Determinar bloco oficial e coordenadas de inserção baseadas na ancoragem do bloco:
+    # PRANCHA (A1, A2, A3): Ancorado no Canto Inferior Direito (0, 0)
+    # PRANCHA_A4 (A4): Ancorado no Canto Inferior Esquerdo (0, 0)
+    bloco_nome = BLOCO_POR_FORMATO.get(fmt_escolhido, "PRANCHA")
+    if bloco_nome == "PRANCHA":
+        x_insercao = x_folha_max
+        y_insercao = y_folha_min
+    else:
+        x_insercao = x_folha_min
+        y_insercao = y_folha_min
+
     return EnquadramentoResultado(
         formato=fmt_escolhido,
         escala=esc_escolhido,
@@ -209,4 +422,51 @@ def calcular_enquadramento(
         y_folha_max=round(y_folha_max, 3),
         centro_projeto_x=round(centro_x, 3),
         centro_projeto_y=round(centro_y, 3),
+        bloco_nome=bloco_nome,
+        x_insercao=round(x_insercao, 3),
+        y_insercao=round(y_insercao, 3),
     )
+
+
+
+def main():
+    """Ponto de entrada CLI do AutoPranche."""
+    parser = argparse.ArgumentParser(description="AUX CAD — AutoPranche V1 (ModelSpace)")
+    parser.add_argument("--sob", type=str, help="Identificador da SOB (ex: A057349839)")
+    parser.add_argument("--root", type=str, help="Diretório raiz da SOB no disco")
+    parser.add_argument("--dwg", type=str, help="Caminho do DWG principal da SOB")
+    parser.add_argument("--json", type=str, help="Arquivo JSON de saída/entrada de metadados")
+    parser.add_argument("--exportar-contexto", action="store_true", help="Exporta prancha_contexto.json na pasta da SOB")
+
+    args = parser.parse_args()
+
+    sob_id = args.sob or "PROJETO_TESTE"
+    root_path = Path(args.root).resolve() if args.root else Path.cwd()
+
+    class _MockWorkspace:
+        def __init__(self, s_id: str, r_path: Path):
+            self.sob_id = s_id
+            self.root_dir = r_path
+            self.metadados = {}
+
+    ws = _MockWorkspace(sob_id, root_path)
+    meta = resolver_metadados_prancha(ws)
+
+    if args.json:
+        out_p = Path(args.json)
+        meta.gravar_json(out_p)
+        print(f"[AutoPranche] Metadados gravados com sucesso em: {out_p}")
+    elif args.exportar_contexto and root_path.exists():
+        out_p = root_path / "prancha_contexto.json"
+        meta.gravar_json(out_p)
+        print(f"[AutoPranche] Contexto exportado em: {out_p}")
+    else:
+        print("=== AUTOPRANCHE V1 — METADADOS CADASTRADOS ===")
+        for k, v in meta.para_dicionario().items():
+            print(f"  {k}: {v}")
+
+
+if __name__ == "__main__":
+    import argparse
+    main()
+

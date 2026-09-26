@@ -360,3 +360,41 @@ def test_baixar_croqui_pasta_inteira_zip_com_subpasta(tmp_path: Path):
     assert foto_extraida.exists()
     assert client.validar_download(dest) is True
 
+
+def test_baixar_pasta_por_url_zip_extraido_e_nivelado(tmp_path: Path):
+    """Valida que baixar_pasta_por_url navega até o link, clica em baixar e processa o zip."""
+    import zipfile
+
+    client = SharePointClient(login="user", senha="pwd")
+    client.driver = MagicMock()
+    client._autenticado = True
+    dest = tmp_path / "CROQUI_URL"
+    dest.mkdir(parents=True, exist_ok=True)
+
+    # Simula o ZIP baixado via navegador
+    zip_path = dest / "PastaCompartilhada.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("PastaCompartilhada/desenho.dwg", b"DWG REAIS")
+
+    url = "https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/compartilhada"
+    arquivos = client.baixar_pasta_por_url(url, dest)
+
+    client.driver.get.assert_called_with(url)
+    assert not zip_path.exists()
+    assert (dest / "desenho.dwg").exists()
+    assert client.validar_download(dest) is True
+
+
+def test_baixar_croqui_delega_para_baixar_pasta_por_url(tmp_path: Path):
+    """Valida que baixar_croqui delega para baixar_pasta_por_url quando tipo é url_direta."""
+    client = SharePointClient(login="user", senha="pwd")
+    client.baixar_pasta_por_url = MagicMock(return_value=[tmp_path / "arquivo.dwg"])
+
+    url = "https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/teste"
+    pasta_info = {"tipo": "url_direta", "url": url, "sob": "A057349839"}
+
+    res = client.baixar_croqui(pasta_info, tmp_path)
+    client.baixar_pasta_por_url.assert_called_once_with(url, tmp_path)
+    assert len(res) == 1
+
+

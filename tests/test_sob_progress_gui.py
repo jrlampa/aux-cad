@@ -318,11 +318,20 @@ class TestSobProgressGUIIntervencao:
                 gui._selecionar_pasta_dialog()
                 assert gui._pasta_selecionada == temp_workspace["destino_dir"]
 
-            # 3. Confirmar intervenção
+            # 3. Confirmar intervenção com pasta local (quando campo de link está vazio)
             gui._confirmar_intervencao()
-            ev = gui.observer.obter_evento()
-            # O observer recebeu a resposta via responder_intervencao
             assert gui.observer._resposta_intervencao == {"caminho": str(temp_workspace["destino_dir"])}
+
+            # 3.1 Preencher link do SharePoint e confirmar intervenção
+            url_sp = "https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/folder"
+            gui.ent_link_sp.insert(0, url_sp)
+            gui._confirmar_intervencao()
+            assert gui.observer._resposta_intervencao == {"url_sharepoint": url_sp}
+
+            # 3.2 Testar _colar_link_clipboard
+            with patch.object(gui.root, "clipboard_get", return_value="https://hbtengenharia1.sharepoint.com/:f:/s/colado"):
+                gui._colar_link_clipboard()
+                assert gui.ent_link_sp.get() == "https://hbtengenharia1.sharepoint.com/:f:/s/colado"
 
             # 4. Confirmar sem croqui
             gui._confirmar_sem_croqui()
@@ -332,16 +341,21 @@ class TestSobProgressGUIIntervencao:
             gui._cancelar_intervencao()
             assert gui.observer._resposta_intervencao == {"cancelar": True}
 
-            # 6. Evento de INTERVENCAO_USUARIO na UI
+            # 6. Evento de INTERVENCAO_USUARIO na UI com motivo de SOB não encontrada
             gui._atualizar_progresso({
                 "tipo": "PROGRESSO",
                 "etapa": "INTERVENCAO_USUARIO",
                 "descricao": "Ação necessária no SharePoint",
                 "estado": "INTERVENCAO_USUARIO",
-                "detalhes": {"url_busca": "https://teste.sp", "pasta_sugerida": str(temp_workspace["root"])},
+                "detalhes": {
+                    "url_busca": "https://teste.sp",
+                    "pasta_sugerida": str(temp_workspace["root"]),
+                    "motivo": "SOB_NÃO_ENCONTRADA_SHAREPOINT",
+                },
             })
             assert gui.lbl_etapa_badge["text"] == "Ação Necessária"
             assert gui._url_busca == "https://teste.sp"
+            assert "não localizada automaticamente" in gui.lbl_aviso_intervencao["text"]
 
             # 7. Evento de FALHA_VALIDACAO_MANUAL
             gui._atualizar_progresso({
@@ -352,8 +366,22 @@ class TestSobProgressGUIIntervencao:
                 "detalhes": {"pasta": str(temp_workspace["root"])},
             })
             assert "Não foi possível validar o download" in gui.lbl_etapa_badge["text"]
+
+            # 8. Evento de INTERVENCAO_GOMNET com confirmação Sim (True)
+            with patch("tkinter.messagebox.askyesno", return_value=True) as mock_msg:
+                gui._atualizar_progresso({
+                    "tipo": "PROGRESSO",
+                    "etapa": "INTERVENCAO_GOMNET",
+                    "descricao": "Erro ao acessar o GOMNET",
+                    "estado": "INTERVENCAO_GOMNET",
+                    "detalhes": {"erro": "Timeout 504 no servidor GOMNET"},
+                })
+                mock_msg.assert_called_once()
+                assert gui.observer._resposta_intervencao is True
+                assert gui.lbl_etapa_badge["text"] == "Aviso: GOMNET"
         finally:
             gui.root.destroy()
+
 
 
 class TestSobCliModule:

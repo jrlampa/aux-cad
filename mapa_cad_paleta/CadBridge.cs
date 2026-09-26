@@ -219,6 +219,36 @@ namespace MapaCadPaleta
                 using var jsonDoc = JsonDocument.Parse(rawJson);
                 var root = jsonDoc.RootElement;
 
+                int totalViasRecebidas = root.TryGetProperty("vias", out var viasJson) && viasJson.ValueKind == JsonValueKind.Array ? viasJson.GetArrayLength() : 0;
+                int totalCalcadasRecebidas = root.TryGetProperty("calcadas", out var calcadasJson) && calcadasJson.ValueKind == JsonValueKind.Array ? calcadasJson.GetArrayLength() : 0;
+                int totalObstrucoesRecebidas = root.TryGetProperty("obstrucoes", out var obstrucoesJson) && obstrucoesJson.ValueKind == JsonValueKind.Array ? obstrucoesJson.GetArrayLength() : 0;
+                int fusoRecebido = root.TryGetProperty("fuso", out var fusoProp) && fusoProp.ValueKind == JsonValueKind.Number ? fusoProp.GetInt32() : -1;
+                int totalVerticesRecebidos = 0;
+                int totalPolylinesCriadas = 0;
+                int totalVerticesCriados = 0;
+
+                if (root.TryGetProperty("vias", out var viasPreview) && viasPreview.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in viasPreview.EnumerateArray())
+                    {
+                        if (item.TryGetProperty("pontosUtm", out var pts) && pts.ValueKind == JsonValueKind.Array)
+                        {
+                            totalVerticesRecebidos += pts.GetArrayLength();
+                            if (pts.GetArrayLength() > 0)
+                            {
+                                var first = pts[0].EnumerateArray().ToList();
+                                if (first.Count >= 2)
+                                {
+                                    ed.WriteMessage($"\n[OSMPALETA][CAD][VIA][AMOSTRA] primeiroPonto={first[0].GetDouble():F3},{first[1].GetDouble():F3}; vias={totalViasRecebidas}; calcadas={totalCalcadasRecebidas}; obstrucoes={totalObstrucoesRecebidas};");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                ed.WriteMessage($"\n[OSMPALETA][CAD][PAYLOAD] fuso={fusoRecebido}; vias={totalViasRecebidas}; calcadas={totalCalcadasRecebidas}; obstrucoes={totalObstrucoesRecebidas}; verticesTotal={totalVerticesRecebidos};");
+
                 using (doc.LockDocument())
                 using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
@@ -254,6 +284,8 @@ namespace MapaCadPaleta
                                 btr.AppendEntity(plEixo);
                                 tr.AddNewlyCreatedDBObject(plEixo, true);
                                 total++;
+                                totalPolylinesCriadas++;
+                                totalVerticesCriados += pontos2d.Count;
 
                                 // 2. Extrair ou calcular larguras da pista e do passeio a partir do OSM
                                 double larguraPista = 7.0;
@@ -270,13 +302,16 @@ namespace MapaCadPaleta
                                 AdicionarOffsetCurvas(btr, tr, plEixo, pontos2d, halfWidth, LAYER_VIAS_BORDO);
                                 AdicionarOffsetCurvas(btr, tr, plEixo, pontos2d, -halfWidth, LAYER_VIAS_BORDO);
                                 total += 2;
+                                totalPolylinesCriadas += 2;
+                                totalVerticesCriados += pontos2d.Count * 2;
 
                                 // 4. Limites do Passeio / Calçada (Layer VIAS_CALCADA)
                                 AdicionarOffsetCurvas(btr, tr, plEixo, pontos2d, distCalcada, LAYER_VIAS_CALCADA);
                                 AdicionarOffsetCurvas(btr, tr, plEixo, pontos2d, -distCalcada, LAYER_VIAS_CALCADA);
                                 total += 2;
+                                totalPolylinesCriadas += 2;
+                                totalVerticesCriados += pontos2d.Count * 2;
 
-                                // 5. Nome da via visível na camada VIAS_BORDO no ponto médio
                                 if (inserirNome && item.TryGetProperty("nome", out var nomeProp))
                                 {
                                     string nomeRua = nomeProp.GetString() ?? "";
@@ -325,6 +360,8 @@ namespace MapaCadPaleta
                                 btr.AppendEntity(pl);
                                 tr.AddNewlyCreatedDBObject(pl, true);
                                 total++;
+                                totalPolylinesCriadas++;
+                                totalVerticesCriados += pontos.Count;
                             }
                         }
                     }
@@ -340,6 +377,7 @@ namespace MapaCadPaleta
 
                     tr.Commit();
                     ed.Regen();
+                    ed.WriteMessage($"\n[OSMPALETA][CAD][RESULTADO] polylinesCriadas={totalPolylinesCriadas}; verticesCriados={totalVerticesCriados}; total={total};");
                     ed.WriteMessage($"\n[MAPA AUX CAD] {total} elementos urbanos (vias/calçadas/obstruções) desenhados no CAD.");
                     return (true, $"{total} elementos urbanos (vias/calçadas/obstruções) desenhados no CAD.");
                 }

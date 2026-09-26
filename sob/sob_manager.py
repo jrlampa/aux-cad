@@ -122,6 +122,54 @@ class SobOrchestrator:
         if cancelado:
             raise SobCancellationRequestedError("[CANCELADO] Operação cancelada pelo usuário.")
 
+    def _perguntar_decisao_gomnet(
+        self,
+        erro: Exception,
+        callback_progresso: Optional[Any],
+        etapa: str,
+        continuar_em_falha: Optional[bool] = None,
+    ) -> bool:
+        """
+        Pergunta ao usuário se deseja continuar a preparação da SOB sem o fluxo do GOMNET ou fazer rollback.
+        Retorna True para continuar sem GOMNET, ou False para realizar rollback.
+        """
+        if continuar_em_falha is not None:
+            return bool(continuar_em_falha)
+
+        dados = {
+            "tipo": "ERRO_GOMNET",
+            "motivo": "ERRO_ACESSO_GOMNET",
+            "erro": str(erro),
+            "etapa": etapa,
+            "mensagem": f"Erro ao acessar o GOMNET ({etapa}): {erro}",
+        }
+
+        # 1. Callback com método dedicado perguntar_continuar_sem_gomnet
+        if callback_progresso and hasattr(callback_progresso, "perguntar_continuar_sem_gomnet"):
+            return bool(callback_progresso.perguntar_continuar_sem_gomnet(dados))
+
+        # 2. Callback com aguardar_intervencao genérico
+        if callback_progresso and hasattr(callback_progresso, "aguardar_intervencao"):
+            res = callback_progresso.aguardar_intervencao(dados)
+            if isinstance(res, bool):
+                return res
+            if isinstance(res, dict):
+                return bool(res.get("continuar_sem_gomnet", False))
+            if isinstance(res, str):
+                return res.strip().lower() in ("sim", "s", "true", "continuar")
+            return False
+
+        # 3. Terminal interativo (CLI)
+        if sys.stdin and hasattr(sys.stdin, "isatty") and sys.stdin.isatty():
+            try:
+                print(f"\n[GOMNET] Erro ao acessar o GOMNET ({etapa}): {erro}")
+                resp = input("Deseja continuar a preparação da SOB sem o fluxo do GOMNET? (S/N) [S]: ")
+                return resp.strip().lower() in ("", "s", "sim", "y", "yes")
+            except Exception:
+                return False
+
+        return False
+
     def _tratar_falha(
         self,
         e: Exception,
@@ -196,6 +244,7 @@ class SobOrchestrator:
         abrir_cad: bool = False,
         callback_progresso: Optional[Any] = None,
         verificador_cancelamento: Optional[Any] = None,
+        continuar_sem_gomnet_em_falha: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Executa o fluxo completo da SOB de acordo com as regras de negócio e validações da Seção 14.
@@ -439,19 +488,28 @@ class SobOrchestrator:
                     resultado["estado"] = "SOB_LOCALIZADA"
                     client.validar_conteudo_disponivel(pasta_info)
                     checklist["Conteúdo disponível para download"] = True
-                except SobConflictError as e_conflict:
+                except (SobConflictError, SobNotFoundError) as e_loc:
+                    ocorrencias = getattr(e_loc, "ocorrencias", [])
+                    url_b = getattr(e_loc, "url_busca", "")
+                    motivo = "MÚLTIPLAS_OCORRÊNCIAS_SHAREPOINT" if isinstance(e_loc, SobConflictError) else "SOB_NÃO_ENCONTRADA_SHAREPOINT"
                     res_fb = executar_fallback_intervencao_manual(
                         sob_id=sob_id,
-                        ocorrencias=e_conflict.ocorrencias,
-                        url_busca=e_conflict.url_busca,
+                        ocorrencias=ocorrencias,
+                        url_busca=url_b,
                         callback_progresso=callback_progresso,
                         logger=self.logger,
+                        motivo=motivo,
                     )
-                    pasta_info = None
-                    if res_fb.get("sem_croqui"):
+                    if res_fb.get("url_sharepoint"):
+                        url_sp = res_fb["url_sharepoint"]
+                        pasta_info = {"tipo": "url_direta", "url": url_sp, "sob": sob_id}
+                        resultado["CROQUI"] = "DOWNLOAD_AUTOMATICO_POR_LINK"
+                    elif res_fb.get("sem_croqui"):
+                        pasta_info = None
                         resultado["CROQUI"] = "SEM_ARQUIVOS"
                         arquivos_manuais_validados = []
                     else:
+                        pasta_info = None
                         resultado["CROQUI"] = "DOWNLOAD_MANUAL_VALIDADO"
                         arquivos_manuais_validados = res_fb.get("arquivos", [])
 
@@ -483,12 +541,25 @@ class SobOrchestrator:
                         gom_client = None
 
                 if gom_client:
-                    gom_client.autenticar()
-                    self._notificar_progresso(callback_progresso, "GOMNET_CONSULTAR", "Consultando modal de anexos da SOB no GOMNET...", 9)
-                    self._checar_cancelamento(verificador_cancelamento or callback_progresso)
-                    anexos_gomnet = gom_client.localizar_sob_e_listar_anexos(sob_id)
-                    checklist["GOMNET validado"] = True
-                    self.logger.info(f"GOMNET: {len(anexos_gomnet)} anexo(s) identificado(s)")
+                    try:
+                        gom_client.autenticar()
+                        self._notificar_progresso(callback_progresso, "GOMNET_CONSULTAR", "Consultando modal de anexos da SOB no GOMNET...", 9)
+                        self._checar_cancelamento(verificador_cancelamento or callback_progresso)
+                        anexos_gomnet = gom_client.localizar_sob_e_listar_anexos(sob_id)
+                        checklist["GOMNET validado"] = True
+                        self.logger.info(f"GOMNET: {len(anexos_gomnet)} anexo(s) identificado(s)")
+                    except Exception as e_gom:
+                        self.logger.warning(f"Erro ao acessar o GOMNET na pré-validação: {e_gom}")
+                        if self._perguntar_decisao_gomnet(e_gom, callback_progresso, "GOMNET_PRE_VALIDACAO", continuar_sem_gomnet_em_falha):
+                            self.logger.info("Usuário optou por continuar a preparação da SOB sem o fluxo do GOMNET.")
+                            anexos_gomnet = []
+                            gom_client = None
+                            checklist["GOMNET validado"] = True
+                            resultado["GOMNET_IGNORADO"] = True
+                            resultado["aviso_gomnet"] = f"GOMNET ignorado a pedido do usuário: {e_gom}"
+                        else:
+                            self.logger.info("Usuário optou por fazer rollback / cancelar devido a erro no GOMNET.")
+                            raise e_gom
                 else:
                     checklist["GOMNET validado"] = True
             else:
@@ -586,20 +657,33 @@ class SobOrchestrator:
                 self._notificar_progresso(callback_progresso, "DOWNLOAD_GOMNET", "Baixando anexos identificados no GOMNET...", 10)
                 self._checar_cancelamento(verificador_cancelamento or callback_progresso)
 
-                created_files, attach_info = baixar_anexos_gomnet_fase_b(
-                    anexos_gomnet=anexos_gomnet,
-                    gom_client=gom_client,
-                    croqui_dir=croqui_dir,
-                    rollback_ctx=rollback_ctx,
-                    callback_progresso=callback_progresso,
-                    checar_cancelamento_fn=lambda: self._checar_cancelamento(verificador_cancelamento or callback_progresso),
-                    logger=self.logger,
-                )
-                resultado["ANEXOS_DIR"] = str(croqui_dir / "ANEXOS")
-                resultado["GOMNET_CREATED_FILES"].extend(created_files)
-                resultado["GOMNET_ATTACHMENTS"].extend(attach_info)
-                checklist["Download GOMNET concluído"] = True
-                self.logger.info("Download de anexos GOMNET concluído")
+                try:
+                    created_files, attach_info = baixar_anexos_gomnet_fase_b(
+                        anexos_gomnet=anexos_gomnet,
+                        gom_client=gom_client,
+                        croqui_dir=croqui_dir,
+                        rollback_ctx=rollback_ctx,
+                        callback_progresso=callback_progresso,
+                        checar_cancelamento_fn=lambda: self._checar_cancelamento(verificador_cancelamento or callback_progresso),
+                        logger=self.logger,
+                    )
+                    resultado["ANEXOS_DIR"] = str(croqui_dir / "ANEXOS")
+                    resultado["GOMNET_CREATED_FILES"].extend(created_files)
+                    resultado["GOMNET_ATTACHMENTS"].extend(attach_info)
+                    checklist["Download GOMNET concluído"] = True
+                    self.logger.info("Download de anexos GOMNET concluído")
+                except Exception as e_dl:
+                    self.logger.warning(f"Erro ao baixar anexos do GOMNET: {e_dl}")
+                    if self._perguntar_decisao_gomnet(e_dl, callback_progresso, "DOWNLOAD_GOMNET", continuar_sem_gomnet_em_falha):
+                        self.logger.info("Usuário optou por continuar a preparação da SOB sem o fluxo do GOMNET após erro de download.")
+                        checklist["Download GOMNET concluído"] = True
+                        checklist["Conteúdo do CROQUI validado"] = True
+                        resultado["estado"] = "DOWNLOAD_VALIDADO"
+                        resultado["GOMNET_DOWNLOAD_IGNORADO"] = True
+                        resultado["aviso_gomnet"] = f"Download GOMNET ignorado a pedido do usuário: {e_dl}"
+                    else:
+                        self.logger.info("Usuário optou por fazer rollback após erro no download do GOMNET.")
+                        raise e_dl
             else:
                 checklist["Download GOMNET concluído"] = True
                 checklist["Conteúdo do CROQUI validado"] = True

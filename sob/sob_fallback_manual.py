@@ -66,6 +66,29 @@ def copiar_para_clipboard(texto: str) -> bool:
         return False
 
 
+def validar_url_sharepoint(url: str) -> bool:
+    """
+    Valida se uma string representa uma URL válida do SharePoint / OneDrive.
+    Aceita links de compartilhamento (:f:/s/, :u:/s/, :f:/r/), sites normais e URLs completas.
+    """
+    if not url or not isinstance(url, str):
+        return False
+    u = url.strip().lower()
+    if not (u.startswith("http://") or u.startswith("https://")):
+        return False
+    return any(dominio in u for dominio in ["sharepoint.com", "1drv.ms", "onedrive.live.com"])
+
+
+def limpar_url_sharepoint(url: str) -> str:
+    """
+    Sanitiza uma URL do SharePoint removendo espaços e aspas periféricas.
+    """
+    if not url:
+        return ""
+    u = url.strip().strip("\"'<>")
+    return u
+
+
 def abrir_busca_sharepoint_navegador(sob_id: str, base_url: str = "") -> str:
     """
     Abre o navegador na URL de busca contextualizada do SharePoint e copia o SOB_ID
@@ -206,22 +229,25 @@ def executar_fallback_intervencao_manual(
     logger: Optional[Any] = None,
     abrir_navegador: bool = True,
     pasta_padrao_downloads: Optional[Path] = None,
+    motivo: str = "MÚLTIPLAS_OCORRÊNCIAS_SHAREPOINT",
 ) -> Dict[str, Any]:
     """
-    Orquestra o fallback manual quando múltiplas ocorrências forem detectadas no SharePoint.
+    Orquestra o fallback manual quando múltiplas ocorrências forem detectadas
+    ou quando a SOB não for encontrada automaticamente no SharePoint.
 
     Segue as regras não negociáveis:
-    - Registra log padronizado com STATUS = INTERVENÇÃO_USUÁRIO e MOTIVO = MÚLTIPLAS_OCORRÊNCIAS_SHAREPOINT.
+    - Registra log padronizado com STATUS = INTERVENÇÃO_USUÁRIO e MOTIVO.
     - Abre a busca no SharePoint contextualizada e copia SOB_ID para o clipboard.
-    - Interage com a UI para aguardar download e indicação de pasta.
+    - Interage com a UI para permitir colagem de link direto do SharePoint ou indicação de pasta.
     - Suporta 'sem_croqui' (CROQUI = SEM_ARQUIVOS).
-    - Valida arquivos baixados com rigor (rejeita 0 bytes, HTMLs de erro, temporários).
+    - Valida URLs e arquivos baixados com rigor.
     """
     from sob_core import SobCancellationRequestedError, SobConflictError
+    from sob_sharepoint import SobNotFoundError
 
     log_prefix = (
         f"SOB: {sob_id} | STATUS = INTERVENÇÃO_USUÁRIO | "
-        f"MOTIVO = MÚLTIPLAS_OCORRÊNCIAS_SHAREPOINT | "
+        f"MOTIVO = {motivo} | "
         f"QUANTIDADE_OCORRÊNCIAS = {len(ocorrencias)} | "
         f"AÇÃO = ABERTURA_BUSCA_SHAREPOINT"
     )
@@ -234,8 +260,13 @@ def executar_fallback_intervencao_manual(
 
     if not callback_progresso or not hasattr(callback_progresso, "aguardar_intervencao"):
         # Modo não interativo (headless/CLI sem UI)
+        if motivo == "SOB_NÃO_ENCONTRADA_SHAREPOINT":
+            raise SobNotFoundError(
+                f"[FALHA] SOB {sob_id} não encontrada no SharePoint. "
+                f"Intervenção do usuário necessária no SharePoint: {url_real}"
+            )
         raise SobConflictError(
-            f"[BLOQUEADO] Múltiplas ocorrências ({len(ocorrencias)}) encontradas para SOB {sob_id}. "
+            f"[FALHA] Múltiplas ocorrências ({len(ocorrencias)}) encontradas para SOB {sob_id}. "
             f"Intervenção do usuário necessária no SharePoint: {url_real}",
             ocorrencias=ocorrencias,
             url_busca=url_real,
@@ -253,6 +284,7 @@ def executar_fallback_intervencao_manual(
             "url_busca": url_real,
             "ocorrencias": ocorrencias,
             "pasta_sugerida": str(pasta_busca),
+            "motivo": motivo,
             "tentativa": tentativa,
         }
 
@@ -263,7 +295,30 @@ def executar_fallback_intervencao_manual(
                 logger.info(f"SOB: {sob_id} | RESULTADO_DA_INTERVENÇÃO = CANCELADO")
             raise SobCancellationRequestedError("[CANCELADO] Operação cancelada pelo usuário durante intervenção.")
 
-        # Opção: Continuar sem arquivos de croqui
+        # Opção 1: Link direto do SharePoint informado pelo usuário
+        url_informada = ""
+        if isinstance(resposta, dict):
+            url_informada = resposta.get("url_sharepoint") or resposta.get("url") or ""
+        elif isinstance(resposta, str) and (resposta.startswith("http") or "sharepoint.com" in resposta):
+            url_informada = resposta
+
+        if url_informada:
+            url_limpa = limpar_url_sharepoint(url_informada)
+            if validar_url_sharepoint(url_limpa):
+                if logger:
+                    logger.info(
+                        f"SOB: {sob_id} | STATUS = LINK_SHAREPOINT_RECEBIDO | "
+                        f"RESULTADO_DA_INTERVENÇÃO = SUCESSO | URL = {url_limpa}"
+                    )
+                return {
+                    "sucesso": True,
+                    "sem_croqui": False,
+                    "url_sharepoint": url_limpa,
+                    "status_croqui": "DOWNLOAD_AUTOMATICO_POR_LINK",
+                    "arquivos": [],
+                }
+
+        # Opção 2: Continuar sem arquivos de croqui
         if isinstance(resposta, dict) and resposta.get("sem_croqui"):
             if logger:
                 logger.info(f"SOB: {sob_id} | CROQUI = SEM_ARQUIVOS | RESULTADO_DA_INTERVENÇÃO = SUCESSO")
@@ -274,7 +329,7 @@ def executar_fallback_intervencao_manual(
                 "status_croqui": "SEM_ARQUIVOS",
             }
 
-        # Caminho especificado pelo usuário
+        # Opção 3: Caminho de pasta local especificado pelo usuário
         caminho_informado = resposta.get("caminho") if isinstance(resposta, dict) else resposta
         pasta_alvo = Path(caminho_informado).resolve() if caminho_informado else pasta_busca
 

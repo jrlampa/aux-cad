@@ -672,6 +672,14 @@ tag Git anotada (ex: git tag -a v0.9.0 -m "Release v0.9.0")
   - `EXECUTAR ORÇAMENTO`: Inicialização de `orcamento/orcamento_manager.py` com preenchimento contextual de `--projeto <SOB>` e `--json`.
   - `EXECUTAR CPFC`: Inicialização de `cpfc/cpfc_manager.py` com preenchimento contextual de `root_dir` e `sob_id`.
 
+### 19. Módulo SOB: Resiliência e Decisão do Usuário em Falha do GOMNET (`sob/`)
+- **Diretriz Arquitetural**: Falha de acesso ou download de anexos do GOMNET **não é motivo para rollback automático**. O GOMNET é um serviço externo cujas indisponibilidades momentâneas não devem descartar a pasta da obra e o arquivo base DWG já preparados.
+- **Mecanismo de Intervenção**:
+  - Quando ocorre erro de autenticação, timeout ou download no GOMNET, o orquestrador (`SobOrchestrator`) consulta o usuário via `callback_progresso.perguntar_continuar_sem_gomnet(...)` ou diálogo modal Tkinter (`messagebox.askyesno`).
+  - **Opção 1 - Continuar sem GOMNET**: A preparação prossegue, gerando o DWG base e a estrutura da SOB, concluindo com status `CONCLUÍDO` e registrando `GOMNET_IGNORADO = True`.
+  - **Opção 2 - Fazer Rollback**: O usuário cancela explicitamente a operação, acionando o `RollbackContext` para reverter as pastas e arquivos criados.
+
+
 
 
 

@@ -550,6 +550,26 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Cobertura do pacote `workspace`: 88% no total (99% em `workspace_actions.py`, 89% em `workspace_cli.py`, 95% em `workspace_core.py`, 80% em `workspace_scanner.py`).
   - Preservação estrita: Zero alterações em módulos especialistas e sem commits/tags.
 
+## Memória de Sessão - SOB: Tratamento Resiliente de Erro no GOMNET (2026-09-26)
+
+- **Regra de Negócio Implementada**: Erro ao acessar o GOMNET (seja na autenticação/consulta da Fase A ou no download de anexos na Fase B) **não pode ser motivo de rollback automático**.
+- **Comportamento Interativo**:
+  - O sistema pergunta expressamente ao usuário se deseja **continuar sem o fluxo do GOMNET** ou **fazer rollback**.
+  - **Continuar sem GOMNET**: O fluxo prossegue normalmente, copiando o arquivo base DWG, validando a estrutura do projeto e concluindo a preparação da SOB com status `CONCLUÍDO` / `SUCESSO`, sem reversão de pastas/arquivos criados.
+  - **Fazer Rollback**: O processo é interrompido e a reversão atômica dos recursos (`RollbackContext`) é executada, marcando o resultado como `BLOQUEADO`.
+- **Componentes Atualizados**:
+  - `sob/sob_manager.py`:
+    - Adicionado método `_perguntar_decisao_gomnet(erro, callback_progresso, etapa, continuar_em_falha)`.
+    - Adicionado parâmetro opcional `continuar_sem_gomnet_em_falha` em `SobOrchestrator.executar`.
+    - Envolvimento seguro em blocos `try/except` nas etapas `A14-G` (pré-validação) e `B04-G` (download).
+  - `sob/sob_progress_gui.py`:
+    - `ProgressoObserver`: Adicionado método `perguntar_continuar_sem_gomnet(dados)` com notificação de evento `INTERVENCAO_GOMNET`.
+    - `SobProgressGUI`: Implementado tratamento para `INTERVENCAO_GOMNET` disparando diálogo modal `messagebox.askyesno(..., title="GOMNET - Continuar ou Rollback?")` no thread da interface Tkinter.
+  - `tests/test_sob_gomnet.py` e `tests/test_sob_progress_gui.py`:
+    - Testes unitários para continuidade sem GOMNET na Fase A e Fase B, escolha de rollback e integração com Observer/GUI.
+- **Validação**: Suíte completa executada com 438 testes coletados (434 PASS, 4 SKIP, 0 FAIL).
+
+
 
 
 

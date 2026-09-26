@@ -112,3 +112,102 @@ def test_formato_invalido():
     """Garante que formatos desconhecidos gerem exceção apropriada."""
     with pytest.raises(ValueError):
         obter_area_util_mm("A99")
+
+
+def test_dimensoes_carimbo_oficial_im3():
+    """Valida as dimensões físicas oficiais do carimbo corporativo IM3 (297 x 64.27 mm)."""
+    from prancha.autoprancha_core import ALTURA_CARIMBO_MM, LARGURA_CARIMBO_MM
+    assert LARGURA_CARIMBO_MM == 297.0
+    assert ALTURA_CARIMBO_MM == 64.27
+
+
+def test_fator_metrico_todas_escalas_normativas():
+    """Garante o fator f = escala / 1000.0 para todas as escalas normativas de distribuição."""
+    from prancha.autoprancha_core import ESCALAS_NORMATIVAS
+    for esc in ESCALAS_NORMATIVAS:
+        _, _, _, _ = calcular_dimensoes_model("A1", esc)
+        fator = esc / 1000.0
+        assert fator == pytest.approx(esc / 1000.0)
+
+
+def test_ancoragem_bloco_prancha_inferior_direito():
+    """Para A1, A2 e A3, o bloco PRANCHA é ancorado no canto inferior direito (Xmax, Ymin)."""
+    for fmt in ["A1", "A2", "A3"]:
+        res = calcular_enquadramento(0.0, 0.0, 100.0, 100.0, formato_fixo=fmt, escala_fixa=1000)
+        assert res.bloco_nome == "PRANCHA"
+        assert res.x_insercao == res.x_folha_max
+        assert res.y_insercao == res.y_folha_min
+
+
+def test_ancoragem_bloco_prancha_a4_inferior_esquerdo():
+    """Para A4, o bloco PRANCHA_A4 é ancorado no canto inferior esquerdo (Xmin, Ymin)."""
+    res = calcular_enquadramento(0.0, 0.0, 50.0, 50.0, formato_fixo="A4", escala_fixa=1000)
+    assert res.bloco_nome == "PRANCHA_A4"
+    assert res.x_insercao == res.x_folha_min
+    assert res.y_insercao == res.y_folha_min
+
+
+def test_reserva_carimbo_resultado_enquadramento():
+    """Valida se o enquadramento calcula a reserva de carimbo baseada no tamanho oficial 297x64.27."""
+    res = calcular_enquadramento(0.0, 0.0, 500.0, 300.0, escala_fixa=1000)
+    assert res.reserva_carimbo_largura_m == 297.0
+    assert res.reserva_carimbo_altura_m == 64.27
+
+
+def test_bloco_prancha_compativel_assinatura():
+    """Valida que uma definição com todos os marcadores oficiais do PRANCHA é COMPATÍVEL."""
+    from prancha.autoprancha_core import validar_assinatura_bloco
+    entidades_oficiais = [
+        {"texto": "Folha: ", "x": -35.89, "y": 30.24},
+        {"texto": "Escala:", "x": -35.91, "y": 25.46},
+        {"texto": "DATA:", "x": -86.58, "y": 15.76},
+        {"texto": "BAIRRO:", "x": -117.78, "y": 15.73},
+        {"texto": "HBT ENGENHARIA", "x": -138.45, "y": 24.87},
+    ]
+    assert validar_assinatura_bloco("PRANCHA", entidades_oficiais) == "COMPATIVEL"
+
+
+def test_bloco_prancha_incompativel_ausencia_marcador():
+    """Definição de bloco PRANCHA sem os marcadores ou com coordenadas deslocadas é INCOMPATÍVEL."""
+    from prancha.autoprancha_core import validar_assinatura_bloco
+    # Falta o marcador HBT e Escala está fora de posição
+    entidades_legadas = [
+        {"texto": "Folha: ", "x": -35.89, "y": 30.24},
+        {"texto": "Escala:", "x": 100.0, "y": 25.46},
+        {"texto": "DATA:", "x": -86.58, "y": 15.76},
+    ]
+    assert validar_assinatura_bloco("PRANCHA", entidades_legadas) == "INCOMPATIVEL"
+
+
+def test_bloco_prancha_a4_compativel_assinatura():
+    """Valida que uma definição com todos os marcadores oficiais do PRANCHA_A4 é COMPATÍVEL."""
+    from prancha.autoprancha_core import validar_assinatura_bloco
+    entidades_a4_oficiais = [
+        {"texto": "Folha: ", "x": 261.11, "y": 30.24},
+        {"texto": "Escala:", "x": 261.09, "y": 25.46},
+        {"texto": "DATA:", "x": 210.42, "y": 15.76},
+        {"texto": "BAIRRO:", "x": 179.22, "y": 15.73},
+        {"texto": "JONATAS LAMPA", "x": 160.03, "y": 10.55},
+    ]
+    assert validar_assinatura_bloco("PRANCHA_A4", entidades_a4_oficiais) == "COMPATIVEL"
+
+
+def test_bloco_prancha_a4_incompativel_ausencia_marcador():
+    """Definição de bloco PRANCHA_A4 sem o marcador de responsável oficial é INCOMPATÍVEL."""
+    from prancha.autoprancha_core import validar_assinatura_bloco
+    entidades_a4_legadas = [
+        {"texto": "Folha: ", "x": 261.11, "y": 30.24},
+        {"texto": "Escala:", "x": 261.09, "y": 25.46},
+        {"texto": "DATA:", "x": 210.42, "y": 15.76},
+        {"texto": "BAIRRO:", "x": 179.22, "y": 15.73},
+        {"texto": "OUTRO PROJETISTA", "x": 160.03, "y": 10.55},
+    ]
+    assert validar_assinatura_bloco("PRANCHA_A4", entidades_a4_legadas) == "INCOMPATIVEL"
+
+
+def test_bloco_desconhecido_incompativel():
+    """Bloco não cadastrado resulta em INCOMPATIVEL."""
+    from prancha.autoprancha_core import validar_assinatura_bloco
+    assert validar_assinatura_bloco("BLOCO_INEXISTENTE", []) == "INCOMPATIVEL"
+
+

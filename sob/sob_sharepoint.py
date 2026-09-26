@@ -474,11 +474,138 @@ class SharePointClient:
             raise SobDownloadError("[FALHA] O conteúdo da SOB não está disponível para download.")
         return True
 
+    def _aguardar_e_processar_download(self, destino_path: Path, timeout: int = 45) -> List[Path]:
+        """
+        Aguarda a conclusão do download, processa descompactação de ZIP e nivela pastas.
+        """
+        inicio = time.time()
+        while time.time() - inicio < timeout:
+            arquivos = list(destino_path.glob("*"))
+            non_temp = [f for f in arquivos if f.is_file() and not f.name.endswith((".crdownload", ".tmp", ".partial", ".download"))]
+            em_andamento = any(f.name.endswith((".crdownload", ".tmp", ".partial", ".download")) for f in arquivos)
+
+            if non_temp and not em_andamento:
+                # Processa descompactação de ZIPs (pastas baixadas pelo SharePoint vêm sempre em ZIP)
+                for f in list(non_temp):
+                    if f.suffix.lower() == ".zip":
+                        try:
+                            with zipfile.ZipFile(f, 'r') as zip_ref:
+                                zip_ref.extractall(destino_path)
+                            f.unlink()
+
+                            # Se a extração gerou uma pasta raiz única (ex: SOB_A057389468/), move conteúdos para destino_path
+                            itens_extraidos = [i for i in destino_path.iterdir()]
+                            if len(itens_extraidos) == 1 and itens_extraidos[0].is_dir():
+                                pasta_interna = itens_extraidos[0]
+                                for sub_item in list(pasta_interna.iterdir()):
+                                    dest_sub = destino_path / sub_item.name
+                                    if not dest_sub.exists():
+                                        shutil.move(str(sub_item), str(dest_sub))
+                                try:
+                                    pasta_interna.rmdir()
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+
+                arquivos_finais = [f for f in destino_path.rglob("*") if f.is_file()]
+                if arquivos_finais:
+                    return arquivos_finais
+            time.sleep(1)
+
+        return [f for f in destino_path.rglob("*") if f.is_file()]
+
+    def baixar_pasta_por_url(self, url: str, destino_croqui: Path) -> List[Path]:
+        """
+        Navega diretamente para a URL da pasta ou link de compartilhamento fornecido
+        pelo usuário e realiza o download de todo o seu conteúdo para destino_croqui.
+        """
+        if not self._autenticado:
+            self.autenticar()
+
+        from selenium.webdriver.common.by import By
+
+        destino_path = Path(destino_croqui).resolve()
+        destino_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            self.driver.execute_cdp_cmd(
+                "Page.setDownloadBehavior",
+                {"behavior": "allow", "downloadPath": str(destino_path)}
+            )
+        except Exception:
+            pass
+
+        self.driver.get(url)
+        time.sleep(4)
+
+        # 1. Tenta clicar no botão de Download na barra de comandos superior
+        seletor_download = (
+            "button[name='Download'], button[name='Baixar'], "
+            "[data-automationid='downloadCommand'], button[aria-label*='Baixar'], "
+            "button[aria-label*='Download'], button[data-automationid='downloadButton']"
+        )
+        btns_download = self.driver.find_elements(By.CSS_SELECTOR, seletor_download)
+        clicado = False
+        for btn in btns_download:
+            if btn.is_displayed():
+                self.driver.execute_script("arguments[0].click();", btn)
+                clicado = True
+                break
+
+        # 2. Se não encontrou o botão diretamente, tenta marcar 'Selecionar tudo'
+        if not clicado:
+            try:
+                chks_all = self.driver.find_elements(
+                    By.CSS_SELECTOR,
+                    "[role='columnheader'] [role='checkbox'], "
+                    "button[data-automationid='FieldRenderer-selectAllCheck'], "
+                    "[data-automationid='DetailsHeader-checkAll'], "
+                    "div.ms-DetailsHeader-check"
+                )
+                if chks_all:
+                    self.driver.execute_script("arguments[0].click();", chks_all[0])
+                    time.sleep(1.5)
+                    btns_download = self.driver.find_elements(By.CSS_SELECTOR, seletor_download)
+                    for btn in btns_download:
+                        if btn.is_displayed():
+                            self.driver.execute_script("arguments[0].click();", btn)
+                            clicado = True
+                            break
+            except Exception:
+                pass
+
+        # 3. Se ainda não clicou, tenta marcar a primeira linha/pasta visível
+        if not clicado:
+            try:
+                linhas = self.driver.find_elements(
+                    By.CSS_SELECTOR,
+                    "[role='row'], [data-automationid='DetailsRow']"
+                )
+                if linhas:
+                    chks = linhas[0].find_elements(By.CSS_SELECTOR, "[role='checkbox'], .ms-Check")
+                    if chks:
+                        self.driver.execute_script("arguments[0].click();", chks[0])
+                        time.sleep(1)
+                        btns_download = self.driver.find_elements(By.CSS_SELECTOR, seletor_download)
+                        for btn in btns_download:
+                            if btn.is_displayed():
+                                self.driver.execute_script("arguments[0].click();", btn)
+                                clicado = True
+                                break
+            except Exception:
+                pass
+
+        return self._aguardar_e_processar_download(destino_path, timeout=60)
+
     def baixar_croqui(self, pasta_info: Dict[str, Any], destino_croqui: Path) -> List[Path]:
         """
         Baixa a pasta inteira da SOB localizada para destino_croqui.
         Garante descompactação íntegra (caso baixada como ZIP) e ausência de arquivos temporários.
         """
+        if pasta_info.get("tipo") == "url_direta" or (pasta_info.get("url") and not pasta_info.get("elemento")):
+            return self.baixar_pasta_por_url(pasta_info.get("url"), destino_croqui)
+
         from selenium.webdriver.common.by import By
 
         destino_path = Path(destino_croqui).resolve()
@@ -555,43 +682,7 @@ class SharePointClient:
                 except Exception:
                     pass
 
-        # Aguarda a conclusão do download (até 45 segundos para pastas inteiras)
-        inicio = time.time()
-        while time.time() - inicio < 45:
-            arquivos = list(destino_path.glob("*"))
-            non_temp = [f for f in arquivos if f.is_file() and not f.name.endswith((".crdownload", ".tmp", ".partial", ".download"))]
-            em_andamento = any(f.name.endswith((".crdownload", ".tmp", ".partial", ".download")) for f in arquivos)
-            
-            if non_temp and not em_andamento:
-                # Processa descompactação de ZIPs (pastas baixadas pelo SharePoint vêm sempre em ZIP)
-                for f in list(non_temp):
-                    if f.suffix.lower() == ".zip":
-                        try:
-                            with zipfile.ZipFile(f, 'r') as zip_ref:
-                                zip_ref.extractall(destino_path)
-                            f.unlink()
-
-                            # Se a extração gerou uma pasta raiz única (ex: SOB_A057389468/), move conteúdos para destino_path
-                            itens_extraidos = [i for i in destino_path.iterdir()]
-                            if len(itens_extraidos) == 1 and itens_extraidos[0].is_dir():
-                                pasta_interna = itens_extraidos[0]
-                                for sub_item in list(pasta_interna.iterdir()):
-                                    dest_sub = destino_path / sub_item.name
-                                    if not dest_sub.exists():
-                                        shutil.move(str(sub_item), str(dest_sub))
-                                try:
-                                    pasta_interna.rmdir()
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-
-                arquivos_finais = [f for f in destino_path.rglob("*") if f.is_file()]
-                if arquivos_finais:
-                    return arquivos_finais
-            time.sleep(1)
-
-        return [f for f in destino_path.rglob("*") if f.is_file()]
+        return self._aguardar_e_processar_download(destino_path, timeout=45)
 
     def validar_download(self, destino_croqui: Path) -> bool:
         """
