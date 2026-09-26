@@ -771,3 +771,31 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Compilação .NET Release para `net8.0-windows` e `net48` aprovada com 0 erros.
   - Modelos oficiais íntegros por SHA-256 (`cqt_modelo.xlsm` e `prancha.dwg`).
 - **Status Geral**: **HOMOLOGADO** na versão **0.6.0**.
+---
+
+## Memória de Sessão Consolidada - Identidade Visual e Assets Oficiais OXCAD (2026-09-26)
+
+- **Escopo e Frentes Simultâneas**:
+  - Execução simultânea da Frente A (Auditoria de Logging/Observabilidade) e Frente B (Identidade Visual OXCAD).
+- **Frente A (Logging & Observabilidade)**:
+  - Auditoria confirmada: `common/logging_config.py` e `oxcad/OxCadLogger.cs` ativos; `correlation_id` atravessa C# -> Python CLI -> Dispatcher -> subprocessos; RPC em stdout preservado sem poluição; comando `OXCAD_DIAGNOSTICO` funcional.
+- **Frente B (Identidade Visual & Assets)**:
+  - **Conceito**: Monograma geométrico técnico `O + X` com precisão milimétrica CAD (anel "O" de ciclo e integração + diagonais "X" ortogonais a 45° de automação e transformação, com kerf/gap negativo de corte CAD e snap points nos terminais).
+  - **Paleta**: Azul Elétrico CAD (`#4EA8DE`), Ciano Técnico (`#72EFDD`), Azul Profundo (`#0077B6`), Grafite Técnico (`#1E222D`) e Branco puro.
+  - **Assets Gerados** em `oxcad/assets/`:
+    - `oxcad.svg` (512x512) e `oxcad_wordmark.svg` (1024x320);
+    - `oxcad.png` (1024x1024 RGBA) e `oxcad_mono.png` (1024x1024 RGBA);
+    - `oxcad_wordmark.png` (1024x320 RGBA);
+    - `oxcad.ico` (multi-frame: 16x16, 24x24, 32x32, 48x48, 64x64, 128x128, 256x256);
+    - Pacote individual: `oxcad_{16,24,32,48,64,128,256}.png`.
+  - **Script de Geração**: `oxcad/scripts/generate_assets.py` (100% determinístico e reprodutível).
+  - **Integração WPF / .NET**:
+    - Logo integrado no cabeçalho de `OxCadControl.xaml` com carregamento resiliente via `CarregarIconeHeader()`.
+    - `OxCadPaleta.csproj` copia automaticamente `assets/` para as pastas de build Release de `net8.0-windows` e `net48`.
+- **Validação de Testes e Builds**:
+  - `tests/test_oxcad_assets.py`: 7 testes dedicados (100% PASS).
+  - Suíte específica OXCAD: 85 testes aprovados (100% PASS).
+  - Suíte global de regressão: 558 testes aprovados, 2 skipped (0 falhas, 0 erros).
+  - Builds .NET Release: `net8.0-windows` e `net48` aprovados com 0 erros.
+  - Modelos oficiais íntegros por SHA-256 (`cqt_modelo.xlsm` e `prancha.dwg`).
+- **Status Geral**: **HOMOLOGADO** (Logging) e **HOMOLOGADO** (Identidade Visual).

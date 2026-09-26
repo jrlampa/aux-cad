@@ -932,4 +932,30 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
      - Compilação .NET Release (`net8.0-windows` e `net48`) com 0 erros.
      - Modelos oficiais íntegros por SHA-256 (`cqt_modelo.xlsm`: `09224E...`, `prancha.dwg`: `13562C...`).
    - **Veredito Oficial**: **HOMOLOGADO**.
-
+8. **Identidade Visual e Assets Oficiais OXCAD**:
+   - **Conceito Geométrico Monograma OX**:
+     - Fusão geométrica de precisão CAD: anel "O" (ciclo, projeto, integração sistêmica) e eixos diagonais ortogonais "X" a 45° (automação, transformação, conexões nodais).
+     - Cortes técnicos de folga (kerf CAD) nos pontos de sobreposição, retículo central de precisão cartesiana e terminais com snap points/nós de controle vetoriais.
+   - **Paleta de Cores Oficial**:
+     - Destaque Primário: Azul Elétrico CAD (`#4EA8DE`).
+     - Acentos Técnicos: Ciano Técnico Snap (`#72EFDD`) e Azul Profundo Engenharia (`#0077B6`).
+     - Estrutura: Grafite Técnico (`#1E222D`) e Slate Técnico (`#2B3245`).
+     - Nós e Mira: Branco Puro (`#FFFFFF`).
+     - Validação Monocromática: Alto contraste límpido preservado em escala de cinza/preto e branco.
+   - **Catálogo de Assets em `oxcad/assets/`**:
+     - `oxcad.svg`: Fonte vetorial mestre (512x512).
+     - `oxcad_wordmark.svg`: Logotipo completo horizontal (1024x320) com tipografia técnica.
+     - `oxcad.png`: Master raster em alta resolução (1024x1024) com canal alpha transparente.
+     - `oxcad_mono.png`: Versão monocromática (1024x1024) para alto contraste.
+     - `oxcad_wordmark.png`: Logotipo rasterizado (1024x320).
+     - `oxcad.ico`: Ícone nativo do Windows multi-resolução legítimo (16x16, 24x24, 32x32, 48x48, 64x64, 128x128, 256x256).
+     - Pacote raster individual: `oxcad_16.png`, `oxcad_24.png`, `oxcad_32.png`, `oxcad_48.png`, `oxcad_64.png`, `oxcad_128.png`, `oxcad_256.png`.
+   - **Geração Reprodutível**:
+     - Script determinístico `oxcad/scripts/generate_assets.py` com supersampling 4x e anti-aliasing Lanczos.
+   - **Integração no Aplicativo**:
+     - Incorporado no cabeçalho WPF da paleta `oxcad/OxCadControl.xaml` com carregamento desacoplado em `OxCadControl.xaml.cs`.
+     - `oxcad/OxCadPaleta.csproj` configurado para distribuir `assets/` para os builds `net8.0-windows` e `net48`.
+   - **Testes Automatizados**:
+     - Suíte `tests/test_oxcad_assets.py` com 7 testes dedicados (100% PASS).
+     - Suíte global de testes: 558 passed, 2 skipped (0 falhas, 0 erros).
+   - **Veredito Oficial**: **HOMOLOGADO**.

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320" width="1024" height="320">
+  <defs>
+    <linearGradient id="wmRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#72EFDD" />
+      <stop offset="100%" stop-color="#4EA8DE" />
+    </linearGradient>
+  </defs>
+
+  <!-- SIMBOLO REDUZIDO (Escala 0.5, Centro em x=140, y=160) -->
+  <g transform="translate(140, 160) scale(0.48) translate(-256, -256)">
+    <!-- Viga SW-NE -->
+    <line x1="106" y1="406" x2="406" y2="106" stroke="#1E222D" stroke-width="64" stroke-linecap="round" />
+    <!-- Anel O -->
+    <circle cx="256" cy="256" r="160" fill="none" stroke="url(#wmRingGrad)" stroke-width="60" />
+    <!-- Viga NW-SE -->
+    <line x1="106" y1="106" x2="406" y2="406" stroke="#1E222D" stroke-width="64" stroke-linecap="round" />
+    <!-- Nucleo -->
+    <rect x="238" y="238" width="36" height="36" rx="4" fill="#1E222D" stroke="#72EFDD" stroke-width="3" transform="rotate(45 256 256)" />
+    <circle cx="256" cy="256" r="5" fill="#FFFFFF" />
+    <!-- Snap points -->
+    <circle cx="106" cy="106" r="14" fill="#1E222D" stroke="#72EFDD" stroke-width="4" />
+    <circle cx="406" cy="406" r="14" fill="#1E222D" stroke="#72EFDD" stroke-width="4" />
+    <circle cx="406" cy="106" r="14" fill="#1E222D" stroke="#72EFDD" stroke-width="4" />
+    <circle cx="106" cy="406" r="14" fill="#1E222D" stroke="#72EFDD" stroke-width="4" />
+  </g>
+
+  <!-- WORDMARK: OXCAD -->
+  <text x="310" y="180" font-family="'Segoe UI', 'Outfit', 'Inter', 'Helvetica', sans-serif" font-size="110" font-weight="800" fill="#FFFFFF" letter-spacing="4">
+    OX<tspan fill="#4EA8DE">CAD</tspan>
+  </text>
+
+  <!-- SUBTITULO TECNICO -->
+  <text x="316" y="228" font-family="'Segoe UI', 'Inter', 'Helvetica', sans-serif" font-size="20" font-weight="500" fill="#9E9EB0" letter-spacing="3">
+    AMBIENTE INTEGRADO DE AUTOMAÇÃO CAD
+  </text>
+
+  <!-- LINHA DE BASE DE ENGENHARIA -->
+  <line x1="316" y1="248" x2="880" y2="248" stroke="#2B3245" stroke-width="2" />
+  <circle cx="316" cy="248" r="3" fill="#4EA8DE" />
+  <circle cx="880" cy="248" r="3" fill="#4EA8DE" />
+</svg>

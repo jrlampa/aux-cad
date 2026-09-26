@@ -38,6 +38,13 @@
     </Reference>
   </ItemGroup>
 
+  <!-- Assets e Recursos Visuais -->
+  <ItemGroup>
+    <None Update="assets\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <!-- AutoCAD .NET Framework 4.8 (AutoCAD 2018-2024) -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />

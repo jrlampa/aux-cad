@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Gradiente do Anel O (Azul Tecnico CAD) -->
+    <linearGradient id="oxRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#72EFDD" />
+      <stop offset="50%" stop-color="#4EA8DE" />
+      <stop offset="100%" stop-color="#0077B6" />
+    </linearGradient>
+
+    <!-- Gradiente do Eixo X (Grafite Tecnico / Precision) -->
+    <linearGradient id="oxXGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2D3748" />
+      <stop offset="50%" stop-color="#1E222D" />
+      <stop offset="100%" stop-color="#141824" />
+    </linearGradient>
+
+    <!-- Filtro de sombra sutil de precisao -->
+    <filter id="oxDropShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+
+    <!-- Mascara de corte para o anel O (gap nos cruzamentos do X) -->
+    <mask id="ringGapMask">
+      <rect x="0" y="0" width="512" height="512" fill="white" />
+      <!-- Cortes diagonais de folga tecnica (kerf) onde a viga NW-SE sobrepoe -->
+      <line x1="90" y1="90" x2="422" y2="422" stroke="black" stroke-width="84" stroke-linecap="square" />
+    </mask>
+  </defs>
+
+  <!-- GRUPO PRINCIPAL COM FILTRO DE ELEVACAO -->
+  <g filter="url(#oxDropShadow)">
+    <!-- 1. VIGA DIAGONAL DO X (SW -> NE): Camada de Fundo -->
+    <line x1="106" y1="406" x2="406" y2="106" 
+          stroke="url(#oxXGrad)" stroke-width="64" stroke-linecap="round" />
+    <line x1="106" y1="406" x2="406" y2="106" 
+          stroke="#2B3245" stroke-width="64" stroke-linecap="round" fill="none" opacity="0.3" />
+
+    <!-- 2. ANEL 'O' (Circulo Tecnico com Mascara de Gap nos cruzamentos) -->
+    <circle cx="256" cy="256" r="160" 
+            fill="none" stroke="url(#oxRingGrad)" stroke-width="60" 
+            mask="url(#ringGapMask)" />
+
+    <!-- 3. VIGA DIAGONAL DO X (NW -> SE): Camada Sobreposta (Passa por cima do O com folga tecnica) -->
+    <line x1="106" y1="106" x2="406" y2="406" 
+          stroke="url(#oxXGrad)" stroke-width="64" stroke-linecap="round" />
+
+    <!-- Filete de contorno tecnico de precisao na viga sobreposta -->
+    <line x1="106" y1="106" x2="406" y2="406" 
+          stroke="#4EA8DE" stroke-width="2" stroke-linecap="round" opacity="0.6" />
+
+    <!-- 4. NUCLEO DE INTERSECCAO CENTRAL (Retículo / Mira CAD) -->
+    <rect x="238" y="238" width="36" height="36" rx="4"
+          fill="#1E222D" stroke="#72EFDD" stroke-width="3"
+          transform="rotate(45 256 256)" />
+    <circle cx="256" cy="256" r="4" fill="#FFFFFF" />
+
+    <!-- 5. NOS DE PRECISAO CAD (Snap Points nos 4 terminais do X) -->
+    <circle cx="106" cy="106" r="14" fill="#1E222D" stroke="#72EFDD" stroke-width="3.5" />
+    <circle cx="106" cy="106" r="4.5" fill="#FFFFFF" />
+
+    <circle cx="406" cy="406" r="14" fill="#1E222D" stroke="#72EFDD" stroke-width="3.5" />
+    <circle cx="406" cy="406" r="4.5" fill="#FFFFFF" />
+
+    <circle cx="406" cy="106" r="14" fill="#1E222D" stroke="#72EFDD" stroke-width="3.5" />
+    <circle cx="406" cy="106" r="4.5" fill="#FFFFFF" />
+
+    <circle cx="106" cy="406" r="14" fill="#1E222D" stroke="#72EFDD" stroke-width="3.5" />
+    <circle cx="106" cy="406" r="4.5" fill="#FFFFFF" />
+
+    <!-- 6. MARCADORES DE EIXOS CARTESIANOS CAD -->
+    <line x1="256" y1="28" x2="256" y2="48" stroke="#72EFDD" stroke-width="4" stroke-linecap="round" />
+    <line x1="256" y1="464" x2="256" y2="484" stroke="#72EFDD" stroke-width="4" stroke-linecap="round" />
+    <line x1="28" y1="256" x2="48" y2="256" stroke="#72EFDD" stroke-width="4" stroke-linecap="round" />
+    <line x1="464" y1="256" x2="484" y2="256" stroke="#72EFDD" stroke-width="4" stroke-linecap="round" />
+  </g>
+</svg>

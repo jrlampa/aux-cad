@@ -29,8 +29,36 @@ namespace OxCad
         public OxCadControl()
         {
             InitializeComponent();
+            CarregarIconeHeader();
             ConfigurarTimerVisual();
             Loaded += OxCadControl_Loaded;
+        }
+
+        private void CarregarIconeHeader()
+        {
+            try
+            {
+                string dirDll = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? "";
+                string caminhoPng = System.IO.Path.Combine(dirDll, "assets", "oxcad_64.png");
+                if (!System.IO.File.Exists(caminhoPng))
+                {
+                    string raizProj = WorkspaceService.ObterDiretorioRaizProjeto();
+                    caminhoPng = System.IO.Path.Combine(raizProj, "oxcad", "assets", "oxcad_64.png");
+                }
+                if (System.IO.File.Exists(caminhoPng))
+                {
+                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                    bmp.BeginInit();
+                    bmp.UriSource = new Uri(caminhoPng, UriKind.Absolute);
+                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    bmp.EndInit();
+                    ImgLogoHeader.Source = bmp;
+                }
+            }
+            catch
+            {
+                // Fallback gracioso: imagem não é exibida se indisponível
+            }
         }
 
         private void ConfigurarTimerVisual()
