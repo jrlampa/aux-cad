@@ -22,8 +22,8 @@ from workspace.workspace_context_cli import extrair_contexto_operacional, execut
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
 
-def test_versao_oxcad_0_5_3_propagada():
-    """Valida que a versão 0.5.3 foi propagada no .csproj e no rodapé do .xaml."""
+def test_versao_oxcad_0_6_0_propagada():
+    """Valida que a versão 0.6.0 foi propagada no .csproj e no rodapé do .xaml."""
     csproj_path = ROOT_DIR / "oxcad" / "OxCadPaleta.csproj"
     xaml_path = ROOT_DIR / "oxcad" / "OxCadControl.xaml"
 
@@ -31,11 +31,11 @@ def test_versao_oxcad_0_5_3_propagada():
     assert xaml_path.exists()
 
     csproj_content = csproj_path.read_text(encoding="utf-8")
-    assert "<Version>0.5.3</Version>" in csproj_content
-    assert "<AssemblyVersion>0.5.3.0</AssemblyVersion>" in csproj_content
+    assert "<Version>0.6.0</Version>" in csproj_content
+    assert "<AssemblyVersion>0.6.0.0</AssemblyVersion>" in csproj_content
 
     xaml_content = xaml_path.read_text(encoding="utf-8")
-    assert "OXCAD 0.5.3 • AUX CAD" in xaml_content
+    assert "OXCAD 0.6.0 • AUX CAD" in xaml_content
 
 
 def test_extracao_resiliente_json_com_warnings_externos():

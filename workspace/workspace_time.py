@@ -18,6 +18,9 @@ from enum import Enum
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+from common.logging_config import get_logger
+
+logger = get_logger("oxcad.workspace.time")
 
 
 class TimeState(str, Enum):
@@ -293,6 +296,10 @@ def atualizar_heartbeat_tempo(
     if token_sessao is not None:
         entry.token_sessao = token_sessao
     salvar_tempo_projeto(root_dir, entry)
+    logger.debug(
+        f"Heartbeat registrado para SOB {entry.sob_id}",
+        extra={"action": "tempo.heartbeat", "sob_id": entry.sob_id, "process_id": pid}
+    )
     return entry
 
 
@@ -353,6 +360,10 @@ def tratar_interrupcao_se_necessario(
         entry.token_sessao = None
         entry.ultima_atualizacao = agora
         salvar_tempo_projeto(root_dir, entry)
+        logger.warning(
+            f"Interrupção de sessão detectada e consolidada para SOB {entry.sob_id} ({duracao:.1f}s)",
+            extra={"action": "tempo.interrompido", "sob_id": entry.sob_id, "duration_ms": duracao * 1000.0}
+        )
 
     return entry
 
@@ -411,6 +422,15 @@ def iniciar_ou_retomar_tempo(
         entry.dwg_path = str(dwg_path)
 
     salvar_tempo_projeto(root_dir, entry)
+    logger.info(
+        f"Tempo de projeto em execução para SOB {entry.sob_id}",
+        extra={
+            "action": "tempo.iniciado",
+            "sob_id": entry.sob_id,
+            "dwg_path": entry.dwg_path,
+            "process_id": pid
+        }
+    )
     return entry
 
 
@@ -461,6 +481,10 @@ def pausar_tempo(
     entry.ultima_atualizacao = agora
 
     salvar_tempo_projeto(root_dir, entry)
+    logger.info(
+        f"Tempo de projeto pausado para SOB {entry.sob_id} ({entry.obter_tempo_formatado()})",
+        extra={"action": "tempo.pausado", "sob_id": entry.sob_id, "duration_ms": duracao_sessao * 1000.0}
+    )
     return entry
 
 
@@ -502,6 +526,10 @@ def concluir_tempo(
     entry.ultima_atualizacao = agora
 
     salvar_tempo_projeto(root_dir, entry)
+    logger.info(
+        f"Tempo de projeto concluído para SOB {entry.sob_id} ({entry.obter_tempo_formatado()})",
+        extra={"action": "tempo.concluido", "sob_id": entry.sob_id}
+    )
     return entry
 
 
@@ -524,4 +552,8 @@ def reabrir_tempo(
     entry.data_hora_fim = None
     entry.ultima_atualizacao = agora
     salvar_tempo_projeto(root_dir, entry)
+    logger.info(
+        f"Tempo de projeto reaberto para SOB {entry.sob_id}",
+        extra={"action": "tempo.reaberto", "sob_id": entry.sob_id}
+    )
     return entry

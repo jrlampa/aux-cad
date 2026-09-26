@@ -19,6 +19,9 @@ import tempfile
 from typing import Any, Dict, List, Optional, Union
 
 from workspace.workspace_core import ProjectArtifact, ProjectWorkspace
+from common.logging_config import get_logger
+
+logger = get_logger("oxcad.workspace.actions")
 
 # Raiz canônica do repositório aux cad
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -41,7 +44,7 @@ class WorkspaceActionDispatcher:
         return None
 
     @classmethod
-    def abrir_artefato(cls, artefato: Union[ProjectArtifact, Path, str]) -> bool:
+    def abrir_artefato(cls, artefato: Union[ProjectArtifact, Path, str], correlation_id: Optional[str] = None) -> bool:
         """
         Abre o arquivo ou diretório no aplicativo padrão do Windows de forma não-bloqueante.
         Não copia, não altera e valida a existência física antes da chamada.
@@ -53,6 +56,10 @@ class WorkspaceActionDispatcher:
 
         caminho_res = caminho.resolve()
         try:
+            logger.info(
+                f"Abrindo artefato físico: {caminho_res.name}",
+                extra={"correlation_id": correlation_id, "dwg_path": str(caminho_res), "action": "abrir"}
+            )
             if hasattr(os, "startfile"):
                 os.startfile(str(caminho_res))
             else:
@@ -60,11 +67,15 @@ class WorkspaceActionDispatcher:
                 subprocess.Popen(["xdg-open", str(caminho_res)])
             return True
         except Exception as err:
-            print(f"[WorkspaceActionDispatcher] Erro ao abrir artefato: {err}")
+            logger.error(
+                f"Erro ao abrir artefato {caminho_res}: {err}",
+                exc_info=True,
+                extra={"correlation_id": correlation_id, "dwg_path": str(caminho_res), "action": "abrir"}
+            )
             return False
 
     @classmethod
-    def localizar_artefato(cls, artefato: Union[ProjectArtifact, Path, str]) -> bool:
+    def localizar_artefato(cls, artefato: Union[ProjectArtifact, Path, str], correlation_id: Optional[str] = None) -> bool:
         """
         Abre o Windows Explorer com foco e seleção sobre o arquivo, ou abre o diretório.
         Valida existência prévia sem disparar aplicativos associados.
@@ -76,6 +87,10 @@ class WorkspaceActionDispatcher:
 
         caminho_res = caminho.resolve()
         try:
+            logger.info(
+                f"Localizando artefato no Explorer: {caminho_res.name}",
+                extra={"correlation_id": correlation_id, "dwg_path": str(caminho_res), "action": "localizar"}
+            )
             if sys.platform == "win32":
                 if caminho_res.is_file():
                     # Formato oficial do Windows: explorer.exe /select,"C:\...\arquivo.ext"
@@ -91,7 +106,11 @@ class WorkspaceActionDispatcher:
                 subprocess.Popen(["xdg-open", alvo])
             return True
         except Exception as err:
-            print(f"[WorkspaceActionDispatcher] Erro ao localizar artefato: {err}")
+            logger.error(
+                f"Erro ao localizar artefato {caminho_res}: {err}",
+                exc_info=True,
+                extra={"correlation_id": correlation_id, "dwg_path": str(caminho_res), "action": "localizar"}
+            )
             return False
 
     @classmethod
@@ -184,6 +203,7 @@ class WorkspaceActionDispatcher:
         cad_json: Optional[Union[str, Path]] = None,
         dest_file: Optional[Union[str, Path]] = None,
         base_dir: Optional[Path] = None,
+        correlation_id: Optional[str] = None,
     ) -> subprocess.Popen:
         """
         Inicia o módulo CQT em subprocesso desacoplado, sem travar a interface do Workspace.
@@ -195,7 +215,7 @@ class WorkspaceActionDispatcher:
             dest_file=dest_file,
             base_dir=base_dir,
         )
-        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR)
+        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR, correlation_id=correlation_id)
 
     @classmethod
     def montar_comando_orcamento(
@@ -265,6 +285,7 @@ class WorkspaceActionDispatcher:
         workspace: ProjectWorkspace,
         dados_json: Optional[Union[str, Path]] = None,
         base_dir: Optional[Path] = None,
+        correlation_id: Optional[str] = None,
     ) -> subprocess.Popen:
         """
         Inicia a GUI do módulo de Orçamento em subprocesso desacoplado.
@@ -274,7 +295,7 @@ class WorkspaceActionDispatcher:
             dados_json=dados_json,
             base_dir=base_dir,
         )
-        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR)
+        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR, correlation_id=correlation_id)
 
     @classmethod
     def montar_comando_cpfc(
@@ -369,6 +390,7 @@ class WorkspaceActionDispatcher:
         workspace: ProjectWorkspace,
         dados_json: Optional[Union[str, Path]] = None,
         base_dir: Optional[Path] = None,
+        correlation_id: Optional[str] = None,
     ) -> subprocess.Popen:
         """
         Inicia a interface do CPFC pré-apontando para a pasta da SOB e o identificador do projeto.
@@ -378,7 +400,7 @@ class WorkspaceActionDispatcher:
             dados_json=dados_json,
             base_dir=base_dir,
         )
-        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR)
+        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR, correlation_id=correlation_id)
 
     @classmethod
     def montar_comando_sob(
@@ -405,13 +427,14 @@ class WorkspaceActionDispatcher:
         cls,
         workspace: Optional[ProjectWorkspace] = None,
         base_dir: Optional[Path] = None,
+        correlation_id: Optional[str] = None,
     ) -> subprocess.Popen:
         """
         Inicia o diálogo interativo do Preparador de SOB oficial em subprocesso desacoplado,
         sem bloquear a interface do Workspace.
         """
         cmd = cls.montar_comando_sob(workspace=workspace, base_dir=base_dir)
-        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR)
+        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR, correlation_id=correlation_id)
 
     @classmethod
     def montar_comando_ambiental(
@@ -504,6 +527,7 @@ class WorkspaceActionDispatcher:
         boxes_txt: Optional[Union[str, Path]] = None,
         fuso: int = 23,
         base_dir: Optional[Path] = None,
+        correlation_id: Optional[str] = None,
     ) -> subprocess.Popen:
         """
         Inicia o módulo Ambiental (MemorialGUI) em subprocesso desacoplado,
@@ -517,7 +541,7 @@ class WorkspaceActionDispatcher:
             fuso=fuso,
             base_dir=base_dir,
         )
-        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR)
+        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR, correlation_id=correlation_id)
 
     @classmethod
     def montar_comando_prancha(
@@ -567,6 +591,7 @@ class WorkspaceActionDispatcher:
         workspace: ProjectWorkspace,
         dados_json: Optional[Union[str, Path]] = None,
         base_dir: Optional[Path] = None,
+        correlation_id: Optional[str] = None,
     ) -> subprocess.Popen:
         """
         Inicia a rotina/orquestrador do AutoPranche em subprocesso desacoplado,
@@ -577,13 +602,16 @@ class WorkspaceActionDispatcher:
             dados_json=dados_json,
             base_dir=base_dir,
         )
-        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR)
+        return cls._lancar_processo(cmd, cwd=base_dir or BASE_DIR, correlation_id=correlation_id)
 
 
     @staticmethod
-    def _lancar_processo(cmd: List[str], cwd: Optional[Path] = None) -> subprocess.Popen:
+    def _lancar_processo(
+        cmd: List[str], cwd: Optional[Path] = None, correlation_id: Optional[str] = None
+    ) -> subprocess.Popen:
         """
         Lança subprocesso desvinculado para evitar travamento da aplicação ou console chamador.
+        Registra observabilidade estruturada e PID de lançamento.
         """
         dir_exec = str(cwd or BASE_DIR)
         kwargs: Dict[str, Any] = {"cwd": dir_exec}
@@ -593,5 +621,14 @@ class WorkspaceActionDispatcher:
             if creation_flag:
                 kwargs["creationflags"] = creation_flag
 
-        return subprocess.Popen(cmd, **kwargs)
+        logger.info(
+            f"Lançando subprocesso: {Path(cmd[1]).name if len(cmd) > 1 else (cmd[0] if cmd else '')}",
+            extra={"command": cmd, "cwd": dir_exec, "correlation_id": correlation_id}
+        )
+        proc = subprocess.Popen(cmd, **kwargs)
+        logger.info(
+            f"Subprocesso em execução (PID {proc.pid})",
+            extra={"subproc_pid": proc.pid, "pid": proc.pid, "command": cmd, "correlation_id": correlation_id}
+        )
+        return proc
 

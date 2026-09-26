@@ -910,4 +910,26 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
    - **CPFC**: Adicionado bootstrap resiliente de `sys.path` em `cpfc/cpfc_manager.py`, eliminando `ModuleNotFoundError: No module named 'cpfc'` ao disparar via paleta/CLI.
    - **Ambiental**: Adicionado mecanismo de elevação e foco (`deiconify`, `lift`, `-topmost`, `focus_force`) em `ambiental/memorial_ambiental_generator.py`, garantindo que a janela Tkinter venha para o primeiro plano sobre o AutoCAD.
    - **AutoPrancha**: Esclarecido o fluxo: o AutoPrancha é uma ferramenta gráfica interativa que roda nativamente no ModelSpace do AutoCAD (`AUTOPRANCHA` / `autoprancha.lsp`). O botão na paleta exporta o contexto do projeto para `prancha_contexto.json` e notifica o usuário na barra de status: `AutoCAD | Módulo AutoPranche: Contexto exportado. Digite AUTOPRANCHA no AutoCAD.`
+7. **Evolução OXCAD 0.6.0 — Infraestrutura Central de Logs, Auditoria e Observabilidade**:
+   - **Auditoria de Diagnóstico**: Realizado levantamento completo prévio de mecanismos de diagnóstico (`print`, `logging`, `catch`, subprocessos).
+   - **Arquitetura de Logging Unificada**:
+     - Python: Criado `common/logging_config.py` com `JsonLinesFormatter`, `SafeRotatingFileHandler` e `OxCadLoggerAdapter`. Rotação de 5 MB e retenção de 5 arquivos.
+     - C# .NET: Criado `oxcad/OxCadLogger.cs` com formatação JSONL thread-safe sem dependências externas adicionais, gravando simultaneamente em `logs/application.jsonl` e `logs/errors.jsonl`.
+   - **Propagação de Correlação Fim-a-Fim**:
+     - Injeção de `correlation_id` a partir da UI/WorkspaceService em C#, propagada via `--correlation-id` para a CLI `workspace_context_cli.py`, chegando a `workspace_actions.py` e subprocessos gerados.
+   - **Rastreabilidade de Subprocessos e Transições**:
+     - Subprocessos operacionais (CQT, Orçamento, CPFC, Ambiental, AutoPrancha, Preparar SOB) registram início, PID (`subproc_pid`), comando sanitizado e conclusão.
+     - Transições de tempo (`tempo.iniciado`, `tempo.pausado`, `tempo.concluido`, `tempo.reaberto`, `tempo.interrompido`) registradas em nível `INFO`. Heartbeat isolado em nível `DEBUG`.
+   - **Segurança e Sanitização**:
+     - Sanitização ativa em C# e Python contra vazamento de senhas, tokens, cookies e credenciais sensíveis (`sanitizar_mensagem` / `Sanitize`).
+     - Proteção no `.gitignore` impedindo versionamento de `logs/`, `*.log` e `*.jsonl`.
+   - **Diagnóstico Operacional**:
+     - Novo comando AutoCAD `OXCAD_DIAGNOSTICO` expondo versão, processo, PID, diretório, arquivos de log ativos e contagem de eventos recentes.
+   - **Testes & Qualidade**:
+     - 14 testes unitários e de integração dedicados de logging (`tests/test_oxcad_logging.py`) aprovados (100% PASS).
+     - Suíte específica OXCAD: 78 testes aprovados (100% PASS).
+     - Suíte global de regressão: 549 testes aprovados, 4 skipped, 0 falhas, 0 erros.
+     - Compilação .NET Release (`net8.0-windows` e `net48`) com 0 erros.
+     - Modelos oficiais íntegros por SHA-256 (`cqt_modelo.xlsm`: `09224E...`, `prancha.dwg`: `13562C...`).
+   - **Veredito Oficial**: **HOMOLOGADO**.
 

@@ -47,3 +47,9 @@ unifilar/dispositivos_kmz_cache.json
 *.sqlite3-wal
 scratch/
 
+# Logs e Observabilidade Central
+logs/
+*.log
+*.jsonl
+
+

@@ -52,6 +52,11 @@ from workspace.workspace_time import (
     tratar_interrupcao_se_necessario,
     atualizar_heartbeat_tempo,
 )
+import time
+import uuid
+from common.logging_config import get_logger
+
+logger = get_logger("oxcad.workspace.cli")
 
 
 def _obter_metadados_locais(root_dir: Path, sob_id: str) -> Dict[str, str]:
@@ -142,11 +147,22 @@ def extrair_contexto_operacional(
     sob_id_esperada: Optional[str] = None,
     acad_pid: Optional[int] = None,
     acad_token: Optional[str] = None,
+    correlation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Extrai o contexto operacional completo conectando o DWG ou diretório
     ao ProjectWorkspace e WorkspaceScanner.
     """
+    t_inicio = time.perf_counter()
+    logger.info(
+        "Iniciando extração de contexto operacional",
+        extra={
+            "correlation_id": correlation_id,
+            "dwg_path": dwg_path,
+            "root_dir": root_dir,
+            "action": "consultar_contexto"
+        }
+    )
     # 1. Determinação de diretório e arquivo DWG
     p_dwg: Optional[Path] = None
     p_root: Optional[Path] = None
@@ -244,6 +260,19 @@ def extrair_contexto_operacional(
             "sessoes": [],
         }
 
+    duracao_ms = (time.perf_counter() - t_inicio) * 1000.0
+    logger.info(
+        f"Contexto operacional extraído com sucesso ({duracao_ms:.1f}ms)",
+        extra={
+            "correlation_id": correlation_id,
+            "sob_id": ws.sob_id if ws.sob_id else "-",
+            "dwg_path": dwg_exibido,
+            "duration_ms": duracao_ms,
+            "result": "sucesso",
+            "action": "consultar_contexto"
+        }
+    )
+
     return {
         "sob_id": ws.sob_id if ws.sob_id else "-",
         "root_dir": str(ws.root_dir),
@@ -256,6 +285,7 @@ def extrair_contexto_operacional(
         "inconsistencia": inconsistencia,
         "mensagem_inconsistencia": msg_inconsistencia,
         "tempo": tempo_dados,
+        "correlation_id": correlation_id,
         "erro": None,
     }
 
@@ -267,12 +297,25 @@ def executar_acao_operacional(
     alvo: Optional[str] = None,
     acad_pid: Optional[int] = None,
     acad_token: Optional[str] = None,
+    correlation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Executa uma ação do Workspace através do WorkspaceActionDispatcher existente.
     Retorna um dicionário estruturado com o resultado da execução.
     """
+    t_inicio = time.perf_counter()
     acao_limpa = (acao or "").strip().lower()
+
+    logger.info(
+        f"Recebida solicitação de ação: {acao_limpa}",
+        extra={
+            "correlation_id": correlation_id,
+            "action": acao_limpa,
+            "dwg_path": dwg_path,
+            "alvo": alvo,
+            "acad_pid": acad_pid
+        }
+    )
 
     # Resolve o contexto físico preliminar
     p_dwg = Path(dwg_path).resolve() if dwg_path else None
@@ -407,28 +450,31 @@ def executar_acao_operacional(
                 "estado": "Falhou",
                 "mensagem": f"Artefato não encontrado no disco: {alvo_path}",
                 "pid": None,
+                "correlation_id": correlation_id,
                 "erro": "Arquivo ou diretório inexistente.",
             }
-        ok = WorkspaceActionDispatcher.abrir_artefato(alvo_path)
+        ok = WorkspaceActionDispatcher.abrir_artefato(alvo_path, correlation_id=correlation_id)
         return {
             "sucesso": ok,
             "acao": acao_limpa,
             "estado": "Concluído" if ok else "Falhou",
             "mensagem": f"Artefato aberto no aplicativo padrão: {alvo_path.name}" if ok else "Falha ao abrir artefato.",
             "pid": None,
+            "correlation_id": correlation_id,
             "erro": None if ok else "Falha no despacho do sistema operacional.",
         }
 
     # Ação de localizar no Explorer
     if acao_limpa == "localizar":
         alvo_path = Path(alvo).resolve() if alvo else p_root
-        ok = WorkspaceActionDispatcher.localizar_artefato(alvo_path)
+        ok = WorkspaceActionDispatcher.localizar_artefato(alvo_path, correlation_id=correlation_id)
         return {
             "sucesso": ok,
             "acao": acao_limpa,
             "estado": "Concluído" if ok else "Falhou",
             "mensagem": f"Localizado no Explorer: {alvo_path.name}" if ok else "Falha ao abrir Explorer.",
             "pid": None,
+            "correlation_id": correlation_id,
             "erro": None if ok else "Falha no despacho do Explorer.",
         }
 
@@ -439,29 +485,32 @@ def executar_acao_operacional(
         proc: Optional[Any] = None
 
         if acao_limpa == "cqt":
-            proc = WorkspaceActionDispatcher.executar_cqt(ws)
+            proc = WorkspaceActionDispatcher.executar_cqt(ws, correlation_id=correlation_id)
             nome_modulo = "CQT (Queda de Tensão BT)"
         elif acao_limpa == "orcamento":
-            proc = WorkspaceActionDispatcher.executar_orcamento(ws)
+            proc = WorkspaceActionDispatcher.executar_orcamento(ws, correlation_id=correlation_id)
             nome_modulo = "Orçamento de Materiais"
         elif acao_limpa == "cpfc":
-            proc = WorkspaceActionDispatcher.executar_cpfc(ws)
+            proc = WorkspaceActionDispatcher.executar_cpfc(ws, correlation_id=correlation_id)
             nome_modulo = "Participação Financeira (CPFC)"
         elif acao_limpa == "ambiental":
-            proc = WorkspaceActionDispatcher.executar_ambiental(ws)
+            proc = WorkspaceActionDispatcher.executar_ambiental(ws, correlation_id=correlation_id)
             nome_modulo = "Memorial e Checklist Ambiental"
         elif acao_limpa == "prancha":
-            proc = WorkspaceActionDispatcher.executar_prancha(ws)
+            proc = WorkspaceActionDispatcher.executar_prancha(ws, correlation_id=correlation_id)
+            duracao_ms = (time.perf_counter() - t_inicio) * 1000.0
             return {
                 "sucesso": True,
                 "acao": "prancha",
                 "estado": "AutoCAD",
                 "mensagem": "Módulo AutoPranche: Contexto exportado. Digite AUTOPRANCHA no AutoCAD.",
                 "pid": proc.pid if proc else None,
+                "correlation_id": correlation_id,
+                "duration_ms": round(duracao_ms, 2),
                 "erro": None,
             }
         elif acao_limpa == "sob":
-            proc = WorkspaceActionDispatcher.executar_sob(ws)
+            proc = WorkspaceActionDispatcher.executar_sob(ws, correlation_id=correlation_id)
             nome_modulo = "Preparador de SOB"
         else:
             return {
@@ -470,26 +519,53 @@ def executar_acao_operacional(
                 "estado": "Requer especificação",
                 "mensagem": f"Ação '{acao}' não homologada ou requer especificação adicional.",
                 "pid": None,
+                "correlation_id": correlation_id,
                 "erro": "Ação desconhecida.",
             }
 
         pid = proc.pid if proc else None
+        duracao_ms = (time.perf_counter() - t_inicio) * 1000.0
+        logger.info(
+            f"Ação {acao_limpa} concluída com sucesso ({duracao_ms:.1f}ms)",
+            extra={
+                "correlation_id": correlation_id,
+                "action": acao_limpa,
+                "duration_ms": duracao_ms,
+                "process_id": pid,
+                "result": "sucesso"
+            }
+        )
         return {
             "sucesso": True,
             "acao": acao_limpa,
             "estado": "Executando...",
             "mensagem": f"Módulo {nome_modulo} iniciado com sucesso.",
             "pid": pid,
+            "correlation_id": correlation_id,
+            "duration_ms": round(duracao_ms, 2),
             "erro": None,
         }
 
     except Exception as ex:
+        duracao_ms = (time.perf_counter() - t_inicio) * 1000.0
+        logger.error(
+            f"Erro ao disparar ação {acao_limpa} ({duracao_ms:.1f}ms): {ex}",
+            exc_info=True,
+            extra={
+                "correlation_id": correlation_id,
+                "action": acao_limpa,
+                "duration_ms": duracao_ms,
+                "result": "falha"
+            }
+        )
         return {
             "sucesso": False,
             "acao": acao_limpa,
             "estado": "Falhou",
             "mensagem": f"Erro ao disparar ação {acao_limpa}: {ex}",
             "pid": None,
+            "correlation_id": correlation_id,
+            "duration_ms": round(duracao_ms, 2),
             "erro": str(ex),
         }
 
@@ -503,8 +579,10 @@ def main():
     parser.add_argument("--alvo", type=str, help="Caminho do artefato alvo para ações como abrir ou localizar")
     parser.add_argument("--acad-pid", type=int, help="Identificador de processo (PID) do AutoCAD chamador")
     parser.add_argument("--acad-token", type=str, help="Token/SessionId identificador único do AutoCAD chamador")
+    parser.add_argument("--correlation-id", type=str, default=None, help="Identificador único de correlação da operação")
 
     args = parser.parse_args()
+    correlation_id = args.correlation_id or uuid.uuid4().hex
 
     try:
         # Se uma ação foi solicitada, executa o despacho
@@ -516,6 +594,7 @@ def main():
                 alvo=args.alvo,
                 acad_pid=args.acad_pid,
                 acad_token=args.acad_token,
+                correlation_id=correlation_id,
             )
             print(json.dumps(resultado, indent=2, ensure_ascii=False))
             sys.exit(0 if resultado["sucesso"] else 1)
@@ -527,11 +606,13 @@ def main():
             sob_id_esperada=args.sob,
             acad_pid=args.acad_pid,
             acad_token=args.acad_token,
+            correlation_id=correlation_id,
         )
         # Saída JSON estrita na stdout com utf-8
         print(json.dumps(resultado, indent=2, ensure_ascii=False))
         sys.exit(0)
     except Exception as ex:
+        logger.error(f"Erro fatal na execução CLI: {ex}", exc_info=True, extra={"correlation_id": correlation_id})
         erro_json = {
             "sob_id": "-",
             "root_dir": args.dir or "-",
@@ -543,6 +624,7 @@ def main():
             "status": "Erro na execução CLI",
             "inconsistencia": False,
             "mensagem_inconsistencia": "",
+            "correlation_id": correlation_id,
             "erro": str(ex),
         }
         print(json.dumps(erro_json, indent=2, ensure_ascii=False))

@@ -372,8 +372,11 @@ namespace OxCad
         /// <summary>
         /// Executa a consulta de contexto de forma assíncrona, desacoplada e segura.
         /// </summary>
-        public static async Task<OxCadWorkspaceContext> ConsultarContextoAsync(string? dwgFullPath)
+        public static async Task<OxCadWorkspaceContext> ConsultarContextoAsync(string? dwgFullPath, string? correlationId = null)
         {
+            correlationId ??= Guid.NewGuid().ToString("N");
+            var sw = Stopwatch.StartNew();
+
             return await Task.Run(() =>
             {
                 var contexto = new OxCadWorkspaceContext();
@@ -387,6 +390,13 @@ namespace OxCad
                         return contexto;
                     }
 
+                    OxCadLogger.LogInfo(
+                        $"Iniciando consulta de contexto para DWG: {Path.GetFileName(dwgFullPath)}",
+                        correlationId: correlationId,
+                        dwgPath: dwgFullPath,
+                        action: "consultar_contexto"
+                    );
+
                     string rootDir = ObterDiretorioRaizProjeto(dwgFullPath);
                     string scriptPath = Path.Combine(rootDir, "workspace", "workspace_context_cli.py");
 
@@ -394,6 +404,12 @@ namespace OxCad
                     {
                         contexto.Status = "Script de contexto não localizado.";
                         contexto.Erro = $"Arquivo não encontrado: {scriptPath}";
+                        OxCadLogger.LogError(
+                            $"Script de contexto não localizado: {scriptPath}",
+                            correlationId: correlationId,
+                            dwgPath: dwgFullPath,
+                            action: "consultar_contexto"
+                        );
                         return contexto;
                     }
 
@@ -405,7 +421,7 @@ namespace OxCad
                     var psi = new ProcessStartInfo
                     {
                         FileName = pythonExe,
-                        Arguments = $"\"{scriptPath}\" --dwg \"{dwgFullPath}\" --acad-pid {currentPid} --acad-token \"{sessionToken}\"",
+                        Arguments = $"\"{scriptPath}\" --dwg \"{dwgFullPath}\" --acad-pid {currentPid} --acad-token \"{sessionToken}\" --correlation-id \"{correlationId}\"",
                         WorkingDirectory = rootDir,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
@@ -429,8 +445,16 @@ namespace OxCad
                         }
                         catch (System.ComponentModel.Win32Exception winEx)
                         {
+                            sw.Stop();
                             contexto.Status = "Python não encontrado no sistema.";
                             contexto.Erro = $"Não foi possível iniciar o executável '{pythonExe}'. Configure a variável de ambiente PYTHON_EXECUTABLE. Detalhes: {winEx.Message}";
+                            OxCadLogger.LogError(
+                                $"Falha ao iniciar executável Python '{pythonExe}' ({sw.Elapsed.TotalMilliseconds:F1}ms)",
+                                winEx,
+                                correlationId: correlationId,
+                                dwgPath: dwgFullPath,
+                                action: "consultar_contexto"
+                            );
                             return contexto;
                         }
 
@@ -442,10 +466,20 @@ namespace OxCad
                         if (!finished)
                         {
                             EncerrarProcessoETodosOsFilhos(proc);
+                            sw.Stop();
                             contexto.Status = "Tempo limite excedido.";
                             contexto.Erro = "A consulta ao Workspace demorou mais que o esperado.";
+                            OxCadLogger.LogError(
+                                $"Timeout na consulta de contexto ({sw.Elapsed.TotalMilliseconds:F1}ms)",
+                                correlationId: correlationId,
+                                dwgPath: dwgFullPath,
+                                action: "consultar_contexto"
+                            );
                             return contexto;
                         }
+
+                        sw.Stop();
+                        double durationMs = sw.Elapsed.TotalMilliseconds;
 
                         string saidaBruta = outputBuilder.ToString();
                         string saidaLimpa = ExtrairJsonValido(saidaBruta);
@@ -455,6 +489,12 @@ namespace OxCad
                         {
                             contexto.Status = "Falha no processo Python.";
                             contexto.Erro = string.IsNullOrWhiteSpace(erros) ? $"Exit Code {proc.ExitCode}" : erros;
+                            OxCadLogger.LogError(
+                                $"Processo Python encerrou com exit code {proc.ExitCode} ({durationMs:F1}ms): {contexto.Erro}",
+                                correlationId: correlationId,
+                                dwgPath: dwgFullPath,
+                                action: "consultar_contexto"
+                            );
                             return contexto;
                         }
 
@@ -469,6 +509,15 @@ namespace OxCad
                             var resultado = JsonSerializer.Deserialize<OxCadWorkspaceContext>(saidaLimpa, options);
                             if (resultado != null)
                             {
+                                OxCadLogger.LogInfo(
+                                    $"Consulta de contexto concluída com sucesso ({durationMs:F1}ms)",
+                                    correlationId: correlationId,
+                                    sobId: resultado.SobId,
+                                    dwgPath: dwgFullPath,
+                                    action: "consultar_contexto",
+                                    durationMs: durationMs,
+                                    result: "sucesso"
+                                );
                                 return resultado;
                             }
                         }
@@ -476,6 +525,13 @@ namespace OxCad
                         {
                             contexto.Status = "Resposta JSON inválida.";
                             contexto.Erro = $"Falha ao interpretar JSON: {exJson.Message}. Saída recebida: {saidaBruta}";
+                            OxCadLogger.LogError(
+                                $"Falha ao interpretar JSON de contexto ({durationMs:F1}ms)",
+                                exJson,
+                                correlationId: correlationId,
+                                dwgPath: dwgFullPath,
+                                action: "consultar_contexto"
+                            );
                             return contexto;
                         }
 
@@ -485,8 +541,16 @@ namespace OxCad
                 }
                 catch (Exception ex)
                 {
+                    sw.Stop();
                     contexto.Status = "Exceção ao consultar Workspace.";
                     contexto.Erro = ex.Message;
+                    OxCadLogger.LogError(
+                        $"Exceção não tratada na consulta de contexto ({sw.Elapsed.TotalMilliseconds:F1}ms)",
+                        ex,
+                        correlationId: correlationId,
+                        dwgPath: dwgFullPath,
+                        action: "consultar_contexto"
+                    );
                 }
 
                 return contexto;
@@ -496,27 +560,46 @@ namespace OxCad
         /// <summary>
         /// Executa uma ação de engenharia de forma assíncrona através do WorkspaceActionDispatcher.
         /// </summary>
-        public static async Task<OxCadActionResult> ExecutarAcaoAsync(string acao, string? dwgFullPath, string? alvo = null)
+        public static async Task<OxCadActionResult> ExecutarAcaoAsync(string acao, string? dwgFullPath, string? alvo = null, string? correlationId = null)
         {
+            correlationId ??= Guid.NewGuid().ToString("N");
+            var sw = Stopwatch.StartNew();
+
             return await Task.Run(() =>
             {
                 var resultado = new OxCadActionResult
                 {
                     Acao = acao,
-                    Estado = "Executando..."
+                    Estado = "Executando...",
+                    CorrelationId = correlationId
                 };
 
                 try
                 {
+                    OxCadLogger.LogInfo(
+                        $"Iniciando ação '{acao}' (alvo: {(string.IsNullOrWhiteSpace(alvo) ? "-" : Path.GetFileName(alvo))})",
+                        correlationId: correlationId,
+                        dwgPath: dwgFullPath,
+                        action: acao
+                    );
+
                     string rootDir = ObterDiretorioRaizProjeto(dwgFullPath);
                     string scriptPath = Path.Combine(rootDir, "workspace", "workspace_context_cli.py");
 
                     if (!File.Exists(scriptPath))
                     {
+                        sw.Stop();
                         resultado.Sucesso = false;
                         resultado.Estado = "Falhou";
                         resultado.Mensagem = "Script do Workspace não encontrado.";
                         resultado.Erro = $"Arquivo não encontrado: {scriptPath}";
+                        resultado.DurationMs = sw.Elapsed.TotalMilliseconds;
+                        OxCadLogger.LogError(
+                            $"Script do Workspace não encontrado: {scriptPath}",
+                            correlationId: correlationId,
+                            dwgPath: dwgFullPath,
+                            action: acao
+                        );
                         return resultado;
                     }
 
@@ -538,7 +621,7 @@ namespace OxCad
 
                     int currentPid = Process.GetCurrentProcess().Id;
                     string sessionToken = InstanciaSessionToken;
-                    argsBuilder.Append($" --acad-pid {currentPid} --acad-token \"{sessionToken}\"");
+                    argsBuilder.Append($" --acad-pid {currentPid} --acad-token \"{sessionToken}\" --correlation-id \"{correlationId}\"");
 
                     var psi = new ProcessStartInfo
                     {
@@ -567,10 +650,19 @@ namespace OxCad
                         }
                         catch (System.ComponentModel.Win32Exception winEx)
                         {
+                            sw.Stop();
                             resultado.Sucesso = false;
                             resultado.Estado = "Falhou";
                             resultado.Mensagem = "Python não encontrado no sistema.";
                             resultado.Erro = $"Não foi possível iniciar o executável '{pythonExe}': {winEx.Message}";
+                            resultado.DurationMs = sw.Elapsed.TotalMilliseconds;
+                            OxCadLogger.LogError(
+                                $"Falha ao iniciar executável Python '{pythonExe}' na ação '{acao}' ({sw.Elapsed.TotalMilliseconds:F1}ms)",
+                                winEx,
+                                correlationId: correlationId,
+                                dwgPath: dwgFullPath,
+                                action: acao
+                            );
                             return resultado;
                         }
 
@@ -582,12 +674,24 @@ namespace OxCad
                         if (!finished)
                         {
                             EncerrarProcessoETodosOsFilhos(proc);
+                            sw.Stop();
                             resultado.Sucesso = false;
                             resultado.Estado = "Falhou";
                             resultado.Mensagem = "Tempo limite excedido na execução da ação.";
                             resultado.Erro = "Timeout";
+                            resultado.DurationMs = sw.Elapsed.TotalMilliseconds;
+                            OxCadLogger.LogError(
+                                $"Timeout na ação '{acao}' ({sw.Elapsed.TotalMilliseconds:F1}ms)",
+                                correlationId: correlationId,
+                                dwgPath: dwgFullPath,
+                                action: acao
+                            );
                             return resultado;
                         }
+
+                        sw.Stop();
+                        double durationMs = sw.Elapsed.TotalMilliseconds;
+                        resultado.DurationMs = durationMs;
 
                         string saidaBruta = outputBuilder.ToString();
                         string saidaLimpa = ExtrairJsonValido(saidaBruta);
@@ -605,12 +709,39 @@ namespace OxCad
                                 var resDeserializado = JsonSerializer.Deserialize<OxCadActionResult>(saidaLimpa, options);
                                 if (resDeserializado != null)
                                 {
+                                    resDeserializado.CorrelationId = correlationId;
+                                    resDeserializado.DurationMs = durationMs;
+                                    if (resDeserializado.Sucesso)
+                                    {
+                                        OxCadLogger.LogInfo(
+                                            $"Ação '{acao}' executada com sucesso ({durationMs:F1}ms)",
+                                            correlationId: correlationId,
+                                            dwgPath: dwgFullPath,
+                                            action: acao,
+                                            durationMs: durationMs,
+                                            result: "sucesso"
+                                        );
+                                    }
+                                    else
+                                    {
+                                        OxCadLogger.LogError(
+                                            $"Ação '{acao}' retornou insucesso ({durationMs:F1}ms): {resDeserializado.Mensagem}",
+                                            correlationId: correlationId,
+                                            dwgPath: dwgFullPath,
+                                            action: acao
+                                        );
+                                    }
                                     return resDeserializado;
                                 }
                             }
-                            catch
+                            catch (Exception exJson)
                             {
-                                // Fallback caso não seja JSON
+                                OxCadLogger.LogWarning(
+                                    $"Aviso: Resposta da ação '{acao}' não era JSON válido: {exJson.Message}",
+                                    correlationId: correlationId,
+                                    dwgPath: dwgFullPath,
+                                    action: acao
+                                );
                             }
                         }
 
@@ -620,15 +751,41 @@ namespace OxCad
                         if (proc.ExitCode != 0)
                         {
                             resultado.Erro = erros;
+                            OxCadLogger.LogError(
+                                $"Ação '{acao}' encerrou com exit code {proc.ExitCode} ({durationMs:F1}ms): {resultado.Mensagem}",
+                                correlationId: correlationId,
+                                dwgPath: dwgFullPath,
+                                action: acao
+                            );
+                        }
+                        else
+                        {
+                            OxCadLogger.LogInfo(
+                                $"Ação '{acao}' finalizada com sucesso ({durationMs:F1}ms)",
+                                correlationId: correlationId,
+                                dwgPath: dwgFullPath,
+                                action: acao,
+                                durationMs: durationMs,
+                                result: "sucesso"
+                            );
                         }
                     }
                 }
                 catch (Exception ex)
                 {
+                    sw.Stop();
                     resultado.Sucesso = false;
                     resultado.Estado = "Falhou";
                     resultado.Mensagem = $"Exceção ao disparar ação: {ex.Message}";
                     resultado.Erro = ex.Message;
+                    resultado.DurationMs = sw.Elapsed.TotalMilliseconds;
+                    OxCadLogger.LogError(
+                        $"Exceção não tratada ao disparar ação '{acao}' ({sw.Elapsed.TotalMilliseconds:F1}ms)",
+                        ex,
+                        correlationId: correlationId,
+                        dwgPath: dwgFullPath,
+                        action: acao
+                    );
                 }
 
                 return resultado;
@@ -638,10 +795,10 @@ namespace OxCad
         /// <summary>
         /// Envia um comando de controle de tempo para o backend Python (iniciar, pausar, retomar, concluir, reabrir).
         /// </summary>
-        public static async Task<OxCadActionResult> ControlarTempoAsync(string acaoTempo, string? dwgFullPath)
+        public static async Task<OxCadActionResult> ControlarTempoAsync(string acaoTempo, string? dwgFullPath, string? correlationId = null)
         {
             string acaoNormalizada = acaoTempo.StartsWith("tempo_") ? acaoTempo : $"tempo_{acaoTempo}";
-            return await ExecutarAcaoAsync(acaoNormalizada, dwgFullPath);
+            return await ExecutarAcaoAsync(acaoNormalizada, dwgFullPath, correlationId: correlationId);
         }
     }
 
@@ -667,6 +824,12 @@ namespace OxCad
 
         [JsonPropertyName("erro")]
         public string? Erro { get; set; }
+
+        [JsonPropertyName("correlation_id")]
+        public string? CorrelationId { get; set; }
+
+        [JsonPropertyName("duration_ms")]
+        public double? DurationMs { get; set; }
     }
 }
 

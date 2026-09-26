@@ -329,7 +329,7 @@
         </StackPanel>
 
         <!-- FOOTER -->
-        <TextBlock Grid.Row="5" Text="OXCAD 0.5.3 • AUX CAD" 
+        <TextBlock Grid.Row="5" Text="OXCAD 0.6.0 • AUX CAD" 
                    FontSize="10" Foreground="#5C5C70" 
                    HorizontalAlignment="Center" Margin="0,8,0,0"/>
     </Grid>
