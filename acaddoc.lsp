@@ -79,6 +79,7 @@
 (add-support-path (strcat *aux-cad-root* "mapa_cad_paleta"))
 (add-support-path (strcat *aux-cad-root* "prancha"))
 (add-support-path (strcat *aux-cad-root* "sob"))
+(add-support-path (strcat *aux-cad-root* "oxcad"))
 
 (defun load-aux-safe (subpath / fullpath res)
   (setq fullpath (strcat *aux-cad-root* subpath))
@@ -151,6 +152,9 @@
 
 ;; 13. Módulo Preparação de Projeto SOB (Pastas, SharePoint, Base DWG)
 (load-aux-safe "sob\\sob_cad_launcher.lsp")
+
+;; 14. Módulo Paleta OXCAD C# (.NET) - Controle de Tempo e Contexto Operacional
+(load-aux-safe "oxcad\\oxcad_loader.lsp")
 
 
 ;; =============================================================================

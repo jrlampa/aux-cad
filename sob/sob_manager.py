@@ -470,7 +470,7 @@ class SobOrchestrator:
                 if not client:
                     login, senha = obter_credenciais_sharepoint()
                     self.logger.adicionar_segredo(senha)
-                    client = SharePointClient(login=login, senha=senha, headless=True)
+                    client = SharePointClient(login=login, senha=senha, headless=True, logger=self.logger)
 
                 # ETAPA A11 & A12: Credenciais e Autenticação
                 checklist["Credenciais SharePoint validadas"] = True
@@ -771,6 +771,19 @@ class SobOrchestrator:
                         "timestamp_conclusao": datetime.now(timezone.utc).isoformat(),
                     },
                 )
+
+                # Inicialização do controle operacional de tempo do OXCAD para a nova SOB (OXCAD 0.5.0)
+                try:
+                    from workspace.workspace_time import inicializar_tempo_projeto
+                    inicializar_tempo_projeto(
+                        root_dir=sob_root_path,
+                        sob_id=sob_id,
+                        dwg_path=str(dwg_copiado),
+                        iniciar_imediatamente=True,
+                    )
+                    self.logger.info("Apontamento operacional de tempo inicializado para a SOB")
+                except Exception as ex_tempo:
+                    self.logger.warning(f"Não foi possível inicializar apontamento de tempo: {ex_tempo}")
             else:
                 resultado["sucesso"] = False
                 resultado["status"] = "BLOQUEADO"

@@ -335,6 +335,15 @@ class MemorialGUI:
         self.root.minsize(960, 640)
         self.root.configure(bg="#F8FAFC")
 
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.attributes("-topmost", True)
+            self.root.after_idle(self.root.attributes, "-topmost", False)
+            self.root.focus_force()
+        except Exception:
+            pass
+
         style = ttk.Style()
         style.theme_use('clam')
         style.configure("TEntry", fieldbackground="#FFFFFF", foreground="#1E293B")

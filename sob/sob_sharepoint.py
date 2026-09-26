@@ -20,11 +20,14 @@ except ImportError:
     load_dotenv = None
 
 
-# URL Padrão do SharePoint da HBT Enel Rio (Pasta "Levantamentos de campo")
-SHAREPOINT_URL_PADRAO = (
+# URL Oficial da Pasta Prioritária "Levantamentos de campo" (HBT-EnelRJ-Sul)
+URL_LEVANTAMENTOS_CAMPO = (
     "https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/"
-    "IgALh51uFX0fRovCUeVsprYWAWYGyn7GwehC6BrYpg9KcFc?e=ltJeMr"
+    "IgALh51uFX0fRovCUeVsprYWAWYGyn7GwehC6BrYpg9KcFc?e=lqKnT7"
 )
+
+# URL Padrão do SharePoint da HBT Enel Rio
+SHAREPOINT_URL_PADRAO = URL_LEVANTAMENTOS_CAMPO
 
 
 class SobSharepointError(Exception):
@@ -182,14 +185,64 @@ class SharePointClient:
         url: Optional[str] = None,
         headless: bool = True,
         timeout: int = 30,
+        logger: Optional[Any] = None,
     ):
         self.login = login
         self.senha = senha
         self.url = url or obter_url_sharepoint()
         self.headless = headless
         self.timeout = timeout
+        self.logger = logger
         self.driver = None
         self._autenticado = False
+        self._eventos_telemetria: List[Dict[str, Any]] = []
+
+    def _log(self, mensagem: str):
+        """Emite mensagem de diagnóstico no logger configurado ou via print."""
+        if self.logger and hasattr(self.logger, "info"):
+            self.logger.info(mensagem)
+        else:
+            print(mensagem)
+
+    def _telemetria(self, evento: str, **kwargs):
+        """
+        Emite evento de telemetria estruturado e não intrusivo.
+
+        Garantias:
+        1. Formato padronizado e pesquisável: [TELEMETRIA] event=<evento> chave=valor ...
+        2. Segurança First: Sanitiza estritamente os campos, impedindo vazamento de credenciais.
+        3. Não-intrusivo: Qualquer falha interna na telemetria é silenciosamente ignorada.
+        4. Rastreabilidade: Mantém registro em self._eventos_telemetria para testes e inspeção.
+        """
+        try:
+            chaves_proibidas = {"senha", "token", "cookie", "credencial", "password", "secret", "key"}
+            payload = {"event": str(evento)}
+            segredos = [s for s in [self.login, self.senha] if s]
+
+            for k, v in kwargs.items():
+                k_clean = str(k).lower().strip()
+                if any(p in k_clean for p in chaves_proibidas):
+                    continue
+                v_str = str(v)
+                v_sanitizado = sanitizar_mensagem(v_str, segredos)
+                payload[k] = v_sanitizado
+
+            # Formata como string chave=valor consistente e pesquisável
+            partes = [f"{k}={v}" for k, v in payload.items()]
+            msg_formatada = f"[TELEMETRIA] {' '.join(partes)}"
+            self._log(msg_formatada)
+
+            if not hasattr(self, "_eventos_telemetria") or not isinstance(self._eventos_telemetria, list):
+                self._eventos_telemetria = []
+            self._eventos_telemetria.append(payload)
+        except Exception:
+            # Observabilidade pura: nunca interrompe o fluxo operacional
+            pass
+
+    @property
+    def eventos_telemetria(self) -> List[Dict[str, Any]]:
+        """Retorna uma cópia dos eventos de telemetria registrados."""
+        return list(getattr(self, "_eventos_telemetria", []))
 
     def _criar_driver(self, pasta_download: Optional[Path] = None):
         """Inicializa o WebDriver do Edge (ou fallback Chrome) configurado."""
@@ -348,14 +401,147 @@ class SharePointClient:
                 f"Erro durante a conexão com o SharePoint: {msg_sanitizada}"
             )
 
-    def localizar_pasta_sob(self, sob_codigo: str) -> Dict[str, Any]:
+    @staticmethod
+    def _item_eh_croqui_valido(nome_item: str, codigo_busca: str) -> bool:
         """
-        Localiza a pasta da SOB informada dentro da biblioteca documental do SharePoint.
-        
-        Regras:
-        - Não assumir cegamente um único diretório fixo.
-        - Se não encontrar: levanta SobNotFoundError("SOB NÃO ENCONTRADA NO SHAREPOINT.").
-        - Se encontrar múltiplos resultados ambíguos: levanta SobConflictError.
+        Verifica se um item retornado da listagem do SharePoint representa um croqui válido:
+        1. Nome deve conter o código da SOB (codigo_busca);
+        2. Não pode ser arquivo temporário ou do sistema;
+        3. Se possuir extensão de arquivo, deve pertencer às extensões aceitas pelo ecossistema SOB.
+        """
+        if not nome_item:
+            return False
+
+        nome_limpo = nome_item.strip()
+        nome_upper = nome_limpo.upper()
+
+        if codigo_busca not in nome_upper:
+            return False
+
+        # Rejeita arquivos temporários e do sistema
+        if nome_upper.startswith("~$") or nome_upper.startswith(".~") or "DESKTOP.INI" in nome_upper or "THUMBS.DB" in nome_upper:
+            return False
+        if any(nome_upper.endswith(ext) for ext in [".TMP", ".CRDOWNLOAD", ".PARTIAL", ".DOWNLOAD", ".LNK", ".URL"]):
+            return False
+
+        # Se tiver extensão de executáveis ou scripts inválidos
+        extensoes_invalidas = {".EXE", ".BAT", ".CMD", ".SH", ".PS1", ".VBS", ".JS", ".LOG", ".BAK"}
+        for ext_inv in extensoes_invalidas:
+            if nome_upper.endswith(ext_inv):
+                return False
+
+        # Se possui extensão de arquivo
+        if "." in nome_limpo:
+            partes = nome_limpo.rsplit(".", 1)
+            ext = "." + partes[1].lower()
+            extensoes_permitidas = (
+                ".dwg", ".pdf", ".zip", ".xlsx", ".xlsm",
+                ".kmz", ".kml", ".png", ".jpg", ".jpeg",
+                ".doc", ".docx",
+            )
+            return ext in extensoes_permitidas
+
+        # Sem extensão de arquivo representa pasta da SOB (ex: 'SOB_A057349839')
+        return True
+
+    def buscar_em_levantamentos_campo(self, sob_codigo: str) -> Optional[Dict[str, Any]]:
+        """
+        Busca prioritária na pasta oficial 'Levantamentos de campo' (HBT-EnelRJ-Sul).
+        Retorna o dicionário de informações do item se localizado e válido,
+        ou None se não encontrar ou se os itens não forem válidos.
+        Levanta SobConflictError se houver múltiplas correspondências ambíguas.
+        """
+        if not self._autenticado:
+            self.autenticar()
+
+        from selenium.webdriver.common.by import By
+
+        codigo_limpo = sob_codigo.strip().upper()
+        if codigo_limpo.startswith("SOB_"):
+            codigo_busca = codigo_limpo[4:]
+        else:
+            codigo_busca = codigo_limpo
+
+        target_url = URL_LEVANTAMENTOS_CAMPO
+
+        try:
+            if self.driver:
+                curr = self.driver.current_url
+                if "IgALh51uFX0fRovCUeVsprYWAWYGyn7GwehC6BrYpg9KcFc" not in curr:
+                    self.driver.get(target_url)
+                    time.sleep(4)
+
+            itens_encontrados = []
+            seletor_linhas = "[role='row'], [data-automationid='DetailsRow'], tr[role='row'], div.ms-DetailsRow"
+            linhas = self.driver.find_elements(By.CSS_SELECTOR, seletor_linhas) if self.driver else []
+
+            for linha in linhas:
+                txt = linha.text
+                nome = txt.split("\n")[0].strip()
+                if self._item_eh_croqui_valido(nome, codigo_busca):
+                    itens_encontrados.append({
+                        "texto": txt,
+                        "elemento": linha,
+                        "sob": codigo_busca,
+                        "origem": "LEVANTAMENTOS_DE_CAMPO",
+                    })
+
+            # Tenta em links diretos de nomes de arquivos/pastas
+            if not itens_encontrados and self.driver:
+                links = self.driver.find_elements(
+                    By.CSS_SELECTOR,
+                    "button[data-automationid='FieldRenderer-name'], a[data-automationid='FieldRenderer-name'], [role='gridcell']"
+                )
+                for lk in links:
+                    txt = lk.text
+                    nome = txt.split("\n")[0].strip()
+                    if self._item_eh_croqui_valido(nome, codigo_busca):
+                        itens_encontrados.append({
+                            "texto": txt,
+                            "elemento": lk,
+                            "sob": codigo_busca,
+                            "origem": "LEVANTAMENTOS_DE_CAMPO",
+                        })
+
+            if not itens_encontrados:
+                return None
+
+            # Filtra resultados únicos
+            pastas_correspondentes = []
+            nomes_unicos = set()
+            for item in itens_encontrados:
+                nome = item["texto"].split("\n")[0].strip()
+                if nome not in nomes_unicos:
+                    nomes_unicos.add(nome)
+                    pastas_correspondentes.append(item)
+
+            if len(pastas_correspondentes) > 1:
+                try:
+                    from sob.sob_fallback_manual import gerar_url_busca_sharepoint
+                except ModuleNotFoundError:
+                    from sob_fallback_manual import gerar_url_busca_sharepoint
+
+                url_b = gerar_url_busca_sharepoint(codigo_busca, target_url)
+                raise SobConflictError(
+                    "[FALHA] Foram encontradas múltiplas correspondências ambíguas.",
+                    ocorrencias=pastas_correspondentes,
+                    url_busca=url_b,
+                )
+
+            return pastas_correspondentes[0]
+
+        except (SobConflictError, SobAuthenticationError):
+            raise
+        except Exception as e:
+            msg_sanitizada = sanitizar_mensagem(str(e), [self.login, self.senha])
+            self._log(f"[SHAREPOINT] Falha na busca em Levantamentos de campo: {msg_sanitizada}")
+            return None
+
+    def localizar_pasta_sob_existente(self, sob_codigo: str) -> Dict[str, Any]:
+        """
+        Mecanismo de pesquisa existente no SharePoint (fallback).
+        Realiza a busca no site/biblioteca documental atual e utiliza a caixa de pesquisa
+        caso o item não esteja imediatamente visível.
         """
         if not self._autenticado:
             self.autenticar()
@@ -369,12 +555,11 @@ class SharePointClient:
             codigo_busca = codigo_limpo
 
         try:
-            # Garante que a página do SharePoint / pasta de levantamentos esteja carregada
+            # Garante que a página do SharePoint esteja carregada
             if "sharepoint.com" not in self.driver.current_url:
                 self.driver.get(self.url)
                 time.sleep(4)
 
-            # Busca por elementos de pasta ou itens contendo o código da SOB
             itens_encontrados = []
             seletor_linhas = "[role='row'], [data-automationid='DetailsRow'], tr[role='row'], div.ms-DetailsRow"
             linhas = self.driver.find_elements(By.CSS_SELECTOR, seletor_linhas)
@@ -465,6 +650,121 @@ class SharePointClient:
         except Exception as e:
             msg_sanitizada = sanitizar_mensagem(str(e), [self.login, self.senha])
             raise SobSharepointError(f"Erro ao pesquisar SOB no SharePoint: {msg_sanitizada}")
+
+    def localizar_pasta_sob(self, sob_codigo: str) -> Dict[str, Any]:
+        """
+        Localiza a pasta da SOB informada dentro do SharePoint.
+        
+        Estratégia de Busca:
+        1. PRIMEIRA TENTATIVA (PRIORITÁRIA):
+           Busca na pasta oficial 'Levantamentos de campo' (HBT-EnelRJ-Sul).
+           Se encontrar croqui válido, retorna imediatamente.
+        2. FALLBACK (BUSCA EXISTENTE):
+           Caso não localize em 'Levantamentos de campo', executa o mecanismo
+           de pesquisa existente que já operava anteriormente no módulo SOB.
+        """
+        if not self._autenticado:
+            self.autenticar()
+
+        # 1. TENTATIVA PRIORITÁRIA: Levantamentos de campo
+        t0_prio = time.perf_counter()
+        self._telemetria("sharepoint.search.priority.start", sob_id=sob_codigo, origem="Levantamentos de campo")
+        try:
+            self._log('[SHAREPOINT] Buscando croqui em "Levantamentos de campo"...')
+            resultado_prio = self.buscar_em_levantamentos_campo(sob_codigo)
+            duracao_prio_ms = round((time.perf_counter() - t0_prio) * 1000, 2)
+            if resultado_prio:
+                self._log('[SHAREPOINT] Croqui localizado na busca prioritária.')
+                self._telemetria(
+                    "sharepoint.search.priority.result",
+                    sob_id=sob_codigo,
+                    origem="Levantamentos de campo",
+                    result="found",
+                    duracao_ms=duracao_prio_ms,
+                )
+                nome_croqui = resultado_prio.get("texto", "").split("\n")[0].strip() or resultado_prio.get("sob", sob_codigo)
+                self._telemetria(
+                    "sharepoint.croqui.found",
+                    sob_id=sob_codigo,
+                    origem="Levantamentos de campo",
+                    nome_arquivo=nome_croqui,
+                )
+                return resultado_prio
+
+            self._log('[SHAREPOINT] Nenhum croqui válido encontrado em "Levantamentos de campo".')
+            self._telemetria(
+                "sharepoint.search.priority.result",
+                sob_id=sob_codigo,
+                origem="Levantamentos de campo",
+                result="not_found",
+                duracao_ms=duracao_prio_ms,
+            )
+        except (SobConflictError, SobAuthenticationError) as e_prio_fatal:
+            duracao_prio_ms = round((time.perf_counter() - t0_prio) * 1000, 2)
+            self._telemetria(
+                "sharepoint.search.priority.result",
+                sob_id=sob_codigo,
+                origem="Levantamentos de campo",
+                result="error",
+                duracao_ms=duracao_prio_ms,
+                erro=type(e_prio_fatal).__name__,
+            )
+            raise
+        except Exception as e_prio:
+            duracao_prio_ms = round((time.perf_counter() - t0_prio) * 1000, 2)
+            self._telemetria(
+                "sharepoint.search.priority.result",
+                sob_id=sob_codigo,
+                origem="Levantamentos de campo",
+                result="error",
+                duracao_ms=duracao_prio_ms,
+                erro=type(e_prio).__name__,
+            )
+            self._log(f'[SHAREPOINT] Erro não-fatal na busca prioritária: {e_prio}. Executando mecanismo existente...')
+
+        # 2. FALLBACK: Mecanismo de pesquisa existente
+        t0_fallback = time.perf_counter()
+        self._telemetria("sharepoint.search.fallback.start", sob_id=sob_codigo, origem="busca_existente")
+        self._log('[SHAREPOINT] Executando mecanismo de pesquisa existente...')
+        try:
+            resultado_fb = self.localizar_pasta_sob_existente(sob_codigo)
+            duracao_fb_ms = round((time.perf_counter() - t0_fallback) * 1000, 2)
+            self._telemetria(
+                "sharepoint.search.fallback.result",
+                sob_id=sob_codigo,
+                origem="busca_existente",
+                result="found",
+                duracao_ms=duracao_fb_ms,
+            )
+            nome_croqui_fb = resultado_fb.get("texto", "").split("\n")[0].strip() or resultado_fb.get("sob", sob_codigo)
+            self._telemetria(
+                "sharepoint.croqui.found",
+                sob_id=sob_codigo,
+                origem="busca_existente",
+                nome_arquivo=nome_croqui_fb,
+            )
+            return resultado_fb
+        except SobNotFoundError:
+            duracao_fb_ms = round((time.perf_counter() - t0_fallback) * 1000, 2)
+            self._telemetria(
+                "sharepoint.search.fallback.result",
+                sob_id=sob_codigo,
+                origem="busca_existente",
+                result="not_found",
+                duracao_ms=duracao_fb_ms,
+            )
+            raise
+        except Exception as e_fb:
+            duracao_fb_ms = round((time.perf_counter() - t0_fallback) * 1000, 2)
+            self._telemetria(
+                "sharepoint.search.fallback.result",
+                sob_id=sob_codigo,
+                origem="busca_existente",
+                result="error",
+                duracao_ms=duracao_fb_ms,
+                erro=type(e_fb).__name__,
+            )
+            raise
 
     def validar_conteudo_disponivel(self, pasta_info: Dict[str, Any]) -> bool:
         """
@@ -603,86 +903,113 @@ class SharePointClient:
         Baixa a pasta inteira da SOB localizada para destino_croqui.
         Garante descompactação íntegra (caso baixada como ZIP) e ausência de arquivos temporários.
         """
-        if pasta_info.get("tipo") == "url_direta" or (pasta_info.get("url") and not pasta_info.get("elemento")):
-            return self.baixar_pasta_por_url(pasta_info.get("url"), destino_croqui)
+        sob_id = (pasta_info and pasta_info.get("sob")) or "DESCONHECIDO"
+        t0_download = time.perf_counter()
+        self._telemetria(
+            "sharepoint.download.start",
+            sob_id=sob_id,
+            destino=str(Path(destino_croqui).name),
+        )
 
-        from selenium.webdriver.common.by import By
-
-        destino_path = Path(destino_croqui).resolve()
-        destino_path.mkdir(parents=True, exist_ok=True)
-
-        # Habilita download via CDP para o destino configurado
         try:
-            self.driver.execute_cdp_cmd(
-                "Page.setDownloadBehavior",
-                {"behavior": "allow", "downloadPath": str(destino_path)}
-            )
-        except Exception:
-            pass
+            if pasta_info.get("tipo") == "url_direta" or (pasta_info.get("url") and not pasta_info.get("elemento")):
+                arquivos = self.baixar_pasta_por_url(pasta_info.get("url"), destino_croqui)
+            else:
+                from selenium.webdriver.common.by import By
 
-        elem = pasta_info.get("elemento")
-        if elem:
-            clicado = False
-            # 1. Tenta marcar o checkbox de seleção da linha da pasta
-            try:
-                chks = elem.find_elements(
-                    By.CSS_SELECTOR,
-                    "[role='checkbox'], [data-automationid='DetailsRowCheck'], .ms-Check"
-                )
-                if chks:
-                    self.driver.execute_script("arguments[0].click();", chks[0])
-                    time.sleep(1)
-                    # Clica no botão de Download na barra superior
-                    btns_top = self.driver.find_elements(
-                        By.CSS_SELECTOR,
-                        "button[name='Download'], button[name='Baixar'], [data-automationid='downloadCommand'], button[aria-label*='Baixar'], button[aria-label*='Download']"
-                    )
-                    for btn in btns_top:
-                        if btn.is_displayed():
-                            self.driver.execute_script("arguments[0].click();", btn)
-                            clicado = True
-                            break
-            except Exception:
-                pass
+                destino_path = Path(destino_croqui).resolve()
+                destino_path.mkdir(parents=True, exist_ok=True)
 
-            # 2. Se não clicou via checkbox e barra superior, tenta o menu de contexto (...) da pasta
-            if not clicado:
+                # Habilita download via CDP para o destino configurado
                 try:
-                    botoes = elem.find_elements(By.TAG_NAME, "button")
-                    for b in botoes:
-                        aria = (b.get_attribute("aria-label") or "").lower()
-                        if any(k in aria for k in ["mais", "ações", "actions", "..."]):
-                            self.driver.execute_script("arguments[0].click();", b)
-                            time.sleep(1.5)
-                            menu_items = self.driver.find_elements(By.CSS_SELECTOR, "[role='menuitem'], button")
-                            for mi in menu_items:
-                                txt = (mi.text or mi.get_attribute("name") or "").strip().lower()
-                                if "baixar" in txt or "download" in txt:
-                                    self.driver.execute_script("arguments[0].click();", mi)
+                    self.driver.execute_cdp_cmd(
+                        "Page.setDownloadBehavior",
+                        {"behavior": "allow", "downloadPath": str(destino_path)}
+                    )
+                except Exception:
+                    pass
+
+                elem = pasta_info.get("elemento")
+                if elem:
+                    clicado = False
+                    # 1. Tenta marcar o checkbox de seleção da linha da pasta
+                    try:
+                        chks = elem.find_elements(
+                            By.CSS_SELECTOR,
+                            "[role='checkbox'], [data-automationid='DetailsRowCheck'], .ms-Check"
+                        )
+                        if chks:
+                            self.driver.execute_script("arguments[0].click();", chks[0])
+                            time.sleep(1)
+                            # Clica no botão de Download na barra superior
+                            btns_top = self.driver.find_elements(
+                                By.CSS_SELECTOR,
+                                "button[name='Download'], button[name='Baixar'], [data-automationid='downloadCommand'], button[aria-label*='Baixar'], button[aria-label*='Download']"
+                            )
+                            for btn in btns_top:
+                                if btn.is_displayed():
+                                    self.driver.execute_script("arguments[0].click();", btn)
                                     clicado = True
                                     break
-                            if clicado:
-                                break
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
 
-            # 3. Fallback: clique no elemento e busca na barra de comandos
-            if not clicado:
-                try:
-                    elem.click()
-                    time.sleep(1)
-                    btns_top = self.driver.find_elements(
-                        By.CSS_SELECTOR,
-                        "button[name='Download'], button[name='Baixar'], [data-automationid='downloadCommand']"
-                    )
-                    for btn in btns_top:
-                        if btn.is_displayed():
-                            self.driver.execute_script("arguments[0].click();", btn)
-                            break
-                except Exception:
-                    pass
+                    # 2. Se não clicou via checkbox e barra superior, tenta o menu de contexto (...) da pasta
+                    if not clicado:
+                        try:
+                            botoes = elem.find_elements(By.TAG_NAME, "button")
+                            for b in botoes:
+                                aria = (b.get_attribute("aria-label") or "").lower()
+                                if any(k in aria for k in ["mais", "ações", "actions", "..."]):
+                                    self.driver.execute_script("arguments[0].click();", b)
+                                    time.sleep(1.5)
+                                    menu_items = self.driver.find_elements(By.CSS_SELECTOR, "[role='menuitem'], button")
+                                    for mi in menu_items:
+                                        txt = (mi.text or mi.get_attribute("name") or "").strip().lower()
+                                        if "baixar" in txt or "download" in txt:
+                                            self.driver.execute_script("arguments[0].click();", mi)
+                                            clicado = True
+                                            break
+                                    if clicado:
+                                        break
+                        except Exception:
+                            pass
 
-        return self._aguardar_e_processar_download(destino_path, timeout=45)
+                    # 3. Fallback: clique no elemento e busca na barra de comandos
+                    if not clicado:
+                        try:
+                            elem.click()
+                            time.sleep(1)
+                            btns_top = self.driver.find_elements(
+                                By.CSS_SELECTOR,
+                                "button[name='Download'], button[name='Baixar'], [data-automationid='downloadCommand']"
+                            )
+                            for btn in btns_top:
+                                if btn.is_displayed():
+                                    self.driver.execute_script("arguments[0].click();", btn)
+                                    break
+                        except Exception:
+                            pass
+
+                arquivos = self._aguardar_e_processar_download(destino_path, timeout=45)
+
+            duracao_dl_ms = round((time.perf_counter() - t0_download) * 1000, 2)
+            self._telemetria(
+                "sharepoint.download.success",
+                sob_id=sob_id,
+                total_arquivos=len(arquivos),
+                duracao_ms=duracao_dl_ms,
+            )
+            return arquivos
+        except Exception as e_dl:
+            duracao_dl_ms = round((time.perf_counter() - t0_download) * 1000, 2)
+            self._telemetria(
+                "sharepoint.download.error",
+                sob_id=sob_id,
+                duracao_ms=duracao_dl_ms,
+                erro=type(e_dl).__name__,
+            )
+            raise
 
     def validar_download(self, destino_croqui: Path) -> bool:
         """

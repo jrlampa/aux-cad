@@ -398,3 +398,176 @@ def test_baixar_croqui_delega_para_baixar_pasta_por_url(tmp_path: Path):
     assert len(res) == 1
 
 
+# =============================================================================
+# TESTES ESPECÍFICOS — BUSCA PRIORITÁRIA "Levantamentos de campo" & FALLBACK
+# =============================================================================
+
+def test_caso_1_encontrado_na_pasta_prioritaria_nao_executa_fallback():
+    """
+    Caso 1 — Encontrado na pasta prioritária:
+    SOB -> Levantamentos de campo -> croqui encontrado -> fallback NÃO executado.
+    """
+    client = SharePointClient(login="user", senha="pwd")
+    client._autenticado = True
+
+    resultado_mock_prio = {
+        "texto": "SOB_A057349839\nModificado recentemente",
+        "sob": "A057349839",
+        "origem": "LEVANTAMENTOS_DE_CAMPO",
+    }
+    client.buscar_em_levantamentos_campo = MagicMock(return_value=resultado_mock_prio)
+    client.localizar_pasta_sob_existente = MagicMock()
+
+    res = client.localizar_pasta_sob("A057349839")
+
+    assert res == resultado_mock_prio
+    client.buscar_em_levantamentos_campo.assert_called_once_with("A057349839")
+    client.localizar_pasta_sob_existente.assert_not_called()
+
+
+def test_caso_2_nao_encontrado_na_pasta_prioritaria_executa_fallback():
+    """
+    Caso 2 — Não encontrado na pasta prioritária:
+    SOB -> Levantamentos de campo -> zero resultados -> fallback executado.
+    """
+    client = SharePointClient(login="user", senha="pwd")
+    client._autenticado = True
+
+    resultado_mock_fallback = {
+        "texto": "SOB_A057349839\nEncontrado na busca geral",
+        "sob": "A057349839",
+        "origem": "BUSCA_GERAL_SHAREPOINT",
+    }
+    client.buscar_em_levantamentos_campo = MagicMock(return_value=None)
+    client.localizar_pasta_sob_existente = MagicMock(return_value=resultado_mock_fallback)
+
+    res = client.localizar_pasta_sob("A057349839")
+
+    assert res == resultado_mock_fallback
+    client.buscar_em_levantamentos_campo.assert_called_once_with("A057349839")
+    client.localizar_pasta_sob_existente.assert_called_once_with("A057349839")
+
+
+def test_caso_3_resultados_invalidos_na_pasta_prioritaria_executa_fallback():
+    """
+    Caso 3 — Resultados encontrados, mas inválidos:
+    Levantamentos de campo -> itens temporários ou com extensões impróprias ->
+    nenhum croqui válido -> fallback executado.
+    """
+    client = SharePointClient(login="user", senha="pwd")
+    client._autenticado = True
+
+    # Valida método interno _item_eh_croqui_valido
+    assert client._item_eh_croqui_valido("~$A057349839.dwg", "A057349839") is False
+    assert client._item_eh_croqui_valido("A057349839.tmp", "A057349839") is False
+    assert client._item_eh_croqui_valido("A057349839.exe", "A057349839") is False
+    assert client._item_eh_croqui_valido("A057349839.crdownload", "A057349839") is False
+    assert client._item_eh_croqui_valido("OUTRA_SOB_11111.dwg", "A057349839") is False
+    assert client._item_eh_croqui_valido("A057349839_croqui.dwg", "A057349839") is True
+    assert client._item_eh_croqui_valido("SOB_A057349839", "A057349839") is True
+
+    # Simula mock do driver retornando apenas arquivos inválidos
+    mock_driver = MagicMock()
+    mock_driver.current_url = "https://hbtengenharia1.sharepoint.com/..."
+    row_invalido = MagicMock()
+    row_invalido.text = "~$A057349839.dwg"
+    mock_driver.find_elements.return_value = [row_invalido]
+    client.driver = mock_driver
+
+    resultado_mock_fb = {"texto": "SOB_A057349839", "sob": "A057349839"}
+    client.localizar_pasta_sob_existente = MagicMock(return_value=resultado_mock_fb)
+
+    res = client.localizar_pasta_sob("A057349839")
+    assert res == resultado_mock_fb
+    client.localizar_pasta_sob_existente.assert_called_once_with("A057349839")
+
+
+def test_caso_4_multiplos_resultados_preserva_comportamento_conflito():
+    """
+    Caso 4 — Múltiplos resultados na busca prioritária:
+    Verificar que levanta SobConflictError com as ocorrências e preserva o comportamento.
+    """
+    client = SharePointClient(login="user", senha="pwd")
+    client._autenticado = True
+
+    mock_driver = MagicMock()
+    mock_driver.current_url = "https://hbtengenharia1.sharepoint.com/..."
+    row1 = MagicMock()
+    row1.text = "SOB_A057349839_SUBPASTA_A\nItem 1"
+    row2 = MagicMock()
+    row2.text = "SOB_A057349839_SUBPASTA_B\nItem 2"
+    mock_driver.find_elements.return_value = [row1, row2]
+    client.driver = mock_driver
+
+    with pytest.raises(SobConflictError) as exc_info:
+        client.localizar_pasta_sob("A057349839")
+
+    assert "[FALHA] Foram encontradas múltiplas correspondências ambíguas." in str(exc_info.value)
+    assert len(exc_info.value.ocorrencias) == 2
+
+
+def test_caso_5_erro_nao_fatal_na_busca_prioritaria_executa_fallback():
+    """
+    Caso 5 — Erro não fatal na busca prioritária:
+    Verificar que falha de rede/elemento em Levantamentos de campo não interrompe o processo,
+    acionando o fallback de forma segura.
+    """
+    client = SharePointClient(login="user", senha="pwd")
+    client._autenticado = True
+
+    client.buscar_em_levantamentos_campo = MagicMock(side_effect=RuntimeError("Timeout no elemento da pasta"))
+    resultado_mock_fb = {"texto": "SOB_A057349839", "sob": "A057349839"}
+    client.localizar_pasta_sob_existente = MagicMock(return_value=resultado_mock_fb)
+
+    res = client.localizar_pasta_sob("A057349839")
+    assert res == resultado_mock_fb
+    client.localizar_pasta_sob_existente.assert_called_once_with("A057349839")
+
+
+def test_caso_6_erro_autenticacao_nao_mascarado_como_nao_encontrado():
+    """
+    Caso 6 — Erro de autenticação/acesso:
+    Verificar que falha de autenticação NÃO é capturada nem mascarada como 'não encontrado'.
+    """
+    client = SharePointClient(login="user", senha="pwd")
+    client._autenticado = True
+
+    client.buscar_em_levantamentos_campo = MagicMock(
+        side_effect=SobAuthenticationError("[FALHA] Não foi possível autenticar no SharePoint.")
+    )
+    client.localizar_pasta_sob_existente = MagicMock()
+
+    with pytest.raises(SobAuthenticationError) as exc_info:
+        client.localizar_pasta_sob("A057349839")
+
+    assert "[FALHA] Não foi possível autenticar no SharePoint." in str(exc_info.value)
+    client.localizar_pasta_sob_existente.assert_not_called()
+
+
+@pytest.mark.parametrize("sob_input", [
+    "a057349839",
+    "A057349839",
+    " A057349839 ",
+    "SOB_a057349839",
+    "SOB_A057349839",
+])
+def test_caso_7_sob_normalizada(sob_input):
+    """
+    Caso 7 — SOB normalizada:
+    Verificar comportamento com variações de caixa, espaços e prefixos de SOB.
+    """
+    client = SharePointClient(login="user", senha="pwd")
+    client._autenticado = True
+
+    mock_driver = MagicMock()
+    mock_driver.current_url = "https://hbtengenharia1.sharepoint.com/..."
+    row = MagicMock()
+    row.text = "SOB_A057349839\nModificado há 1 dia"
+    mock_driver.find_elements.return_value = [row]
+    client.driver = mock_driver
+
+    res = client.localizar_pasta_sob(sob_input)
+    assert res["sob"] == "A057349839"
+    assert "SOB_A057349839" in res["texto"]
+
+

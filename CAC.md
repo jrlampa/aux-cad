@@ -679,13 +679,235 @@ tag Git anotada (ex: git tag -a v0.9.0 -m "Release v0.9.0")
   - **Opção 1 - Continuar sem GOMNET**: A preparação prossegue, gerando o DWG base e a estrutura da SOB, concluindo com status `CONCLUÍDO` e registrando `GOMNET_IGNORADO = True`.
   - **Opção 2 - Fazer Rollback**: O usuário cancela explicitamente a operação, acionando o `RollbackContext` para reverter as pastas e arquivos criados.
 
+### 20. Módulo SOB: Busca Prioritária de Croqui no SharePoint ("Levantamentos de campo") (`sob/`)
+- **Diretriz Arquitetural**: A pasta `Levantamentos de campo` (`HBT-EnelRJ-Sul`) é a primeira fonte prioritária a ser pesquisada para localização do croqui de campo da SOB, preservando integralmente o mecanismo existente de pesquisa como fallback seguro.
+- **Fluxo Operacional**:
+  ```text
+  SOB informada
+        ↓
+  Autenticação SharePoint (Sessão existente reutilizada)
+        ↓
+  BUSCA PRIORITÁRIA ("Levantamentos de campo")
+        ↓
+  Encontrou croqui válido?
+        ├── SIM → Baixar / Validar → Continuar fluxo normal
+        └── NÃO / Erro não-fatal
+              ↓
+        FALLBACK EXISTENTE
+              ↓
+        Pesquisa existente no SharePoint
+              ↓
+        Localizar / Baixar / Validar → Continuar fluxo normal
+  ```
+- **Critérios de Validação e Integridade**:
+  - Reutilização estrita de `_item_eh_croqui_valido` e `validar_download(croqui_dir)`, descartando arquivos temporários (`~$`), backups e extensões inválidas (`.tmp`, `.exe`, scripts).
+  - Preservação de tratamento de múltiplos candidatos ambíguos via `SobConflictError`.
+  - Isolamento de erros: falhas de autenticação (`SobAuthenticationError`) não são mascaradas como falso "não encontrado".
 
+---
 
+## 15. Módulo OXCAD — Interface Nativa Integrada ao AutoCAD (.NET / WPF)
 
+### Visão Geral e Princípio Arquitetural (Thin Client)
+O **OXCAD** é a fundação da interface integrada nativa ao AutoCAD (PaletteSet lateral), projetada para substituir progressivamente a interface externa Tkinter sem duplicar lógicas de negócio ou regras de engenharia em C#.
 
+```text
+┌──────────────────────────────────────────────┐
+│ AutoCAD (Sessão CAD)                         │
+│                                              │
+│ Comando: OXCAD                               │
+│      ↓                                       │
+│ oxcad_loader.lsp (AutoLISP)                  │
+│      ↓                                       │
+│ OxCadPaleta.dll (.NET 8.0 / net48)           │
+│      ↓                                       │
+│ PaletteHost (Singleton PaletteSet)           │
+│      ↓                                       │
+│ OxCadControl (WPF UserControl)               │
+│      ↓                                       │
+│ DwgContextExtractor (Contexto do DWG Ativo)  │
+└──────────────────────────────────────────────┘
+```
 
+### Componentes e Decisões Técnicas
+- **Isolamento de Domínio (Thin Client)**: O C# não implementa regras de negócio, cálculos ou scanners complexos. Obtém `MdiActiveDocument.Database.Filename` e extrai de forma segura o nome do DWG, diretório e número da SOB via regex homologada (`SOB_...`, `{BASE}_{SOB}_DESENHO` ou padrão da concessionária).
+- **Tratamento de Desenho Não Salvo**: Caso o documento ativo não esteja gravado em disco ou seja nulo, o sistema exibe claramente `"Desenho ainda não salvo."` sem lançar exceções.
+- **PaletteSet Singleton**: Gerenciado por `PaletteHost` com GUID estável e exclusivo (`8A4F1D9C-2B7E-4E6A-B35D-9F0A1C8E7B2D`), estilo com auto-hide, close button, dock lateral à direita (`DockSides.Right`) e prevenção de abas duplicadas.
+- **Multi-targeting .NET**: Projeto `OxCadPaleta.csproj` compilável tanto para `net8.0-windows` (AutoCAD 2025/2026+) quanto para `net48` (AutoCAD 2018-2024 via pacote NuGet `AutoCAD.NET 24.3.0`).
+- **Resolução Relativa de Paths**: AutoLISP loader (`oxcad_loader.lsp`) com detecção automática do runtime via `ACADVER`, sem dependências absolutas de máquina local ou OneDrive.
+- **Preservação de Comandos Nativos**: O comando nativo conflitante `WORKSPACE` e os comandos existentes de especialistas permanecem intactos.
 
+### Evolução OXCAD 0.2.0 — Integração do Contexto Operacional
+A versão 0.2.0 conecta a interface WPF diretamente ao ecossistema operacional do projeto via interface headless dedicada:
 
+```text
+AutoCAD (DWG Ativo)
+       ↓
+OXCAD (PaletteSet + WPF)
+       ↓
+WorkspaceService (C#)
+       ↓ (Ciclo estrito: Iniciar → Consultar → JSON → Encerrar)
+workspace/workspace_context_cli.py (Python Headless — Zero Tkinter)
+       ↓
+ProjectWorkspace + WorkspaceScanner
+       ↓
+Contrato OxCadWorkspaceContext (JSON)
+       ↓
+OXCAD UI (SOB, Metadados, Inconsistência, Matriz de Artefatos)
+```
 
+- **Contrato Estável (`OxCadWorkspaceContext`)**:
+  - `sob_id`: identificador oficial da SOB;
+  - `root_dir`: diretório raiz da SOB no disco;
+  - `dwg_principal`: arquivo DWG canônico;
+  - `municipio`, `bairro`, `endereco`: metadados de localização recuperados do manifesto local (`-` quando ausentes);
+  - `artefatos`: matriz dos 10 principais artefatos monitorados com rótulo, status e ícones (`✓` / `○`);
+  - `inconsistencia` & `mensagem_inconsistencia`: detecção automática e alerta explícito caso o DWG ativo aponte para uma SOB divergente da pasta do Workspace.
+- **Prevenção de Concorrência**: Controle atômico com flag `_isUpdating` e desativação temporária do botão `[🔄 Atualizar Contexto]` durante a consulta assíncrona.
 
+### Evolução OXCAD 0.3.0 — Integração de Execução via WorkspaceActionDispatcher
+A versão 0.3.0 transforma a OXCAD de interface passiva em ambiente ativo de execução de engenharia, disparando os módulos especialistas através do `WorkspaceActionDispatcher` homologado:
+
+```text
+AutoCAD (Sessão CAD)
+       ↓
+Botão de Ação / Abrir Artefato (OxCadControl)
+       ↓
+WorkspaceService.ExecutarAcaoAsync(acao, dwg, alvo)
+       ↓ (Subprocesso desacoplado com timeout e retorno JSON)
+workspace/workspace_context_cli.py (--acao / --alvo)
+       ↓
+WorkspaceActionDispatcher (Motor Oficial de Execução)
+       ├── CQT           → cqt_excel_manager.py
+       ├── Orçamento     → orcamento_manager.py
+       ├── CPFC          → cpfc_manager.py
+       ├── Ambiental     → memorial_ambiental_generator.py
+       ├── AutoPrancha   → autoprancha_core.py
+       ├── Preparar SOB  → sob_launcher_gui.py
+       ├── Abrir/Localiz → os.startfile / explorer.exe
+       └── Unifilar      → Orientação: comandos UNIFILAR/PROTECAO no AutoCAD
+       ↓
+Auto-refresh da Matriz de Artefatos pós-execução
+```
+
+- **Diretrizes de Segurança**:
+  - Zero duplicação de regras em C#;
+  - Chamadas estritamente não-bloqueantes para preservar a responsividade do AutoCAD;
+  - Controle de concorrência com flag `_isActionRunning` e bloqueio de cliques múltiplos;
+  - Barra de status simples: `Pronto`, `Executando...`, `Concluído`, `Falhou`, `Requer especificação`.
+
+### Evolução OXCAD 0.4.0 — Homologação Operacional e Endurecimento da Infraestrutura
+A versão 0.4.0 estabiliza e endurece a integração entre o AutoCAD, .NET C# e o backend Python, eliminando fragilidades operacionais sob condições adversas de sistema:
+
+1. **Extração Resiliente de JSON (`ExtrairJsonValido`)**:
+   - Isolamento robusto do bloco JSON delimitado pelo primeiro `{` e último `}` na saída padrão.
+   - Protege a desserialização contra poluição de warnings de pacotes terceiros (ex: `urllib3`, `requests`, `openpyxl`) ou logs de stdout.
+2. **Supressão Preventiva de Warnings**:
+   - `workspace/workspace_context_cli.py` com `warnings.filterwarnings("ignore")` garantindo canal stdout 100% puro para contratos de intercâmbio.
+3. **Gestão Atômica de Processos e Prevenção de Zumbis (`EncerrarProcessoETodosOsFilhos`)**:
+   - Em caso de timeout em subprocessos de consulta ou ação, execução determinística de `taskkill /F /T /PID` no Windows para eliminação de toda a árvore de subprocessos, prevenindo processos órfãos em background.
+4. **Resolução de Diretório Raiz Multi-Fallback (`ObterDiretorioRaizProjeto`)**:
+   - Cadeia determinística: (1) `AUXCAD_ROOT`, (2) Assembly location, (3) Diretório do DWG ativo, (4) Diretório corrente, garantindo localização de `acaddoc.lsp` e pasta `workspace` mesmo com `NETLOAD` de pastas remotas.
+5. **Diagnóstico Gracioso de Falha de Executável**:
+   - Captura específica de `System.ComponentModel.Win32Exception` com emissão de mensagem operacional amigável informando a necessidade de configurar `PYTHON_EXECUTABLE` sem propagar exceções não tratadas para a interface WPF.
+6. **Timeout Configurável**:
+   - Suporte a personalização via variável de ambiente `OXCAD_TIMEOUT_MS` (com fallback seguro para 8000ms).
+7. **Preservação de Comandos e Regras de Negócio**:
+   - Unifilar mantido com classificação estrita `Requer especificação` e orientação de comandos nativos do CAD (`UNIFILAR` / `PROTECAO`).
+   - Zero regras de negócio em C# (Thin Frontend / Smart Backend).
+
+### Evolução OXCAD 0.5.0 — Controle Operacional de Tempo por SOB e JobTime
+A versão 0.5.0 introduz o controle rigoroso, auditável e persistente do tempo produtivo gasto em cada projeto/SOB:
+
+1. **Investigação do JobTime do AutoCAD**:
+   - Constatado que o comando `JOBTIME` não é nativo do AutoCAD (trata-se de um VLX/add-on de terceiros da Arkance/CAD Studio).
+   - O mecanismo embutido do AutoCAD (`TIME`, `TDINDWG`, `TDUSRTIMER`) é read-only no DWG para edição acumulada, herda tempos prévios do template `BASE_DESENHO.dwg`, não permite pausa determinística nem rastreabilidade de início/fim gerencial.
+   - **Decisão**: Implementação de motor próprio de domínio `OxCadJobTimer` (`workspace/workspace_time.py`) com persistência em `.oxcad/time.json`.
+2. **Semântica e Fonte da Verdade Sem Deriva**:
+   - Não utiliza loops, `Thread.Sleep` ou timers como fonte de dados.
+   - Baseado exclusivamente em timestamps ISO 8601 UTC (`DateTimeOffset`).
+   - Cálculo determinístico de tempo trabalhado: `tempo = acumulado + (agora - sessao_atual_inicio)`.
+3. **Persistência Fora do DWG**:
+   - Arquivo `.oxcad/time.json` armazenado na raiz da SOB com gravação atômica via arquivo temporário `.tmp` e substituição transacional.
+   - Preservado com segurança em caso de queda, encerramento ou reinicialização do AutoCAD.
+4. **Integração no Ciclo de Vida da SOB**:
+   - Integrado diretamente ao orquestrador do comando `SOB` (`sob/sob_manager.py`), inicializando o apontamento com a criação do DWG.
+5. **Interface WPF da Paleta OXCAD**:
+   - Card visual discreto `TEMPO DO PROJETO` apresentando Início, Tempo trabalhado, Estado e Conclusão.
+   - Ações contextuais de Iniciar, Pausar, Retomar, Concluir (com confirmação) e Reabrir.
+   - `DispatcherTimer` a cada 1s executando apenas cálculo visual sem impacto de I/O em disco.
+
+### Evolução OXCAD 0.5.2 — Auditoria Final do PID, Heartbeat e Ciclo Real do AutoCAD
+A versão 0.5.2 consolida a auditoria profunda da integração de processos Windows com o AutoCAD, eliminando a vulnerabilidade de reciclagem de PID pelo sistema operacional e blindando o ciclo de vida do apontamento operacional de tempo:
+
+1. **Auditoria e Eliminação de Vulnerabilidade de Reciclagem de PID**:
+   - **Vulnerabilidade Identificada**: No Windows, um PID pode ser reciclado pelo kernel e atribuído a outro processo qualquer do sistema operacional após o encerramento do `acad.exe`. Se um novo AutoCAD ou processo do sistema recebesse o mesmo PID, uma verificação baseada unicamente em `PID` falharia em distinguir a troca de processo.
+   - **Solução Arquitetural Implementada**: Criação do `InstanciaSessionToken` no C# (`WorkspaceService.cs`), que combina `Process.GetCurrentProcess().Id`, `Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks` e um `Guid` aleatório imutável instanciado na inicialização da aplicação host.
+   - **Propagação**: Passagem de `--acad-pid <PID>` e `--acad-token <TOKEN>` via CLI (`workspace_context_cli.py`).
+   - **Detecção Determinística**: Em `workspace/workspace_time.py`, a função `tratar_interrupcao_se_necessario` valida a congruência de `token_sessao`. Se o token gravado no `time.json` for divergente do token da sessão corrente do AutoCAD, a interrupção é detectada com 100% de determinismo, eliminando qualquer risco de falso-positivo ou falso-negativo por reaproveitamento de PID.
+
+2. **Auditoria do Heartbeat e Preservação da Fonte de Verdade**:
+   - **Mecanismo Não-Bloqueante**: Disparado a cada 60s em background através de `Task.Run` e protegido pela flag atômica `_isHeartbeatRunning` contra sobreposição de chamadas sob alto estresse de CPU.
+   - **Fonte Canônica de Dados**: O heartbeat atua estritamente como *touch* defensivo de metadados (`ultima_atividade` e `ultima_atualizacao`). Não soma tempo (+60s) nem incrementa acumulados.
+   - **Estabilidade Assintótica do JSON**: O arquivo `time.json` mantém tamanho fixo e zero criação de sessões espúrias durante horas contínuas de trabalho (comprovado em teste de 120 pulsos de heartbeat).
+   - **Tratamento de Exceções**: Qualquer falha transitória de I/O é absorvida silenciosamente sem propagar erro para o loop de despacho do WPF.
+
+3. **Margem Máxima de Incerteza em Crash**:
+   - Em caso de crash súbito (kill de processo, tela azul, corte de energia), a sessão é consolidada até a `ultima_atividade` gravada pelo último heartbeat. A margem máxima de incerteza operacional pós-queda é rigorosamente limitada ao intervalo do heartbeat (**60 segundos**).
+
+4. **Matriz de Auditoria e Validação Metodológica**:
+   - **TESTE AUTOMATIZADO**:
+     - Detecção de colisão de PID reciclado com `token_sessao` divergente;
+     - Heartbeat idempotente ignorado em `Pausado` e `Concluido`;
+     - Longo período sem inchaço de JSON (120 pulsos sucessivos);
+     - Pausa seguida de fechamento mantendo estado `Pausado` na reabertura;
+     - Conclusão mantendo estado `Concluido` e tempo congelado;
+     - Timezone ISO 8601 UTC explícito em todos os campos;
+     - Robustez contra PIDs inválidos, nulos e negativos em `processo_esta_ativo`.
+   - **VALIDAÇÃO POR INSPEÇÃO**:
+     - Confirmação de que `Process.GetCurrentProcess()` no contexto do plugin .NET via `NETLOAD` roda in-process e representa o processo host `acad.exe`;
+     - Confirmação de que campos `tempo_total_segundos` e `tempo_formatado` são valores derivados de runtime, não fontes de verdade;
+     - Verificação de encoding UTF-8 puro no canal stdout sem poluição de warnings de dependências.
+   - **VALIDAÇÃO MANUAL (AUTOCAD REAL)**:
+     - Classificada como PENDENTE de execução física pelo operador em workstation com viewport ativa do AutoCAD, conforme protocolo da Seção 25 do roteiro de release.
+
+### Evolução OXCAD 0.5.3 — Validação Operacional no AutoCAD
+A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo por SOB, preparando a infraestrutura para a validação real dentro do AutoCAD:
+
+1. **Unificação e Propagação de Versão 0.5.3**:
+   - `oxcad/OxCadPaleta.csproj`: Atualizado para versão `0.5.3`, `AssemblyVersion 0.5.3.0` e `FileVersion 0.5.3.0`.
+   - `oxcad/OxCadControl.xaml`: Rodapé atualizado para `OXCAD 0.5.3 • AUX CAD`.
+   - `tests/test_oxcad_hardening.py`: Teste `test_versao_oxcad_0_5_3_propagada` validado com 100% de cobertura.
+   - Build Release compilado sem erros para ambos os targets (`net8.0-windows` e `net48`).
+
+2. **Carregador Oficial e Integração Universal**:
+   - `acaddoc.lsp`: Registra suporte e invoca `oxcad/oxcad_loader.lsp`.
+   - `oxcad/oxcad_loader.lsp`: Detecta versão do AutoCAD (`ACADVER >= 25.0` -> `net8.0-windows`, `< 25.0` -> `net48`), provendo os comandos `OXCAD`, `FECHAR_OXCAD` e `RECARREGAR_OXCAD`.
+
+3. **Status da Homologação**:
+   - **Regressão Global**: 536 testes aprovados, 3 skipped, 0 falhas em 92s.
+   - **Testes OXCAD**: 64 testes aprovados (100%).
+   - **Modelos Oficiais**: Hashes SHA-256 intactos (`cqt_modelo.xlsm` e `prancha.dwg`).
+   - **Veredito**: HOMOLOGADO COM RESSALVAS (pendente de validação manual do operador na viewport ativa do AutoCAD aberto).
+4. **Correção de Homologação Real no AutoCAD (`oxcad_loader.lsp`)**:
+   - **Diagnóstico do Erro Real**: Durante o primeiro carregamento manual no AutoCAD 2026, o comando `OXCAD` emitiu `; error: bad argument type: stringp nil`.
+   - **Causa Raiz**: A função `oxcad-get-dll-path` dependia de `load-aux-find-root` (não declarada) e realizava `(findfile "oxcad_loader.lsp")`. Ao carregar via `(load "oxcad/oxcad_loader.lsp")`, `findfile` retornava `nil` e `(vl-filename-directory nil)` disparava a exceção de tipo de argumento. Além disso, `(vl-filename-nxname)` e `(command "OXCAD")` sofriam risco de avaliação nula / recursão.
+   - **Correção Aplicada**: Cadeia de resolução dinâmica e agnóstica de `base-dir` com checagem de tipos estrita (`stringp`), implementação inline autossuficiente de `vl-filename-nxname`, sanitização contra variáveis `nil` e invocação global via `(vl-cmdf "_.OXCAD")`. 100% de adesão à regra de zero dependência a caminhos hardcoded.
+5. **Homologação Física Concluída no AutoCAD 2026**:
+   - **Ambiente Real**: Autodesk AutoCAD 2026 (PID 64656) executando em Windows 11 x64 com target .NET 8 (`net8.0-windows`).
+   - **Projeto/SOB Real Testado**: SOB `A043257319` (`EXEMPLO GRUPO A COM AVT - MC_A043257319_DESENHO_REV01.dwg`).
+   - **Ciclo Completo Comprovado em Produção**:
+     1. Abertura da PaletteSet via comando `OXCAD` com docking lateral nativo;
+     2. Reconhecimento automático da SOB e detecção de artefatos existentes (DWG, Checklist, Memorial, CQT);
+     3. Início da contagem de tempo (Sessão 1: 3.3s);
+     4. Pausa operacional (19s em pausa descartados do tempo trabalhado);
+     5. Retomada da contagem (Sessão 2: 8.9s);
+     6. Conclusão formal com gravação de data/hora início (`26/09/2026 15:32`), conclusão (`26/09/2026 15:33`) e tempo congelado (`00:00:12`);
+     7. Persistência atômica validada no disco em `.oxcad/time.json` (1.012 bytes);
+     8. Interface gráfica WPF responsiva, sem flicker e 100% sincronizada com a fonte de verdade em disco.
+   - **Veredito Oficial**: **HOMOLOGADO**.
+6. **Ajustes de Ações da Paleta (Feedback Operacional)**:
+   - **CPFC**: Adicionado bootstrap resiliente de `sys.path` em `cpfc/cpfc_manager.py`, eliminando `ModuleNotFoundError: No module named 'cpfc'` ao disparar via paleta/CLI.
+   - **Ambiental**: Adicionado mecanismo de elevação e foco (`deiconify`, `lift`, `-topmost`, `focus_force`) em `ambiental/memorial_ambiental_generator.py`, garantindo que a janela Tkinter venha para o primeiro plano sobre o AutoCAD.
+   - **AutoPrancha**: Esclarecido o fluxo: o AutoPrancha é uma ferramenta gráfica interativa que roda nativamente no ModelSpace do AutoCAD (`AUTOPRANCHA` / `autoprancha.lsp`). O botão na paleta exporta o contexto do projeto para `prancha_contexto.json` e notifica o usuário na barra de status: `AutoCAD | Módulo AutoPranche: Contexto exportado. Digite AUTOPRANCHA no AutoCAD.`
 

@@ -1,0 +1,336 @@
+<UserControl x:Class="OxCad.OxCadControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             d:DesignHeight="780" d:DesignWidth="360"
+             Background="#1E1E24" Foreground="#E0E0E6"
+             FontFamily="Segoe UI, Tahoma, sans-serif" FontSize="12">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Header -->
+            <RowDefinition Height="Auto"/> <!-- Separator -->
+            <RowDefinition Height="*"/>    <!-- Content / Cards -->
+            <RowDefinition Height="Auto"/> <!-- Action Status Bar -->
+            <RowDefinition Height="Auto"/> <!-- Refresh Button -->
+            <RowDefinition Height="Auto"/> <!-- Footer / Version -->
+        </Grid.RowDefinitions>
+
+        <!-- HEADER -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock Text="OXCAD" FontSize="20" FontWeight="Bold" Foreground="#4EA8DE" />
+            <TextBlock Text="Ambiente Integrado de Automação CAD" FontSize="11" Foreground="#9E9EB0" Margin="0,2,0,0" />
+        </StackPanel>
+
+        <!-- DIVIDER -->
+        <Border Grid.Row="1" Height="1" Background="#2E2E38" Margin="0,0,0,10"/>
+
+        <!-- CONTEXT CARDS -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+
+                <!-- CARD ALERTA DE INCONSISTÊNCIA -->
+                <Border x:Name="CardInconsistencia" Background="#3D2B1F" BorderBrush="#E76F51" BorderThickness="1"
+                        CornerRadius="6" Padding="10" Margin="0,0,0,8" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="⚠ Inconsistência de contexto" FontSize="12" FontWeight="Bold" Foreground="#F4A261" />
+                        <TextBlock x:Name="TxtInconsistenciaMsg" Text="DWG: SOB_A | Workspace: SOB_B" FontSize="11" Foreground="#FFFFFF" Margin="0,4,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- SEÇÃO AÇÕES DE ENGENHARIA (DISPATCHER) -->
+                <TextBlock Text="AÇÕES DE ENGENHARIA" FontSize="10" FontWeight="SemiBold" Foreground="#7E7E94" Margin="0,0,0,6" />
+
+                <Border Background="#252532" CornerRadius="6" Padding="8" BorderBrush="#353544" BorderThickness="1" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- CQT -->
+                        <Button x:Name="BtnCqt" Grid.Row="0" Grid.Column="0" Content="⚡ CQT" Height="30" Margin="2"
+                                Background="#2A3B4C" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
+                                Cursor="Hand" Click="BtnAcao_Click" Tag="cqt" />
+
+                        <!-- Orçamento -->
+                        <Button x:Name="BtnOrcamento" Grid.Row="0" Grid.Column="1" Content="📊 Orçamento" Height="30" Margin="2"
+                                Background="#2A3B4C" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
+                                Cursor="Hand" Click="BtnAcao_Click" Tag="orcamento" />
+
+                        <!-- CPFC -->
+                        <Button x:Name="BtnCpfc" Grid.Row="1" Grid.Column="0" Content="📐 CPFC" Height="30" Margin="2"
+                                Background="#2A3B4C" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
+                                Cursor="Hand" Click="BtnAcao_Click" Tag="cpfc" />
+
+                        <!-- Ambiental -->
+                        <Button x:Name="BtnAmbiental" Grid.Row="1" Grid.Column="1" Content="🌿 Ambiental" Height="30" Margin="2"
+                                Background="#2A3B4C" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
+                                Cursor="Hand" Click="BtnAcao_Click" Tag="ambiental" />
+
+                        <!-- AutoPrancha -->
+                        <Button x:Name="BtnPrancha" Grid.Row="2" Grid.Column="0" Content="📐 AutoPrancha" Height="30" Margin="2"
+                                Background="#2A3B4C" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
+                                Cursor="Hand" Click="BtnAcao_Click" Tag="prancha" />
+
+                        <!-- Preparar SOB -->
+                        <Button x:Name="BtnSob" Grid.Row="2" Grid.Column="1" Content="📁 Preparar SOB" Height="30" Margin="2"
+                                Background="#2A3B4C" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
+                                Cursor="Hand" Click="BtnAcao_Click" Tag="sob" />
+                    </Grid>
+                </Border>
+
+                <!-- SEÇÃO TEMPO DO PROJETO (OXCAD 0.5.0) -->
+                <TextBlock Text="TEMPO DO PROJETO" FontSize="10" FontWeight="SemiBold" Foreground="#7E7E94" Margin="0,4,0,6" />
+
+                <Border Background="#20202A" CornerRadius="6" Padding="10" BorderBrush="#353548" BorderThickness="1" Margin="0,0,0,10">
+                    <StackPanel>
+                        <!-- Grid Estado e Início -->
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <StackPanel>
+                                <TextBlock Text="ESTADO" FontSize="9" FontWeight="SemiBold" Foreground="#8A8A9E"/>
+                                <TextBlock x:Name="TxtTempoEstado" Text="Não iniciado" FontSize="12" FontWeight="Bold" Foreground="#9E9EB0" Margin="0,2,0,0"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                <TextBlock Text="INÍCIO" FontSize="9" FontWeight="SemiBold" Foreground="#8A8A9E" HorizontalAlignment="Right"/>
+                                <TextBlock x:Name="TxtTempoInicio" Text="-" FontSize="10" Foreground="#E2E2EC" Margin="0,2,0,0" HorizontalAlignment="Right"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Tempo Trabalhado (Destaque Principal) -->
+                        <Border Background="#16161E" CornerRadius="4" Padding="8,6" Margin="0,2,0,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="TEMPO TRABALHADO" FontSize="8" FontWeight="SemiBold" Foreground="#7A7A8E"/>
+                                    <TextBlock x:Name="TxtTempoFormatado" Text="00:00:00" FontSize="18" FontWeight="Bold" Foreground="#52B788" Margin="0,2,0,0" FontFamily="Consolas, Segoe UI, monospace"/>
+                                </StackPanel>
+                                
+                                <StackPanel x:Name="PainelTempoFim" Grid.Column="1" VerticalAlignment="Center" Visibility="Collapsed" HorizontalAlignment="Right">
+                                    <TextBlock Text="CONCLUSÃO" FontSize="8" FontWeight="SemiBold" Foreground="#7A7A8E" HorizontalAlignment="Right"/>
+                                    <TextBlock x:Name="TxtTempoFim" Text="-" FontSize="10" Foreground="#E2E2EC" Margin="0,2,0,0" HorizontalAlignment="Right"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Botões de Controle de Tempo -->
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Iniciar / Retomar / Pausar -->
+                            <Button x:Name="BtnTempoAcaoPrincipal" Content="▶ Iniciar" Height="28" Margin="0,0,3,0"
+                                    Background="#2A4B3C" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="10" BorderThickness="0"
+                                    Cursor="Hand" Click="BtnTempoAcaoPrincipal_Click" />
+
+                            <!-- Concluir -->
+                            <Button x:Name="BtnTempoConcluir" Grid.Column="1" Content="✓ Concluir" Height="28" Margin="3,0,0,0"
+                                    Background="#3A3A4C" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="10" BorderThickness="0"
+                                    Cursor="Hand" Click="BtnTempoConcluir_Click" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="CONTEXTO OPERACIONAL" FontSize="10" FontWeight="SemiBold" Foreground="#7E7E94" Margin="0,0,0,6" />
+
+                <!-- STATUS CARD -->
+                <Border Background="#282832" CornerRadius="6" Padding="10" BorderBrush="#353544" BorderThickness="1" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="STATUS DO PROJETO" FontSize="9" FontWeight="SemiBold" Foreground="#9E9EB0" />
+                        <TextBlock x:Name="TxtStatus" Text="Consultando..." FontSize="13" FontWeight="Bold" Foreground="#F77F00" Margin="0,2,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- SOB CARD -->
+                <Border Background="#282832" CornerRadius="6" Padding="10" BorderBrush="#353544" BorderThickness="1" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="IDENTIFICADOR SOB" FontSize="9" FontWeight="SemiBold" Foreground="#9E9EB0" />
+                        <TextBlock x:Name="TxtSob" Text="-" FontSize="14" FontWeight="Bold" Foreground="#4EA8DE" Margin="0,2,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- DWG CARD -->
+                <Border Background="#282832" CornerRadius="6" Padding="10" BorderBrush="#353544" BorderThickness="1" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="DESENHO (DWG)" FontSize="9" FontWeight="SemiBold" Foreground="#9E9EB0" />
+                        <TextBlock x:Name="TxtDwg" Text="-" FontSize="11" FontWeight="Normal" Foreground="#FFFFFF" Margin="0,2,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- PASTA CARD -->
+                <Border Background="#282832" CornerRadius="6" Padding="10" BorderBrush="#353544" BorderThickness="1" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="DIRETÓRIO DA SOB" FontSize="9" FontWeight="SemiBold" Foreground="#9E9EB0" />
+                        <TextBlock x:Name="TxtPasta" Text="-" FontSize="10" FontWeight="Normal" Foreground="#C5C5D2" Margin="0,2,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- METADADOS CARD -->
+                <Border Background="#282832" CornerRadius="6" Padding="10" BorderBrush="#353544" BorderThickness="1" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="LOCALIZAÇÃO &amp; METADADOS" FontSize="9" FontWeight="SemiBold" Foreground="#9E9EB0" Margin="0,0,0,4" />
+                        
+                        <Grid Margin="0,2,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Município:" FontSize="10" Foreground="#8A8A9E"/>
+                            <TextBlock x:Name="TxtMunicipio" Grid.Column="1" Text="-" FontSize="11" FontWeight="SemiBold" Foreground="#E2E2EC"/>
+                        </Grid>
+
+                        <Grid Margin="0,2,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Bairro:" FontSize="10" Foreground="#8A8A9E"/>
+                            <TextBlock x:Name="TxtBairro" Grid.Column="1" Text="-" FontSize="11" FontWeight="SemiBold" Foreground="#E2E2EC"/>
+                        </Grid>
+
+                        <Grid Margin="0,2,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Endereço:" FontSize="10" Foreground="#8A8A9E"/>
+                            <TextBlock x:Name="TxtEndereco" Grid.Column="1" Text="-" FontSize="10" Foreground="#E2E2EC" TextWrapping="Wrap"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- SEÇÃO MATRIZ DE ARTEFATOS -->
+                <TextBlock Text="ARTEFATOS DO PROJETO" FontSize="10" FontWeight="SemiBold" Foreground="#7E7E94" Margin="0,2,0,6" />
+
+                <Border Background="#24242E" CornerRadius="6" Padding="8" BorderBrush="#353544" BorderThickness="1" Margin="0,0,0,8">
+                    <ItemsControl x:Name="ListaArtefatos">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,2,0,2" Padding="6,4" Background="#2A2A36" CornerRadius="4">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="22"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Ícone -->
+                                        <TextBlock Text="{Binding Icone}" FontSize="12" FontWeight="Bold"
+                                                   VerticalAlignment="Center" HorizontalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#707085"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Existe}" Value="True">
+                                                            <Setter Property="Foreground" Value="#52B788"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <!-- Rótulo -->
+                                        <TextBlock Grid.Column="1" Text="{Binding Rotulo}" FontSize="11" 
+                                                   VerticalAlignment="Center" Margin="6,0,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#A0A0B0"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Existe}" Value="True">
+                                                            <Setter Property="Foreground" Value="#FFFFFF"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <!-- Ação / Status do Item -->
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="📂 Abrir" FontSize="9" Padding="6,2" Margin="0,0,4,0"
+                                                    Background="#3A3A4C" Foreground="#FFFFFF" BorderThickness="0" Cursor="Hand"
+                                                    Click="BtnAbrirItem_Click" Tag="{Binding Caminho}">
+                                                <Button.Style>
+                                                    <Style TargetType="Button">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Existe}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+
+                                            <!-- Indicação específica para Unifilar -->
+                                            <TextBlock Text="AutoCAD" FontSize="9" Foreground="#F4A261" Margin="2,0,0,0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Chave}" Value="UNIFILAR">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ACTION STATUS BAR -->
+        <Border Grid.Row="3" Background="#22222C" CornerRadius="4" Padding="8,4" Margin="0,8,0,4" BorderBrush="#353544" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="TxtAcaoEstado" Text="Pronto" FontSize="10" FontWeight="Bold" Foreground="#52B788" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock x:Name="TxtAcaoMensagem" Grid.Column="1" Text="Nenhuma ação em execução." FontSize="10" Foreground="#A0A0B0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </Border>
+
+        <!-- REFRESH BUTTON COM CONTROLE DE CONCORRÊNCIA -->
+        <StackPanel Grid.Row="4" Margin="0,4,0,0">
+            <Button x:Name="BtnAtualizar" Content="🔄 Atualizar Contexto" 
+                    Height="34" FontWeight="SemiBold" FontSize="11"
+                    Background="#0077B6" Foreground="#FFFFFF" BorderThickness="0"
+                    Cursor="Hand" Click="BtnAtualizar_Click">
+                <Button.Resources>
+                    <Style TargetType="Border">
+                        <Setter Property="CornerRadius" Value="6"/>
+                    </Style>
+                </Button.Resources>
+            </Button>
+        </StackPanel>
+
+        <!-- FOOTER -->
+        <TextBlock Grid.Row="5" Text="OXCAD 0.5.3 • AUX CAD" 
+                   FontSize="10" Foreground="#5C5C70" 
+                   HorizontalAlignment="Center" Margin="0,8,0,0"/>
+    </Grid>
+</UserControl>
