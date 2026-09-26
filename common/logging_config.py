@@ -37,7 +37,8 @@ _SENSIBLE_PATTERNS = [
     (re.compile(r'(?i)(access_token|refresh_token|token|jwt|bearer)\s*[:=]\s*["\']?([^"\'\s&,]+)'), r'\1=***'),
     (re.compile(r'(?i)(client_secret|secret_key|api_key|secret)\s*[:=]\s*["\']?([^"\'\s&,]+)'), r'\1=***'),
     (re.compile(r'(?i)(authorization:\s*bearer\s+)([A-Za-z0-9\-\._~\+\/]+=*)'), r'\1***'),
-    (re.compile(r'(?i)(cookie:\s*)([^;\r\n]+)'), r'\1***'),
+    (re.compile(r'(?i)(cookie\s*[:=]|cookie\s+[a-z0-9_\-\.]+\s*[:=]|asp\.net_sessionid\s*=|session_id\s*[:=]|sessionid\s*[:=]|phpsessid\s*[:=])\s*["\']?([^"\'\s;,\r\n]+)'), r'\1***'),
+    (re.compile(r'-----BEGIN (?:[A-Z ]+)?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+)?PRIVATE KEY-----'), r'[PRIVATE KEY REDACTED]'),
 ]
 
 

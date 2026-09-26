@@ -27,7 +27,8 @@ namespace OxCad
             new Regex(@"(?i)(access_token|refresh_token|token|jwt|bearer)\s*[:=]\s*[""']?([^""'\s&,]+)", RegexOptions.Compiled),
             new Regex(@"(?i)(client_secret|secret_key|api_key|secret)\s*[:=]\s*[""']?([^""'\s&,]+)", RegexOptions.Compiled),
             new Regex(@"(?i)(authorization:\s*bearer\s+)([A-Za-z0-9\-\._~\+\/]+=*)", RegexOptions.Compiled),
-            new Regex(@"(?i)(cookie:\s*)([^;\r\n]+)", RegexOptions.Compiled)
+            new Regex(@"(?i)(cookie\s*[:=]|cookie\s+[a-z0-9_\-\.]+\s*[:=]|asp\.net_sessionid\s*=|session_id\s*[:=]|sessionid\s*[:=]|phpsessid\s*[:=])\s*[""']?([^""'\s;,\r\n]+)", RegexOptions.Compiled),
+            new Regex(@"-----BEGIN (?:[A-Z ]+)?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+)?PRIVATE KEY-----", RegexOptions.Compiled)
         };
 
         private static string? _cachedLogDir;
@@ -71,7 +72,14 @@ namespace OxCad
             string sanitizado = texto!;
             foreach (var padrao in SensitivePatterns)
             {
-                sanitizado = padrao.Replace(sanitizado, "$1=***");
+                if (padrao.ToString().Contains("PRIVATE KEY"))
+                {
+                    sanitizado = padrao.Replace(sanitizado, "[PRIVATE KEY REDACTED]");
+                }
+                else
+                {
+                    sanitizado = padrao.Replace(sanitizado, "$1***");
+                }
             }
             return sanitizado;
         }
