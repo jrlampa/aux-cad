@@ -799,3 +799,17 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Builds .NET Release: `net8.0-windows` e `net48` aprovados com 0 erros.
   - Modelos oficiais íntegros por SHA-256 (`cqt_modelo.xlsm` e `prancha.dwg`).
 - **Status Geral**: **HOMOLOGADO** (Logging) e **HOMOLOGADO** (Identidade Visual).
+
+---
+
+## 19. OXCAD 0.6.0 — Homologação Física Final e Release (2026-09-26)
+- **Sessão AutoCAD 2026 Real**:
+  - Host: Autodesk AutoCAD 2026 (PID `46664`, v25.1.0.0, .NET 8.0.29).
+  - Assembly .NET 8: `OxCadPaleta.dll` versão `0.6.0.0` (commit `853dc5356f02b5aa1dfa957dbe0ef203f8f156cc`) confirmada em memória.
+  - Diagnóstico: Comando `OXCAD_DIAGNOSTICO` executado com resposta limpa na Command Line.
+  - Interface Gráfica: Cabeçalho com monograma OX renderizado fisicamente; controles responsivos.
+  - Integração C# -> Python: Execução de consulta de contexto da SOB `A043257319` em 15.9ms.
+  - Rastreabilidade Fim-a-Fim: `correlation_id` compartilhado entre o processo do AutoCAD e o subprocesso Python verificado em `logs/application.jsonl`.
+  - Suíte OXCAD: 85 testes aprovados (100% PASS).
+  - Modelos Oficiais: Hashes SHA-256 de `prancha.dwg` e `cqt_modelo.xlsm` intactos.
+  - Veredito: **HOMOLOGADO**.

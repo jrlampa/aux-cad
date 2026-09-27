@@ -959,3 +959,12 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
      - Suíte `tests/test_oxcad_assets.py` com 7 testes dedicados (100% PASS).
      - Suíte global de testes: 558 passed, 2 skipped (0 falhas, 0 erros).
    - **Veredito Oficial**: **HOMOLOGADO**.
+9. **Fechamento Formal e Release OXCAD 0.6.0**:
+   - **Homologação Física no AutoCAD 2026**:
+     - Sessão Interativa: Autodesk AutoCAD 2026 (PID `46664`, `acad.exe`, v25.1.0.0, .NET 8.0.29).
+     - Assembly .NET 8: `OxCadPaleta.dll` versão `0.6.0.0` (commit `853dc5356f02b5aa1dfa957dbe0ef203f8f156cc`) confirmada em memória física.
+     - Diagnóstico: Comando `OXCAD_DIAGNOSTICO` executado com resposta limpa e status de observabilidade.
+     - Interface Gráfica WPF: Cabeçalho com monograma técnico OX renderizado e controles ativos.
+     - Fluxo Real de Engenharia: Resolução de contexto com SOB `A043257319` em 15.9ms.
+     - Rastreabilidade End-to-End: `correlation_id` compartilhado entre o host AutoCAD e subprocessos Python gravado em `logs/application.jsonl`.
+     - Veredito da Versão: **HOMOLOGADO**.
