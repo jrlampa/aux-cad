@@ -47,13 +47,14 @@ namespace MapaCadPaleta
         }
 
         /// <summary>
-        /// Recarrega o controle da paleta se estiver aberto.
+        /// Recarrega o controle da paleta e a visualização do WebView2 se estiver aberto.
         /// </summary>
         public static void Recarregar()
         {
-            if (_paletteSet != null && _paletteSet.Visible)
+            MostrarPaleta();
+            if (_mapaControl != null)
             {
-                MostrarPaleta();
+                _ = _mapaControl.RecarregarWebViewAsync();
             }
         }
     }

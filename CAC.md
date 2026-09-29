@@ -147,27 +147,39 @@ aux cad/
   - **`net8.0-windows`**: Para AutoCAD 2025 e AutoCAD 2026.
   - **`net48`**: Para AutoCAD 2018 a 2024 (executando sobre o runtime clássico .NET Framework 4.7/4.8).
   - Integração com `Microsoft.Web.WebView2` e referências nativas à API do AutoCAD (`accoremgd`, `acdbmgd`, `acmgd`).
-- `Plugin.cs` (65 linhas): Ponto de entrada (`IExtensionApplication`) com comandos do AutoCAD:
+- `Plugin.cs`: Ponto de entrada (`IExtensionApplication`) com comandos do AutoCAD:
   - **`MAPAPALETA`** (ou **`OSMPALETA`**, **`MAPACAD`**): Abre a paleta cartográfica acoplável.
   - **`FECHAR_MAPAPALETA`**: Oculta a paleta.
   - **`RECARREGAR_MAPAPALETA`**: Recarrega os componentes da paleta.
-- `PaletteHost.cs` (62 linhas): Gerenciador da paleta nativa `PaletteSet` (GUID único), com ancoragem à direita, auto-hide e hospedagem visual direta de controle WPF.
-- `MapaControl.xaml` & `MapaControl.xaml.cs` (220 linhas): Controle WPF hospedeiro do controle Chromium `WebView2` com **Mapeamento de Host Virtual Local (`https://auxcad.local/index.html`)**, rodando 100% offline dentro do AutoCAD sem portas HTTP ou servidores em segundo plano.
-- `CadBridge.cs` (230 linhas): Ponte de automação do AutoCAD (`DocumentLock`, `Transaction`):
-  - Garante criação das camadas `POSTES`, `POSTES_NUMERO` e `POSTES_DESCRICAO`.
-  - Inserção do bloco `POSTE_` (com fallback para círculo/cruz vetorial) na coordenada UTM exata.
+- `PaletteHost.cs`: Gerenciador da paleta nativa `PaletteSet` (GUID único), com ancoragem à direita, auto-hide e hospedagem visual direta de controle WPF.
+- `MapaControl.xaml` & `MapaControl.xaml.cs`: Controle WPF hospedeiro do controle Chromium `WebView2` com **Mapeamento de Host Virtual Seguro (`https://appassets.example/index.html`)** com validação rigorosa de origem (`IsAuthorizedOrigin`), operando 100% isolado dentro do AutoCAD.
+- `CadBridge.cs`: Ponte de automação transacional do AutoCAD (`DocumentLock`, `Transaction`):
+  - **Separação Canônica de Identidades de Domínio**:
+    - `DomainId`: Identificador único persistente da entidade elétrica (GUID RFC4122 v4), autoridade final mantida no C# .NET, independente do número visual.
+    - `Numero`: Rótulo de apresentação visual do poste (ex: "01", "P01"), não utilizado como chave primária de persistência (`Numero != DomainId`).
+    - `VaoId`: Identificador único persistente do vão de rede (GUID RFC4122 v4), independente do `OperationId`.
+    - `PosteOrigemId` & `PosteDestinoId`: Vínculos relacionais topológicos por `DomainId` persistente (não por número nem proximidade geométrica).
+    - `OperationId`: Agrupamento transacional da operação executada.
+    - `Handle`: Identificador físico atual da entidade no banco de dados do DWG.
+  - **Identidade Persistente BIM via XData Versionado (`schemaVersion = 2`)**: Aplicações DXF registradas oficiais `AUXCAD_POSTE` e `AUXCAD_VAO` gravando cabeçalho de versão `ExtendedDataInteger16 = 2`, `DomainId`, `Numero`, `TipoPoste`, `VaoId`, `PosteOrigemId`, `PosteDestinoId`, `OperationId` e metadados JSON com parsing defensivo (`IsValid`/`InvalidReason`).
+  - **Pipeline Modular de Escaneamento e Reconciliação (`EscanearDwg`)**:
+    - `LerEstadoDwg`: Varredura estritamente somente-leitura e defensiva sem efeitos colaterais no DWG.
+    - `ReconciliarTopologiaDwg`: Resolução canônica por identidade (`Exact`), resolução geométrica para legados `< 1.0m` (`Inferred`), detecção de ambiguidades (`Ambiguous`) e detecção de vãos órfãos (`ORPHAN_VAO`).
+    - `ExecutarReparosDwg`: Transação explícita de mutação para reatribuição de GUIDs de clones gerados por `COPY`/`ARRAY` e remapeamento de conjunto (`COPY_SET_REPAIRED`).
+    - Objeto de saída `DwgState` contendo `Postes`, `Vaos`, `Relacoes`, `Diagnostics` e `Statistics`.
+  - **Undo / Rollback Seguro e Independente do Número Visual**: Rollback atômico cirúrgico rastreado em sessão via lista de Handles em `_historicoOperacoes` e busca persistente no DWG por `OperationId` e `DomainId`, eliminando dependência do número visual (`Contains(numero)`) e prevenindo deleções indevidas.
+  - Inserção do bloco `POSTE_` (com fallback para círculo/cruz vetorial) na coordenada UTM exata (2.5D, $Z=0.0$).
   - Inserção do bloco `PONTO` com número do poste no atributo.
   - Inserção de texto técnico empilhado MText com tipo de poste, estruturas MT/BT, equipamentos e cargas trifásicas.
-  - Captura interativa de coordenadas no DWG via `Editor.GetPoint` e envio ao mapa via WebSocket/WebMessage.
-  - Varredura e sincronização de postes existentes no DWG para plotagem no Leaflet.
-- `SnyderConverter.cs` (112 linhas): Conversor analítico Snyder geodésico C# bidirecional entre Lat/Lon WGS84 e UTM SIRGAS 2000 (Fuso 22S, 23S e 24S) com precisão milimétrica.
-- `web/index.html`, `web/style.css` e `web/app.js`: Interface moderna em tema corporativo `#1B365D`, alternância entre OSM, Satélite ESRI e Google Híbrido, marcador arrastável, conversão instantânea kVA $\leftrightarrow$ kW com FP = 0.92, chips rápidos de equipamentos/cargas e botões de 1 clique ("📍 Inserir no CAD", "🎯 Ler DWG", "🔄 Sincronizar").
+  - Inserção de vãos de condutores (`VIAS_CABOS_BT` / `VIAS_CABOS_MT`) com texto de distância alinhado ao vão e gravação de `VaoId`.
+  - Captura interativa de coordenadas no DWG via `Editor.GetPoint` e envio ao mapa via WebMessage.
+- `SnyderConverter.cs`: Conversor analítico Snyder geodésico C# bidirecional entre Lat/Lon WGS84 e UTM SIRGAS 2000 (Fuso 22S, 23S e 24S) com precisão milimétrica.
+- `web/index.html`, `web/style.css`, `web/app.js` e `web/tracado.js`: Interface moderna em tema corporativo `#1B365D`, alternância entre OSM, Satélite ESRI e Google Híbrido, marcador arrastável, conversão kVA $\leftrightarrow$ kW com FP = 0.92, chips rápidos de equipamentos/cargas, traçado contínuo com geração de vãos automáticos, arrasto dinâmico de postes, undo bidirecional (UI + DWG) e reconstrução topológica do traçado (`reconstruirTracadoDoDwg`).
 - **Geração Automática de Vias no AutoCAD ao Inserir Postes**:
-  - Opção explícita no rodapé da sidebar (`chkAutoViasCad`): *"🛣️ Gerar vias no CAD ao inserir poste"*.
-  - Opção dedicada no painel do traçado contínuo (`chkTracadoViasCad`): *"🛣️ Gerar vias no CAD a cada poste"*.
-  - Sincronização bidirecional, persistência no `localStorage` (`AUXCAD_AUTO_VIAS_CAD`) e deduplicação inteligente por `waysProcessados`.
-  - Cobertura geodésica contínua: cálculo analítico imediato de coordenadas via `window.Snyder`, consulta resiliente na Overpass API via POST form-urlencoded (suportando `out body geom` e nós OSM sem risco de HTTP 406) e desenho direto de polilinhas 2.5D no DWG (`CadBridge.DesenharElementosUrbanos`) nos layers `VIAS_EIXO` (Cor 8 - Cinza Escuro), `VIAS_CALCADA` (Cor 9 - Cinza Claro) e `OBSTRUCOES_EDIF` (Cor 1 - Vermelho).
-- `mapa_paleta_loader.lsp` (75 linhas): Carregador AutoLISP com detecção dinâmica da versão do AutoCAD (`ACADVER`) e disparo via `NETLOAD`.
+  - Opção explícita no rodapé da sidebar (`chkAutoViasCad`) e no traçado contínuo (`chkTracadoViasCad`).
+  - Sincronização bidirecional e deduplicação inteligente por `waysProcessados`.
+  - Cobertura geodésica contínua: cálculo analítico imediato de coordenadas via `window.Snyder`, consulta resiliente na Overpass API via POST form-urlencoded e desenho direto de polilinhas 2.5D no DWG nos layers `VIAS_EIXO`, `VIAS_CALCADA` e `OBSTRUCOES_EDIF`.
+- `mapa_paleta_loader.lsp`: Carregador AutoLISP com detecção dinâmica da versão do AutoCAD (`ACADVER`) e disparo via `NETLOAD`.
 
 ### 8. Módulo de Dados Técnicos e Tabelas de Referência (`dados_tecnicos/`)
 - `tabelas_referencia.py` (520 linhas): Motor analítico e gerador dos bancos de dados técnicos oficiais das redes BT e MT (Fontes: OneNote `BASE.one` e diretório `CALC_ESF` da IM3 Brasil):
@@ -968,3 +980,13 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
      - Fluxo Real de Engenharia: Resolução de contexto com SOB `A043257319` em 15.9ms.
      - Rastreabilidade End-to-End: `correlation_id` compartilhado entre o host AutoCAD e subprocessos Python gravado em `logs/application.jsonl`.
      - Veredito da Versão: **HOMOLOGADO**.
+
+10. **Auditoria de Coerência e Caminho de Execução Real — `mapa_cad_paleta`**:
+   - **Mapeamento de Chamadas Reais**: Verificados todos os pontos de comunicação entre Web (JS), WPF/WebView2, CadBridge e DWG.
+   - **Sincronização de Identidade**: `resultado_insercao` e `resultado_vao` no frontend (`app.js`) agora sincronizam e confirmam os IDs canônicos emitidos pelo backend C# no `TracadoState`.
+   - **Hierarquia de Sincronização DWG**: Estabelecida precedência rígida: `estado_dwg` (v2) é o canal canônico de reconstrução topológica autoritativa; `postes_dwg` (v1) rebaixado a fallback legado.
+   - **Rigidez em COPY SET**: Identificação de conjunto copiado agora exige que AMBAS as extremidades do vão pertençam ao conjunto remapeado para emitir `COPY_SET_REPAIRED`. Se apenas uma ponta foi copiada, o sistema emite `COPY_SET_UNCERTAIN` e não redireciona referências arbitrariamente.
+   - **Defesa Contra Versão Futura de XData**: Se uma entidade no DWG contiver `schemaVersion > XDATA_SCHEMA_VERSION` (v2), o scanner emite `UNSUPPORTED_XDATA_VERSION` e não sobrescreve os dados.
+   - **Eliminação de Warnings de Compilação**: Eliminados todos os avisos CS8600, CS8601, CS8602, CS8604 em `CadBridge.cs` e `MapaControl.xaml.cs`. Compilação `net48` e `net8.0-windows` limpa com 0 avisos de código.
+   - **Status Geral**: IMPLEMENTAÇÃO: COMPLETA | INTEGRAÇÃO INTERNA: COMPLETA | TESTES OFFLINE: PASS (59/59) | BUILD: PASS (0 erros) | RUNTIME AUTOCAD: NÃO VALIDADO (acad.exe ausente) | HOMOLOGAÇÃO ASSISTIDA: PENDENTE.
+

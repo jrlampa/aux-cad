@@ -100,6 +100,13 @@ function registrarPosteTracado(novoPoste, mapa) {
         const dy = novoPoste.y - anterior.y;
         const distMetros = Math.hypot(dx, dy);
 
+        const vaoId = (typeof window.gerarGuid === 'function') 
+            ? window.gerarGuid() 
+            : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+            });
+        const opId = novoPoste.operationId || ('op_vao_' + Date.now());
+
         // Envia mensagem ao AutoCAD via C# Bridge
         if (window.chrome && window.chrome.webview) {
             window.chrome.webview.postMessage({
@@ -111,7 +118,11 @@ function registrarPosteTracado(novoPoste, mapa) {
                 tipoRede: TracadoState.tipoRede,
                 textoVao: `${distMetros.toFixed(1)}m`,
                 numDe: anterior.numero,
-                numPara: novoPoste.numero
+                numPara: novoPoste.numero,
+                operationId: opId,
+                vaoId: vaoId,
+                posteOrigemId: anterior.id || null,
+                posteDestinoId: novoPoste.id || null
             });
         }
     }
@@ -253,10 +264,12 @@ function desfazerUltimoPoste(mapa) {
     const removido = TracadoState.pontos.pop();
     redesenharTodoTracado(mapaAlvo);
 
-    // Notifica C# / AutoCAD para remover o último vão desenhado
+    // Notifica C# / AutoCAD para remover o último vão e poste desenhados (GAP-005)
     if (window.chrome && window.chrome.webview) {
         window.chrome.webview.postMessage({
             action: 'desfazer_vao',
+            domainId: removido.id || null,
+            operationId: removido.operationId || null,
             numero: removido.numero
         });
     }
@@ -598,6 +611,80 @@ function exportarParaCqt() {
     }
 }
 
+/**
+ * Reconstrói a topologia do traçado a partir do escaneamento do DWG (GAP-004)
+ */
+function reconstruirTracadoDoDwg(postes, vaos, mapa) {
+    const mapaAlvo = mapa || (window.AppState ? window.AppState.map : null);
+    
+    // Regra de Integridade: Limpeza prévia autoritativa do estado anterior do traçado
+    TracadoState.pontos = [];
+    TracadoState.vaos = [];
+    if (TracadoState.polylineLayer) TracadoState.polylineLayer.clearLayers();
+    if (TracadoState.labelsLayer) TracadoState.labelsLayer.clearLayers();
+    if (TracadoState.markersLayer) TracadoState.markersLayer.clearLayers();
+
+    if (!postes || postes.length === 0) {
+        if (mapaAlvo) redesenharTodoTracado(mapaAlvo);
+        if (typeof showToast === 'function') {
+            showToast('Nenhum elemento elétrico encontrado no DWG para reconstrução.', 'info');
+        }
+        return;
+    }
+
+    TracadoState.pontos = postes.map(p => ({
+        id: p.id || ('poste_' + Date.now()),
+        numero: p.numero || '01',
+        x: p.x,
+        y: p.y,
+        lat: p.lat,
+        lon: p.lon,
+        tipoPoste: p.tipoPoste || '11/600',
+        temTrafo: !!p.temTrafo,
+        potenciaTrafo: p.potenciaTrafo || '',
+        operationId: p.operationId || '',
+        handle: p.handle || '',
+        isLegacy: !!p.isLegacy,
+        mono: 0,
+        bi: 0,
+        tri: 0,
+        cargaTriKva: 0,
+        ip70: 0
+    }));
+
+    TracadoState.vaos = (vaos || []).map(v => ({
+        id: v.id,
+        operationId: v.operationId,
+        posteOrigemId: v.posteOrigemId,
+        posteDestinoId: v.posteDestinoId,
+        tipoRede: v.tipoRede || 'BT',
+        textoVao: v.textoVao || '',
+        extensao: v.extensao || 0,
+        handle: v.handle || '',
+        de: v.de || '',
+        para: v.para || '',
+        isLegacy: !!v.isLegacy
+    }));
+
+    // Se houver vãos no DWG e tipo de rede detectada, sincroniza
+    if (TracadoState.vaos.length > 0) {
+        TracadoState.tipoRede = TracadoState.vaos[0].tipoRede || 'BT';
+    }
+
+    if (mapaAlvo) {
+        redesenharTodoTracado(mapaAlvo);
+    }
+
+    // Renderiza também marcadores visuais no AppState
+    if (typeof window.renderizarPostesDwg === 'function') {
+        window.renderizarPostesDwg(postes);
+    }
+
+    if (typeof showToast === 'function') {
+        showToast(`⚡ Topologia DWG reconstruída: ${postes.length} postes e ${TracadoState.vaos.length} vãos sincronizados.`, 'success');
+    }
+}
+
 // Exporta para escopo global
 window.TracadoState = TracadoState;
 window.toggleModoTracado = toggleModoTracado;
@@ -606,10 +693,12 @@ window.registrarPosteTracado = registrarPosteTracado;
 window.desfazerUltimoPoste = desfazerUltimoPoste;
 window.removerPosteTracado = removerPosteTracado;
 window.redesenharTodoTracado = redesenharTodoTracado;
+window.reconstruirTracadoDoDwg = reconstruirTracadoDoDwg;
 window.toggleListaPostes = toggleListaPostes;
 window.renderizarListaPostesTracado = renderizarListaPostesTracado;
 window.focarPosteNoMapa = focarPosteNoMapa;
 window.limparTracado = limparTracado;
 window.finalizarTrecho = finalizarTrecho;
 window.exportarParaCqt = exportarParaCqt;
+
 

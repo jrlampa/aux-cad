@@ -99,19 +99,12 @@ namespace MapaCadPaleta
                         navigationCompleted.TrySetResult(args.IsSuccess);
                     };
 
-                    try
-                    {
-                        WebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                            "appassets.example",
-                            webDir,
-                            CoreWebView2HostResourceAccessKind.Allow
-                        );
-                        WebView.CoreWebView2.Navigate("https://appassets.example/index.html");
-                    }
-                    catch
-                    {
-                        WebView.CoreWebView2.Navigate(new Uri(indexHtml).AbsoluteUri);
-                    }
+                    WebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                        "appassets.example",
+                        webDir,
+                        CoreWebView2HostResourceAccessKind.Allow
+                    );
+                    WebView.CoreWebView2.Navigate("https://appassets.example/index.html");
                 }
                 else
                 {
@@ -133,10 +126,28 @@ namespace MapaCadPaleta
             }
         }
 
+        private int _ultimoFuso = 23;
+
+        /// <summary>
+        /// Valida se a origem da mensagem recebida pertence estritamente ao host virtual seguro autorizado.
+        /// </summary>
+        public static bool IsAuthorizedOrigin(string? source)
+        {
+            if (string.IsNullOrWhiteSpace(source)) return false;
+            return source!.StartsWith("https://appassets.example/", StringComparison.OrdinalIgnoreCase) ||
+                   source.Equals("https://appassets.example", StringComparison.OrdinalIgnoreCase);
+        }
+
         private void CoreWebView2_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             try
             {
+                if (e == null || !IsAuthorizedOrigin(e.Source))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OSMPALETA][SEGURANCA] Mensagem rejeitada de origem não autorizada: {e?.Source}");
+                    return;
+                }
+
                 string rawJson = e.WebMessageAsJson;
                 using var doc = JsonDocument.Parse(rawJson);
                 var root = doc.RootElement;
@@ -148,54 +159,128 @@ namespace MapaCadPaleta
                     case "inserir_poste":
                         var res = CadBridge.InserirPoste(rawJson);
                         AtualizarStatus(res.Message);
-                        EnviarMensagemWeb(new { action = "resultado_insercao", success = res.Success, message = res.Message });
+                        EnviarMensagemWeb(new { action = "resultado_insercao", success = res.Success, message = res.Message, domainId = res.DomainId });
                         break;
 
                     case "capturar_ponto":
-                        ExecutarCapturaCad();
+                    {
+                        int fusoCaptura = 23;
+                        if (root.TryGetProperty("fuso", out var fusoCapProp))
+                        {
+                            if (fusoCapProp.ValueKind == JsonValueKind.Number && fusoCapProp.TryGetInt32(out int f))
+                            {
+                                fusoCaptura = f;
+                            }
+                            else if (fusoCapProp.ValueKind == JsonValueKind.String && int.TryParse(fusoCapProp.GetString(), out int fs))
+                            {
+                                fusoCaptura = fs;
+                            }
+                        }
+
+                        if (fusoCaptura < 1 || fusoCaptura > 60)
+                        {
+                            string msgErro = $"Fuso UTM inválido ({fusoCaptura}). Deve estar entre 1 e 60.";
+                            AtualizarStatus(msgErro);
+                            EnviarMensagemWeb(new { action = "erro_captura", message = msgErro });
+                            break;
+                        }
+
+                        _ultimoFuso = fusoCaptura;
+                        ExecutarCapturaCad(fusoCaptura);
                         break;
+                    }
 
                     case "escanear_dwg":
-                        int fuso = root.TryGetProperty("fuso", out var fusoProp) ? fusoProp.GetInt32() : 23;
-                        var postes = CadBridge.EscanearPostesDwg(fuso);
-                        AtualizarStatus($"{postes.Count} postes encontrados no DWG.");
-                        EnviarMensagemWeb(new { action = "postes_dwg", postes });
+                    {
+                        int fuso = _ultimoFuso;
+                        if (root.TryGetProperty("fuso", out var fusoScanProp))
+                        {
+                            if (fusoScanProp.ValueKind == JsonValueKind.Number && fusoScanProp.TryGetInt32(out int f))
+                                fuso = f;
+                            else if (fusoScanProp.ValueKind == JsonValueKind.String && int.TryParse(fusoScanProp.GetString(), out int fs))
+                                fuso = fs;
+                        }
+                        var resultadoDwg = CadBridge.EscanearDwg(fuso);
+                        AtualizarStatus($"{resultadoDwg.Postes.Count} postes e {resultadoDwg.Vaos.Count} vãos encontrados no DWG.");
+                        var postesDict = resultadoDwg.Postes.Select(p => p.ToDictionary()).ToList();
+                        var vaosDict = resultadoDwg.Vaos.Select(v => v.ToDictionary()).ToList();
+                        var relacoesDict = resultadoDwg.Relacoes.Select(r => r.ToDictionary()).ToList();
+                        var diagDict = resultadoDwg.Diagnostics.Select(d => d.ToDictionary()).ToList();
+                        var statsDict = resultadoDwg.Statistics.ToDictionary();
+
+                        // Envia estado topológico completo (v2) incluindo diagnósticos, relações e estatísticas
+                        EnviarMensagemWeb(new { 
+                            action = "estado_dwg", 
+                            version = 2, 
+                            postes = postesDict, 
+                            vaos = vaosDict,
+                            relacoes = relacoesDict,
+                            diagnostics = diagDict,
+                            statistics = statsDict
+                        });
+                        EnviarMensagemWeb(new { action = "postes_dwg", postes = postesDict });
                         break;
+                    }
 
                     case "desenhar_vao":
+                    {
                         double x1 = root.TryGetProperty("x1", out var px1) ? px1.GetDouble() : 0;
                         double y1 = root.TryGetProperty("y1", out var py1) ? py1.GetDouble() : 0;
                         double x2 = root.TryGetProperty("x2", out var px2) ? px2.GetDouble() : 0;
                         double y2 = root.TryGetProperty("y2", out var py2) ? py2.GetDouble() : 0;
                         string tipoRede = root.TryGetProperty("tipoRede", out var pTr) ? pTr.GetString() ?? "BT" : "BT";
                         string textoVao = root.TryGetProperty("textoVao", out var pTv) ? pTv.GetString() ?? "" : "";
-                        var resVao = CadBridge.InserirVaoCabos(x1, y1, x2, y2, tipoRede, textoVao);
+                        string? opId = root.TryGetProperty("operationId", out var pOp) ? pOp.GetString() : null;
+                        string? numDe = root.TryGetProperty("numDe", out var pDe) ? pDe.GetString() : null;
+                        string? numPara = root.TryGetProperty("numPara", out var pPara) ? pPara.GetString() : null;
+                        string? vaoId = root.TryGetProperty("vaoId", out var pVaoId) ? pVaoId.GetString() : null;
+                        string? posteOrigemId = root.TryGetProperty("posteOrigemId", out var pOrig) ? pOrig.GetString() : null;
+                        string? posteDestinoId = root.TryGetProperty("posteDestinoId", out var pDest) ? pDest.GetString() : null;
+
+                        var resVao = CadBridge.InserirVaoCabos(x1, y1, x2, y2, tipoRede, textoVao, opId, numDe, numPara, vaoId, posteOrigemId, posteDestinoId);
                         AtualizarStatus(resVao.Message);
+                        EnviarMensagemWeb(new { action = "resultado_vao", success = resVao.Success, message = resVao.Message, vaoId = resVao.VaoId });
                         break;
+                    }
 
                     case "desfazer_vao":
-                        string numDesfazer = root.TryGetProperty("numero", out var pNum) ? pNum.GetString() ?? "" : "";
-                        AtualizarStatus($"↩️ Traçado: Poste P{numDesfazer} desfeito.");
+                    {
+                        string? domainId = root.TryGetProperty("domainId", out var pDom) ? pDom.GetString() : null;
+                        string? opId = root.TryGetProperty("operationId", out var pOp) ? pOp.GetString() : null;
+                        string? numDesfazer = root.TryGetProperty("numero", out var pNum) ? pNum.GetString() : null;
+
+                        var resDesfazer = CadBridge.DesfazerUltimaOperacao(domainId, opId, numDesfazer);
+                        AtualizarStatus(resDesfazer.Message);
+                        EnviarMensagemWeb(new { action = "resultado_desfazer", success = resDesfazer.Success, message = resDesfazer.Message, domainId, operationId = opId, numero = numDesfazer });
                         break;
+                    }
 
                     case "abrir_kmz_ambiental":
+                    {
                         AbrirArquivoAmbiental();
                         break;
+                    }
 
                     case "desenhar_elementos_urbanos":
+                    {
                         var resUrb = CadBridge.DesenharElementosUrbanos(rawJson);
                         AtualizarStatus(resUrb.Message);
                         break;
+                    }
 
                     case "exportar_cqt":
                     case "abrir_cqtui":
+                    {
                         ExportarParaCqt(rawJson);
                         break;
+                    }
 
                     case "status":
+                    {
                         string msg = root.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
                         AtualizarStatus(msg);
                         break;
+                    }
                 }
             }
             catch (Exception ex)
@@ -206,23 +291,33 @@ namespace MapaCadPaleta
 
         private void BtnCapturarCad_Click(object sender, RoutedEventArgs e)
         {
-            ExecutarCapturaCad();
+            ExecutarCapturaCad(_ultimoFuso);
         }
 
-        private void ExecutarCapturaCad()
+        private void ExecutarCapturaCad(int fuso = 23)
         {
-            AtualizarStatus("Clique no DWG para capturar coordenadas...");
-            var cap = CadBridge.CapturarPontoCad(23);
+            if (fuso < 1 || fuso > 60)
+            {
+                string msgErro = $"Fuso UTM inválido ({fuso}). Deve estar entre 1 e 60.";
+                AtualizarStatus(msgErro);
+                EnviarMensagemWeb(new { action = "erro_captura", message = msgErro });
+                return;
+            }
+
+            _ultimoFuso = fuso;
+            AtualizarStatus($"Clique no DWG para capturar coordenadas (Fuso {fuso})...");
+            var cap = CadBridge.CapturarPontoCad(fuso);
             if (cap.Success)
             {
-                AtualizarStatus($"Ponto capturado: X={cap.X:F2}, Y={cap.Y:F2}");
+                AtualizarStatus($"Ponto capturado: X={cap.X:F2}, Y={cap.Y:F2} (Fuso {fuso})");
                 EnviarMensagemWeb(new
                 {
                     action = "ponto_capturado",
                     x = cap.X,
                     y = cap.Y,
                     lat = cap.Lat,
-                    lon = cap.Lon
+                    lon = cap.Lon,
+                    fuso = fuso
                 });
             }
             else
@@ -232,18 +327,29 @@ namespace MapaCadPaleta
             }
         }
 
-        private async void BtnRecarregar_Click(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// Recarrega o WebView2 de forma segura, garantindo que o controle esteja pronto antes do reload.
+        /// </summary>
+        public async Task RecarregarWebViewAsync()
         {
             LoadingPanel.Visibility = Visibility.Visible;
             try
             {
                 await GarantirWebViewProntoAsync();
-                WebView.CoreWebView2.Reload();
+                if (WebView.CoreWebView2 != null)
+                {
+                    WebView.CoreWebView2.Reload();
+                }
             }
             catch (Exception ex)
             {
                 AtualizarStatus($"Erro ao recarregar WebView2: {ex.Message}");
             }
+        }
+
+        private async void BtnRecarregar_Click(object sender, RoutedEventArgs e)
+        {
+            await RecarregarWebViewAsync();
         }
 
         private async void EnviarMensagemWeb(object obj)

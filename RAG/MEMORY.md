@@ -126,17 +126,31 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `MapaCadPaleta.csproj`: Multi-Targeting SDK para AutoCAD 2025/2026 (`net8.0-windows`) e AutoCAD 2018-2024 (`net48`), empacotando WebView2 e referências nativas `accoremgd`, `acdbmgd` e `acmgd`.
 - `Plugin.cs`: Implementação `IExtensionApplication` com comandos AutoCAD **`MAPAPALETA`**, **`OSMPALETA`**, **`FECHAR_MAPAPALETA`** e **`RECARREGAR_MAPAPALETA`**.
 - `PaletteHost.cs`: Contêiner nativo `PaletteSet` com acoplamento lateral (docked à direita), auto-hide e hospedagem direta de controle visual WPF.
-- `MapaControl.xaml` / `.cs`: Controle WPF com `Microsoft.Web.WebView2` utilizando **Mapeamento de Host Virtual Local (`https://auxcad.local/index.html`)**, eliminando qualquer dependência de servidores web ou portas abertas no sistema.
-- `CadBridge.cs`: Ponte de automação do AutoCAD (`DocumentLock`, `TransactionManager`):
-  - Criação automática de layers `POSTES`, `POSTES_NUMERO` e `POSTES_DESCRICAO`.
-  - Inserção de bloco `POSTE_` (ou fallback vetorial círculo/cruz) na coordenada UTM milimétrica.
+- `MapaControl.xaml` / `.cs`: Controle WPF com `Microsoft.Web.WebView2` utilizando **Mapeamento de Host Virtual Seguro (`https://appassets.example/index.html`)** com validação rigorosa de origem (`IsAuthorizedOrigin`), operando 100% isolado dentro do AutoCAD.
+- `CadBridge.cs`: Ponte de automação transacional do AutoCAD (`DocumentLock`, `TransactionManager`):
+  - **Identidade de Domínio Canônica & Persistente**:
+    - `DomainId`: Identificador único de domínio da entidade (GUID RFC4122 v4), autoridade final no C# .NET, totalmente desacoplado do número de apresentação (`Numero != DomainId`).
+    - `Numero`: Rótulo de apresentação visual do poste (ex: "01", "P01").
+    - `VaoId`: Identificador único persistente do vão de rede (GUID RFC4122 v4), independente do `OperationId`.
+    - `PosteOrigemId` & `PosteDestinoId`: Relação topológica por GUIDs canônicos de poste (não por número nem proximidade).
+    - `OperationId`: Chave de agrupamento de transação/operação de inserção.
+    - `Handle`: Identificador físico da entidade no DWG ativo.
+  - **Identidade Persistente BIM via XData Versionado (`schemaVersion = 2`)**: Aplicações DXF oficiais `AUXCAD_POSTE` e `AUXCAD_VAO` gravando metadados técnicos diretamente no DWG com cabeçalho `ExtendedDataInteger16 = 2`, parsing defensivo (`IsValid`/`InvalidReason`) e compatibilidade com legados v1.
+  - **Pipeline Modular de Escaneamento e Reconciliação (`EscanearDwg`)**:
+    - `LerEstadoDwg`: Varredura estritamente somente-leitura e defensiva sem efeitos colaterais.
+    - `ReconciliarTopologiaDwg`: Resolução por identidade (`Exact`), inferência geométrica `< 1.0m` (`Inferred`), detecção de ambiguidades (`Ambiguous`) e detecção de vãos órfãos (`ORPHAN_VAO`).
+    - `ExecutarReparosDwg`: Transação explícita de mutação para reatribuição de GUIDs de clones gerados por `COPY`/`ARRAY` e remapeamento de conjuntos (`COPY_SET_REPAIRED`).
+    - Retorno estruturado em `DwgState` contendo `Postes`, `Vaos`, `Relacoes`, `Diagnostics` e `Statistics`.
+  - **Mecanismo Seguro de Undo / Rollback (`desfazer_vao`)**: Rastreamento atômico em sessão via lista de Handles em `_historicoOperacoes` e busca por XData no `CurrentSpaceId` por `OperationId` e `DomainId`, sem depender do número visual.
+  - Criação automática de layers `POSTES`, `POSTES_NUMERO`, `POSTES_DESCRICAO`, `VIAS_CABOS_BT`, `VIAS_CABOS_MT` e `VIAS_CABOS_TEXTO`.
+  - Inserção de bloco `POSTE_` (ou fallback vetorial círculo/cruz) na coordenada UTM milimétrica (2.5D, $Z=0.0$).
   - **Inserção do Bloco Específico "T"**: Quando o poste possui transformador, insere o bloco `"T"` oficial na coordenada exata do poste com preenchimento de potência nos atributos e fallback vetorial 2.5D.
-  - **Geometria Anti-Sobreposição**: Afastamento geométrico limpo do bloco numerador `PONTO` $(-2.8, +1.8)$ e do bloco de anotações técnicas `MText` $(+1.8, +1.2)$ garantindo separação visual total sem colisão com o círculo do poste `POSTE_`.
+  - **Geometria Anti-Sobreposição**: Afastamento geométrico do bloco numerador `PONTO` $(-2.8, +1.8)$ e do bloco de anotações técnicas `MText` $(+1.8, +1.2)$ garantindo separação visual total sem colisão com o círculo do poste `POSTE_`.
   - **Suporte a Multi-Estruturas MT e BT**: Renderização empilhada e ordenada de múltiplas estruturas de média e baixa tensão no MText.
+  - Inserção de vãos de cabos entre postes com distância calculada no plano UTM e gravação de `VaoId`.
   - Captura interativa de coordenadas no desenho via `Editor.GetPoint` com sincronização no mapa.
-  - Varredura e plotagem de postes do DWG direto no Leaflet.
 - `SnyderConverter.cs` & `web/snyder.js`: Algoritmo geodésico Snyder analítico de altíssima precisão para conversão bidirecional entre Lat/Lon WGS84 e UTM SIRGAS 2000 (Fusos 22S, 23S e 24S) com responsabilidade única modularizada.
-- `web/index.html`, `web/style.css` e `web/app.js`: Interface moderna em tema executivo `#1B365D` otimizada para paleta estreita com OSM, Satélite ESRI, Google Híbrido, marcador arrastável, multi-estruturas MT e BT com tags dinâmicas e quick chips, seleção de potência do transformador (15 a 300 kVA), conversão kVA $\leftrightarrow$ kW com FP = 0.92, chips rápidos e botões de 1 clique ("📍 Inserir no CAD", "🎯 Ler DWG", "🔄 Sincronizar").
+- `web/index.html`, `web/style.css`, `web/app.js` e `web/tracado.js`: Interface moderna em tema executivo `#1B365D` otimizada para paleta estreita com OSM, Satélite ESRI, Google Híbrido, marcador arrastável, multi-estruturas MT e BT, traçado contínuo de cabos, arrasto interativo de postes, undo bidirecional (UI + DWG) e reconstrução topológica do traçado (`reconstruirTracadoDoDwg`).
 - `mapa_paleta_loader.lsp`: Carregador AutoLISP dinâmico baseado na variável de versão do AutoCAD (`ACADVER`) disparando `NETLOAD`.
 
 ### 9. `dados_tecnicos/` (Tabelas de Referência Técnicas BT & MT: SQLite3, JSON e AutoLISP)
@@ -813,3 +827,43 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Suíte OXCAD: 85 testes aprovados (100% PASS).
   - Modelos Oficiais: Hashes SHA-256 de `prancha.dwg` e `cqt_modelo.xlsm` intactos.
   - Veredito: **HOMOLOGADO**.
+
+---
+
+## 20. MAPA_CAD_PALETA — Auditoria de Coerência e Caminho de Execução Real (2026-09-27)
+- **Objetivo**: Auditar se todos os componentes declarados (`DomainId`/`VaoId` GUIDs, XData schema v2, `LerEstadoDwg`, `ReconciliarTopologiaDwg`, `ExecutarReparosDwg`, COPY SET com remapeamento conexo e substituição autoritativa de traçado) estão realmente integrados e executáveis no fluxo fim-a-fim.
+- **Ajustes de Integração Realizados**:
+  - `web/app.js`: Sincronização dos retornos `resultado_insercao` (atualiza `domainId` no `TracadoState.pontos`) e `resultado_vao` (atualiza `vaoId` no `TracadoState.vaos`).
+  - `web/app.js`: Tratamento estrito do fluxo de scan: `estado_dwg` (v2) é autoritativo; `postes_dwg` opera como fallback legado condicional.
+  - `CadBridge.cs`: Rigidez no remapeamento de COPY SET: exige que ambas as pontas do vão tenham sido clonadas na mesma operação para emitir `COPY_SET_REPAIRED`. Se apenas uma ponta foi copiada, emite `COPY_SET_UNCERTAIN` e não redireciona arbitrariamente.
+  - `CadBridge.cs`: Detecção de versões futuras de XData (`schemaVer > 2`) emitindo `UNSUPPORTED_XDATA_VERSION`.
+  - `CadBridge.cs` e `MapaControl.xaml.cs`: Eliminação de todos os warnings de nulabilidade (CS8600, CS8601, CS8602, CS8604).
+- **Testes e Build**:
+  - 59/59 testes automatizados passando em `tests/test_mapa_paleta.py` e `tests/test_mapa_postes.py` (T01 a T32).
+  - Build Release compilado com 0 erros para `net8.0-windows` e `net48`.
+- **AutoCAD Runtime**: `acad.exe` ausente nesta sessão. Checklist de homologação assistida preparado.
+- **Status**: IMPLEMENTAÇÃO: COMPLETA | INTEGRAÇÃO INTERNA: COMPLETA | TESTES OFFLINE: PASS | BUILD: PASS | RUNTIME AUTOCAD: NÃO VALIDADO | HOMOLOGAÇÃO ASSISTIDA: PENDENTE.
+
+
+---
+
+## 21. MAPA_CAD_PALETA - Definicao de Arquitetura-Alvo Digital Twin (2026-09-28)
+
+- **Objetivo**: Definir o plano de evolucao do modulo de uma ferramenta de cartografia/desenho CAD para um Digital Twin operacional do croqui de campo de rede eletrica de distribuicao.
+- **Dossie Produzido**: `mapa_cad_paleta/DOSSIE_DIGITAL_TWIN_MAPA_CAD_PALETA.md`
+- **Estado Atual Verificado no Codigo**:
+  - Schema XData v2 com DomainId/VaoId GUID, topologia PosteOrigemId/PosteDestinoId, scan reconciliador (LerEstadoDwg/ReconciliarTopologiaDwg/ExecutarReparosDwg).
+  - Lacunas identificadas com evidencia: sem coordenadas no XData (L-01), sem timestamp (L-02), sem proveniencia/fonte (L-03), sem confianca (L-04), historico Undo in-memory (L-06), sem exportacao GeoJSON (L-07).
+- **Modelo Conceitual Twin Definido**:
+  - PosteTwin: domainId (imutavel), versao (monotonica), longitude/latitude WGS84, fonte, confianca, criadoEm, modificadoEm.
+  - VaoTwin: vaoId (imutavel), vertices WGS84, comprimento_m, fonte, confianca, timestamps.
+  - RedeTopologica: grafo adjacencia com vizinhos(), vaosDePoste(), caminhoEntre(), componentesConexas().
+  - Separacao conceitual: Realidade -> Twin (XData DWG) -> CAD (geometria) -> Formatos Abertos (GeoJSON).
+- **Roadmap Definido** (5 sprints independentes):
+  - DT-01: XData v3 com longitude, latitude, criadoEm, fonte, confianca (ALTA prioridade).
+  - DT-02: Exportacao GeoJSON canonica via comando EXPORTAR_REDE_GEOJSON (MEDIA).
+  - DT-03: Persistencia do historico de Undo em sidecar .oxcad.json (MEDIA).
+  - DT-04: Deteccao de modificacao nativa via Database.ObjectModified (MEDIA).
+  - DT-05: Consulta topologica no frontend JS com BFS/DFS (MEDIA).
+- **Restricoes Confirmadas**: Z = 0.0 (2.5D), DWG como persistencia primaria, sem banco externo obrigatorio, sem CIM/IEC 61968 nesta fase, sem telemetria real-time.
+- **Status**: PLANEJAMENTO ARQUITETURAL CONCLUIDO | IMPLEMENTACAO PENDENTE (inicio pelo Sprint DT-01).

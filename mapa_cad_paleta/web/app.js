@@ -8,6 +8,18 @@
 // Chave de Persistência Local
 const STORAGE_KEY = 'AUXCAD_PALETA_STATE';
 
+// Gerador de GUID canônico RFC4122 v4
+function gerarGuid() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+window.gerarGuid = gerarGuid;
+
 // Estado da Aplicação
 const AppState = {
     map: null,
@@ -754,8 +766,13 @@ function inserirPosteNoCad() {
         cargaTri = `CARGA TRI: ${kva.toFixed(1)}kVA (${kw.toFixed(1)}kW)`;
     }
 
+    const opId = 'op_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+    const domainId = gerarGuid();
+
     const payload = {
         action: 'inserir_poste',
+        id: domainId,
+        operationId: opId,
         x,
         y,
         numero,
@@ -777,6 +794,8 @@ function inserirPosteNoCad() {
     // Registrar no traçado contínuo se o modo estiver ativo
     if (window.TracadoState && window.TracadoState.ativo && typeof window.registrarPosteTracado === 'function') {
         window.registrarPosteTracado({
+            id: domainId,
+            operationId: opId,
             numero,
             x,
             y,
@@ -868,12 +887,40 @@ function setupMensagensCSharp() {
             }
             else if (data.action === 'resultado_insercao') {
                 showToast(data.message, data.success ? 'success' : 'error');
+                // Sincroniza ID canônico confirmado pelo C# no TracadoState
+                if (data.success && data.domainId && window.TracadoState && window.TracadoState.pontos && window.TracadoState.pontos.length > 0) {
+                    const ultimo = window.TracadoState.pontos[window.TracadoState.pontos.length - 1];
+                    if (ultimo && (!ultimo.id || ultimo.id.startsWith('poste_'))) {
+                        ultimo.id = data.domainId;
+                    }
+                }
             }
-            else if (data.action === 'status_urbanos') {
-                showToast(data.message, data.success ? 'success' : 'info');
+            else if (data.action === 'resultado_vao') {
+                // Sincroniza VaoId canônico confirmado pelo C# no TracadoState
+                if (data.success && data.vaoId && window.TracadoState && window.TracadoState.vaos && window.TracadoState.vaos.length > 0) {
+                    const ultimoVao = window.TracadoState.vaos[window.TracadoState.vaos.length - 1];
+                    if (ultimoVao && (!ultimoVao.id || ultimoVao.id.startsWith('vao_'))) {
+                        ultimoVao.id = data.vaoId;
+                    }
+                }
+            }
+            else if (data.action === 'resultado_desfazer') {
+                showToast(data.message, data.success ? 'success' : 'warning');
+            }
+            else if (data.action === 'estado_dwg') {
+                // Caminho Canônico v2: Reconstrução topológica integral e autoritativa do traçado
+                window._ultimoEstadoDwgRecebido = Date.now();
+                if (typeof window.reconstruirTracadoDoDwg === 'function') {
+                    window.reconstruirTracadoDoDwg(data.postes || [], data.vaos || [], AppState.map);
+                } else {
+                    renderizarPostesDwg(data.postes || []);
+                }
             }
             else if (data.action === 'postes_dwg') {
-                renderizarPostesDwg(data.postes || []);
+                // Fallback Legado v1: só processa se estado_dwg v2 não tiver sido recebido nos últimos 500ms
+                if (!window._ultimoEstadoDwgRecebido || (Date.now() - window._ultimoEstadoDwgRecebido > 500)) {
+                    renderizarPostesDwg(data.postes || []);
+                }
             }
             else if (data.action === 'poligonos_ambientais') {
                 if (typeof window.carregarPoligonosAmbientais === 'function') {
@@ -890,13 +937,17 @@ function setupMensagensCSharp() {
 function renderizarPostesDwg(postes) {
     AppState.dwgMarkersLayer.clearLayers();
     postes.forEach(p => {
+        const numLabel = p.numero ? `P${p.numero}` : 'Poste DWG';
+        const trafoInfo = p.temTrafo ? `<br>⚡ Trafo: ${p.potenciaTrafo || 'Sim'}` : '';
+        const tipoInfo = p.tipoPoste ? `<br>Tipo: ${p.tipoPoste}` : '';
+        const legacyTag = p.isLegacy ? `<br><small style="color:#d97706;">(Legado)</small>` : '';
         const m = L.circleMarker([p.lat, p.lon], {
             radius: 5,
-            fillColor: '#10B981',
+            fillColor: p.temTrafo ? '#F59E0B' : '#10B981',
             color: '#FFFFFF',
             weight: 1.5,
             fillOpacity: 0.9
-        }).bindPopup(`<b>Poste DWG</b><br>X: ${p.x}<br>Y: ${p.y}`);
+        }).bindPopup(`<b>${numLabel}</b>${tipoInfo}${trafoInfo}${legacyTag}<br>X: ${Number(p.x).toFixed(2)}<br>Y: ${Number(p.y).toFixed(2)}`);
         AppState.dwgMarkersLayer.addLayer(m);
     });
     showToast(`${postes.length} postes sincronizados do DWG.`, 'success');

@@ -589,7 +589,7 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
 
                 ViasObstrucoesState.camadaObstrucoes.addLayer(poly);
             }
-            novosElementos.obstrucoes.push({ tipo: 'EDIFICACAO', nome: nomeEdif, coords });
+            novosElementos.obstrucoes.push({ osmId: el.id, osmType: el.type, tipo: 'EDIFICACAO', nome: nomeEdif, coords });
             console.log('[OSMPALETA][OSM][WAY]', {
                 id: el.id,
                 type: el.type,
@@ -614,7 +614,7 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
 
                 ViasObstrucoesState.camadaObstrucoes.addLayer(barreiraLinha);
             }
-            novosElementos.obstrucoes.push({ tipo: 'BARREIRA', nome: tags.barrier, coords });
+            novosElementos.obstrucoes.push({ osmId: el.id, osmType: el.type, tipo: 'BARREIRA', nome: tags.barrier, coords });
             console.log('[OSMPALETA][OSM][WAY]', {
                 id: el.id,
                 type: el.type,
@@ -639,7 +639,7 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
 
                 ViasObstrucoesState.camadaCalcadas.addLayer(calcadaLinha);
             }
-            novosElementos.calcadas.push({ tipo: 'PASSEIO', coords });
+            novosElementos.calcadas.push({ osmId: el.id, osmType: el.type, tipo: 'PASSEIO', coords });
             console.log('[OSMPALETA][OSM][WAY]', {
                 id: el.id,
                 type: el.type,
@@ -667,6 +667,8 @@ function renderizarElementosOsm(osmData, mapa, enviarCad = false) {
                 ViasObstrucoesState.camadaVias.addLayer(viaLinha);
             }
             novosElementos.vias.push({ 
+                osmId: el.id,
+                osmType: el.type,
                 tipo: 'EIXO_VIA', 
                 nome: nomeRua, 
                 coords, 
@@ -828,6 +830,8 @@ function converterEEnviarParaCad(elementos) {
     function converterLista(lista) {
         if (!lista || !Array.isArray(lista)) return [];
         return lista.map(item => ({
+            osmId: item.osmId,
+            osmType: item.osmType || 'way',
             tipo: item.tipo,
             nome: item.nome || '',
             larguraPista: item.larguraPista || 7.0,
@@ -903,4 +907,3 @@ if (document.readyState === 'loading') {
 } else {
     inicializarOpcaoViasCad();
 }
-
