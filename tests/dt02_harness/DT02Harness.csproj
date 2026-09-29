@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="..\..\mapa_cad_paleta\DigitalTwin.cs" Link="DigitalTwin.cs" />
     <Compile Include="..\..\mapa_cad_paleta\OsmGeometryPolicy.cs" Link="OsmGeometryPolicy.cs" />
+    <Compile Include="..\..\mapa_cad_paleta\ProjectScope.cs" Link="ProjectScope.cs" />
   </ItemGroup>
 </Project>

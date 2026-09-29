@@ -12,6 +12,16 @@ namespace MapaCadPaleta
         private static MapaControl? _mapaControl;
         private static readonly Guid PaletteGuid = new Guid("E4C23A4D-7E81-4C5D-912A-18F2E7D90B31");
 
+        public static event EventHandler<ProjectScopeChangedEventArgs>? ProjectScopeChanged;
+
+        public static ProjectScope CurrentProjectScope => CadBridge.GetCurrentProjectScope();
+
+        internal static void NotifyProjectScopeChanged(object? sender, ProjectScopeChangedEventArgs eventArgs)
+        {
+            ProjectScopeChanged?.Invoke(sender, eventArgs);
+            _mapaControl?.NotifyProjectScopeChanged(eventArgs);
+        }
+
         /// <summary>
         /// Exibe ou cria a paleta acoplada do AutoCAD com o mapa OSM.
         /// </summary>

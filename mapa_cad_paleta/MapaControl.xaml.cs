@@ -117,6 +117,7 @@ namespace MapaCadPaleta
                 if (!await navigationCompleted.Task.ConfigureAwait(true))
                     throw new InvalidOperationException("A navegação do WebView2 não foi concluída com sucesso.");
 
+                EnviarEscopoAtualParaWeb();
             }
             catch (Exception ex)
             {
@@ -127,6 +128,32 @@ namespace MapaCadPaleta
         }
 
         private int _ultimoFuso = 23;
+
+        internal void NotifyProjectScopeChanged(ProjectScopeChangedEventArgs eventArgs)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+                EnviarMensagemWeb(new
+                {
+                    action = "project_scope_changed",
+                    sobId = eventArgs.Current.SobId,
+                    status = eventArgs.Current.Status.ToString(),
+                    detail = eventArgs.Current.Detail,
+                    generation = eventArgs.Generation
+                })));
+        }
+
+        private void EnviarEscopoAtualParaWeb()
+        {
+            ProjectScope scope = CadBridge.GetCurrentProjectScope();
+            EnviarMensagemWeb(new
+            {
+                action = "project_scope_changed",
+                sobId = scope.SobId,
+                status = scope.Status.ToString(),
+                detail = scope.Detail,
+                generation = CadBridge.ActiveDocumentGeneration
+            });
+        }
 
         /// <summary>
         /// Valida se a origem da mensagem recebida pertence estritamente ao host virtual seguro autorizado.

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Text;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Colors;
@@ -243,6 +244,31 @@ namespace MapaCadPaleta
         public const short XDATA_SCHEMA_VERSION = 2;
 
         private static readonly List<CadOperacaoRegistro> _historicoOperacoes = new();
+        private static ProjectScope _currentProjectScope = ProjectScopeContract.Unbound();
+        private static long _activeDocumentGeneration;
+
+        public static long ActiveDocumentGeneration => Interlocked.Read(ref _activeDocumentGeneration);
+
+        public static event EventHandler<ProjectScopeChangedEventArgs>? ProjectScopeChanged;
+
+        public static ProjectScope GetCurrentProjectScope()
+        {
+            Document? document = acApp.DocumentManager.MdiActiveDocument;
+            return document == null
+                ? ProjectScopeContract.Unbound()
+                : DwgProjectScopeStore.Read(document.Database);
+        }
+
+        public static void NotifyActiveDocumentChanged()
+        {
+            ProjectScope nextScope = GetCurrentProjectScope();
+            ProjectScope previousScope = _currentProjectScope;
+            _currentProjectScope = nextScope;
+            long generation = Interlocked.Increment(ref _activeDocumentGeneration);
+            ProjectScopeChanged?.Invoke(
+                null,
+                new ProjectScopeChangedEventArgs(previousScope, nextScope, generation));
+        }
 
         private const string LAYER_POSTES = "POSTES";
         private const string LAYER_NUMERO = "POSTES_NUMERO";
@@ -512,6 +538,16 @@ namespace MapaCadPaleta
             {
                 using var jsonDoc = JsonDocument.Parse(rawJson);
                 var root = jsonDoc.RootElement;
+                ProjectScope activeScope = DwgProjectScopeStore.Read(db);
+                if (!ProjectScopeContract.TryValidatePayload(
+                        root,
+                        activeScope,
+                        ActiveDocumentGeneration,
+                        out string scopeError))
+                {
+                    ed.WriteMessage($"\n[OSMPALETA][CAD][ESCOPO] Payload rejeitado: {scopeError}.");
+                    return (false, $"Payload OSM rejeitado por escopo inválido ou desatualizado ({scopeError}).");
+                }
 
                 int totalViasRecebidas = root.TryGetProperty("vias", out var viasJson) && viasJson.ValueKind == JsonValueKind.Array ? viasJson.GetArrayLength() : 0;
                 int totalCalcadasRecebidas = root.TryGetProperty("calcadas", out var calcadasJson) && calcadasJson.ValueKind == JsonValueKind.Array ? calcadasJson.GetArrayLength() : 0;
@@ -593,6 +629,16 @@ namespace MapaCadPaleta
                     {
                         if (string.IsNullOrWhiteSpace(chave)) return;
                         GravarXDataOsm(entidade, db, tr, chave, fingerprint, categoria, item);
+                        if (!entidadesOsm.TryGetValue(chave, out var entidades))
+                        {
+                            entidades = new List<OsmEntityRef>();
+                            entidadesOsm[chave] = entidades;
+                        }
+                        entidades.Add(new OsmEntityRef
+                        {
+                            ObjectId = entidade.ObjectId,
+                            Fingerprint = fingerprint
+                        });
                     }
 
                     void DesenharViasComOffsets(JsonElement arrayElem, bool inserirNome = true)

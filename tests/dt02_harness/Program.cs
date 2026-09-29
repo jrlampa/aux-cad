@@ -40,6 +40,20 @@ internal static class Program
         Run("OSM empty geometry is rejected", OsmEmptyGeometryIsRejected);
         Run("OSM invalid coordinates are rejected", OsmInvalidCoordinatesAreRejected);
         Run("OSM unknown geometry retains legacy closure", OsmUnknownGeometryRetainsFallback);
+        Run("project scope identity is normalized", ProjectScopeIdentityIsNormalized);
+        Run("project scope rejects invalid IDs", ProjectScopeRejectsInvalidIds);
+        Run("project scope write normalizes before comparison", ProjectScopeWriteNormalizesBeforeComparison);
+        Run("project scope write rejects conflicting binding", ProjectScopeWriteRejectsConflictingBinding);
+        Run("project scope write rejects invalid ID", ProjectScopeWriteRejectsInvalidId);
+        Run("project scope write rejects invalid existing metadata", ProjectScopeWriteRejectsInvalidExistingMetadata);
+        Run("project scope distinguishes missing metadata", ProjectScopeDistinguishesMissingMetadata);
+        Run("project scope detects conflicting identities", ProjectScopeDetectsConflicts);
+        Run("project scope rejects unsupported metadata", ProjectScopeRejectsUnsupportedMetadata);
+        Run("project scope validates matching payload", ProjectScopeValidatesMatchingPayload);
+        Run("project scope rejects mismatched payload", ProjectScopeRejectsMismatchedPayload);
+        Run("project scope rejects stale generation", ProjectScopeRejectsStaleGeneration);
+        Run("project scope rejects invalid generation", ProjectScopeRejectsInvalidGeneration);
+        Run("project scope rejects unbound payload", ProjectScopeRejectsUnboundPayload);
 
         Console.WriteLine($"DT-02: {_passed} tests passed.");
         return 0;
@@ -322,6 +336,160 @@ internal static class Program
         Equal(false, OsmGeometryPolicy.ShouldClose("TIPO_DESCONHECIDO", false));
     }
 
+    private static void ProjectScopeIdentityIsNormalized()
+    {
+        ProjectScope scope = ProjectScopeContract.Resolve(
+            ProjectScopeContract.MetadataVersion,
+            ProjectScopeContract.Encode(" ab_123 "));
+        Equal(ProjectScopeStatus.Bound, scope.Status);
+        Equal("AB_123", scope.SobId);
+    }
+
+    private static void ProjectScopeRejectsInvalidIds()
+    {
+        ProjectScope scope = ProjectScopeContract.Resolve(
+            ProjectScopeContract.MetadataVersion,
+            new[] { new KeyValuePair<string, string>(ProjectScopeContract.SobIdField, "SOB_123") });
+        Equal(ProjectScopeStatus.Invalid, scope.Status);
+        Equal(null, scope.SobId);
+    }
+
+    private static void ProjectScopeWriteNormalizesBeforeComparison()
+    {
+        ProjectScope existing = ProjectScopeContract.Resolve(
+            ProjectScopeContract.MetadataVersion,
+            ProjectScopeContract.Encode("ABC"));
+        Equal("ABC", ProjectScopeContract.ValidateWrite(existing, " abc "));
+    }
+
+    private static void ProjectScopeWriteRejectsConflictingBinding()
+    {
+        ProjectScope existing = ProjectScopeContract.Resolve(
+            ProjectScopeContract.MetadataVersion,
+            ProjectScopeContract.Encode("ABC"));
+        Throws<InvalidOperationException>(() => ProjectScopeContract.ValidateWrite(existing, "XYZ"));
+    }
+
+    private static void ProjectScopeWriteRejectsInvalidId()
+    {
+        Throws<ArgumentException>(() => ProjectScopeContract.ValidateWrite(ProjectScopeContract.Unbound(), null));
+    }
+
+    private static void ProjectScopeWriteRejectsInvalidExistingMetadata()
+    {
+        Throws<InvalidOperationException>(() =>
+            ProjectScopeContract.ValidateWrite(ProjectScopeContract.Invalid("BROKEN"), "ABC"));
+        Throws<InvalidOperationException>(() =>
+            ProjectScopeContract.ValidateWrite(
+                ProjectScopeContract.Resolve(
+                    ProjectScopeContract.MetadataVersion,
+                    new[]
+                    {
+                        new KeyValuePair<string, string>(ProjectScopeContract.SobIdField, "ABC"),
+                        new KeyValuePair<string, string>(ProjectScopeContract.SobIdField, "XYZ")
+                    }),
+                "ABC"));
+    }
+
+    private static void ProjectScopeDistinguishesMissingMetadata()
+    {
+        Equal(ProjectScopeStatus.Unbound, ProjectScopeContract.Unbound().Status);
+        Equal(
+            ProjectScopeStatus.Invalid,
+            ProjectScopeContract.Resolve(
+                ProjectScopeContract.MetadataVersion,
+                Array.Empty<KeyValuePair<string, string>>()).Status);
+    }
+
+    private static void ProjectScopeDetectsConflicts()
+    {
+        ProjectScope scope = ProjectScopeContract.Resolve(
+            ProjectScopeContract.MetadataVersion,
+            new[]
+            {
+                new KeyValuePair<string, string>(ProjectScopeContract.SobIdField, "ABC"),
+                new KeyValuePair<string, string>(ProjectScopeContract.SobIdField, "XYZ")
+            });
+        Equal(ProjectScopeStatus.Ambiguous, scope.Status);
+    }
+
+    private static void ProjectScopeRejectsUnsupportedMetadata()
+    {
+        ProjectScope scope = ProjectScopeContract.Resolve(
+            ProjectScopeContract.MetadataVersion + 1,
+            ProjectScopeContract.Encode("ABC"));
+        Equal(ProjectScopeStatus.Invalid, scope.Status);
+        Equal("UNSUPPORTED_METADATA_VERSION", scope.Detail);
+    }
+
+    private static void ProjectScopeValidatesMatchingPayload()
+    {
+        ProjectScope scope = ProjectScopeContract.Resolve(
+            ProjectScopeContract.MetadataVersion,
+            ProjectScopeContract.Encode("ABC"));
+        using JsonDocument payload = JsonDocument.Parse(
+            "{\"projectScope\":{\"sobId\":\"abc\",\"generation\":7}}");
+
+        Equal(true, ProjectScopeContract.TryValidatePayload(
+            payload.RootElement, scope, 7, out string error));
+        Equal(string.Empty, error);
+    }
+
+    private static void ProjectScopeRejectsMismatchedPayload()
+    {
+        ProjectScope scope = ProjectScopeContract.Resolve(
+            ProjectScopeContract.MetadataVersion,
+            ProjectScopeContract.Encode("ABC"));
+        using JsonDocument payload = JsonDocument.Parse(
+            "{\"projectScope\":{\"sobId\":\"XYZ\",\"generation\":7}}");
+
+        Equal(false, ProjectScopeContract.TryValidatePayload(
+            payload.RootElement, scope, 7, out string error));
+        Equal("PROJECT_SCOPE_MISMATCH", error);
+    }
+
+    private static void ProjectScopeRejectsStaleGeneration()
+    {
+        ProjectScope scope = ProjectScopeContract.Resolve(
+            ProjectScopeContract.MetadataVersion,
+            ProjectScopeContract.Encode("ABC"));
+        using JsonDocument payload = JsonDocument.Parse(
+            "{\"projectScope\":{\"sobId\":\"ABC\",\"generation\":6}}");
+
+        Equal(false, ProjectScopeContract.TryValidatePayload(
+            payload.RootElement, scope, 7, out string error));
+        Equal("PROJECT_SCOPE_GENERATION_STALE", error);
+    }
+
+    private static void ProjectScopeRejectsInvalidGeneration()
+    {
+        ProjectScope scope = ProjectScopeContract.Resolve(
+            ProjectScopeContract.MetadataVersion,
+            ProjectScopeContract.Encode("ABC"));
+
+        using JsonDocument negativeGeneration = JsonDocument.Parse(
+            "{\"projectScope\":{\"sobId\":\"ABC\",\"generation\":-1}}");
+        Equal(false, ProjectScopeContract.TryValidatePayload(
+            negativeGeneration.RootElement, scope, 7, out string negativeError));
+        Equal("PROJECT_SCOPE_GENERATION_INVALID", negativeError);
+
+        using JsonDocument nonNumericGeneration = JsonDocument.Parse(
+            "{\"projectScope\":{\"sobId\":\"ABC\",\"generation\":\"7\"}}");
+        Equal(false, ProjectScopeContract.TryValidatePayload(
+            nonNumericGeneration.RootElement, scope, 7, out string nonNumericError));
+        Equal("PROJECT_SCOPE_GENERATION_INVALID", nonNumericError);
+    }
+
+    private static void ProjectScopeRejectsUnboundPayload()
+    {
+        using JsonDocument payload = JsonDocument.Parse(
+            "{\"projectScope\":{\"sobId\":\"ABC\",\"generation\":7}}");
+
+        Equal(false, ProjectScopeContract.TryValidatePayload(
+            payload.RootElement, ProjectScopeContract.Unbound(), 7, out string error));
+        Equal("ACTIVE_PROJECT_SCOPE_UNBOUND", error);
+    }
+
     private static string ComponentSignature(DigitalTwin twin) =>
         string.Join(";", twin.GetConnectedComponents().Select(component =>
             $"{string.Join(",", component.PosteIds)}:{string.Join(",", component.VaoIds)}"));
@@ -382,6 +550,20 @@ internal static class Program
         {
             throw new InvalidOperationException($"Expected '{expected}', got '{actual}'.");
         }
+    }
+
+    private static void Throws<TException>(Action action) where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"Expected {typeof(TException).Name}.");
     }
 }
 

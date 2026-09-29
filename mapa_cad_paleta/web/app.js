@@ -880,7 +880,18 @@ function setupMensagensCSharp() {
             const data = event.data;
             if (!data) return;
 
-            if (data.action === 'ponto_capturado') {
+            if (data.action === 'project_scope_changed') {
+                if (typeof window.handleProjectScopeChanged === 'function') {
+                    window.handleProjectScopeChanged(data);
+                }
+                showToast(
+                    data.status === 'Bound'
+                        ? `Projeto OSM ativo: ${data.sobId}`
+                        : 'Projeto OSM sem ProjectScope válido; envio ao CAD bloqueado.',
+                    data.status === 'Bound' ? 'info' : 'warning'
+                );
+            }
+            else if (data.action === 'ponto_capturado') {
                 posicionarMarcador(data.lat, data.lon);
                 AppState.map.flyTo([data.lat, data.lon], 19);
                 showToast(`Ponto capturado do CAD: (${data.x.toFixed(2)}, ${data.y.toFixed(2)})`, 'success');

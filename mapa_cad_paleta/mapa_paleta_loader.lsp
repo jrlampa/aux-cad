@@ -52,7 +52,11 @@
       (setvar "FILEDIA" 0)
       (vl-catch-all-apply '(lambda () (command "_.NETLOAD" dll-path)))
       (setvar "FILEDIA" 1)
-      t)
+      (if (getcname "AUXCAD_BIND_SOB")
+        t
+        (progn
+          (princ "\n[AUX CAD ERRO] NETLOAD terminou, mas AUXCAD_BIND_SOB não foi registrado.")
+          nil)))
     (progn
       (princ "\n[AUX CAD ERRO] DLL MapaCadPaleta.dll não encontrada em bin/Release.")
       (princ "\nExecute 'dotnet build mapa_cad_paleta/MapaCadPaleta.csproj -c Release' para compilar.")
@@ -60,22 +64,35 @@
 )
 
 ;;; Comandos de Acesso Rápido no AutoCAD
-(defun c:MAPAPALETA ()
+(defun c:MAPAPALETA ( / command-result )
   "Abre a Paleta Cartográfica OSM integrada no AutoCAD."
-  (if (null (fboundp 'c:MAPAPALETA-NET))
-    (c:mapa-paleta-load-dll))
-  (vl-catch-all-apply '(lambda () (command "MAPAPALETA")))
+  (if (or (getcname "AUXCAD_BIND_SOB")
+          (c:mapa-paleta-load-dll))
+    (progn
+      (setq command-result
+        (vl-catch-all-apply '(lambda () (command "MAPAPALETA"))))
+      (if (vl-catch-all-error-p command-result)
+        (princ (strcat "\n[AUX CAD ERRO] Falha ao abrir a paleta: "
+                       (vl-catch-all-error-message command-result)))))
+    (princ "\n[AUX CAD ERRO] A paleta não será aberta porque a DLL não foi carregada."))
   (princ)
 )
 
 (defun c:OSMPALETA () (c:MAPAPALETA))
 (defun c:PALETAMAPA () (c:MAPAPALETA))
 
-(defun c:RECARREGAR_MAPAPALETA ()
+(defun c:RECARREGAR_MAPAPALETA ( / command-result )
   "Recarrega a paleta e recarrega seus assets web."
-  (c:mapa-paleta-load-dll)
-  (vl-catch-all-apply '(lambda () (command "RECARREGAR_MAPAPALETA")))
-  (princ "\n[AUX CAD] Paleta OSM recarregada.")
+  (if (or (getcname "AUXCAD_BIND_SOB")
+          (c:mapa-paleta-load-dll))
+    (progn
+      (setq command-result
+        (vl-catch-all-apply '(lambda () (command "RECARREGAR_MAPAPALETA"))))
+      (if (vl-catch-all-error-p command-result)
+        (princ (strcat "\n[AUX CAD ERRO] Falha ao recarregar a paleta: "
+                       (vl-catch-all-error-message command-result)))
+        (princ "\n[AUX CAD] Solicitação de recarga da paleta concluída.")))
+    (princ "\n[AUX CAD ERRO] Recarga cancelada porque a DLL não foi carregada."))
   (princ)
 )
 

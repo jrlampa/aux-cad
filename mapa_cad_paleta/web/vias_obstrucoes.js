@@ -19,8 +19,60 @@ const ViasObstrucoesState = {
     camadaObstrucoes: null,
     carregando: false,
     inFlightRequests: new Map(),
-    ultimaFalha: null
+    ultimaFalha: null,
+    projectScope: null,
+    projectGeneration: -1
 };
+
+function limparElementosOsmAcumulados() {
+    ViasObstrucoesState.elementosAcumulados.vias.length = 0;
+    ViasObstrucoesState.elementosAcumulados.calcadas.length = 0;
+    ViasObstrucoesState.elementosAcumulados.obstrucoes.length = 0;
+
+    for (const layer of [
+        ViasObstrucoesState.camadaVias,
+        ViasObstrucoesState.camadaCalcadas,
+        ViasObstrucoesState.camadaObstrucoes
+    ]) {
+        if (layer) layer.clearLayers();
+    }
+}
+
+function capturarContextoOsm() {
+    const { projectScope, projectGeneration } = ViasObstrucoesState;
+    if (!projectScope || !Number.isSafeInteger(projectGeneration) || projectGeneration < 0) return null;
+    return { sobId: projectScope, generation: projectGeneration };
+}
+
+function contextoOsmAindaAtual(contexto) {
+    return !!contexto
+        && ViasObstrucoesState.projectScope === contexto.sobId
+        && ViasObstrucoesState.projectGeneration === contexto.generation;
+}
+
+function invalidarEstadoOsmPorProjectScope(scope) {
+    const generation = Number(scope?.generation);
+    if (!Number.isSafeInteger(generation) || generation < 0) return false;
+
+    const sobId = typeof scope.sobId === 'string' ? scope.sobId.trim().toUpperCase() : '';
+    const bound = scope.status === 'Bound' && !!sobId;
+    const nextProjectScope = bound ? sobId : null;
+    if (generation < ViasObstrucoesState.projectGeneration) return false;
+    if (generation === ViasObstrucoesState.projectGeneration) {
+        return ViasObstrucoesState.projectScope === nextProjectScope;
+    }
+
+    ViasObstrucoesState.projectGeneration = generation;
+    ViasObstrucoesState.projectScope = nextProjectScope;
+    ViasObstrucoesState.cacheGrid.clear();
+    ViasObstrucoesState.waysProcessados.clear();
+    limparElementosOsmAcumulados();
+    ViasObstrucoesState.inFlightRequests.clear();
+    ViasObstrucoesState.carregando = false;
+    ViasObstrucoesState.ultimaFalha = null;
+
+    return true;
+}
 
 /**
  * Sincroniza a opção de gerar vias automaticamente no AutoCAD conforme novos postes são inseridos
@@ -320,7 +372,7 @@ async function executarConsultaOsmInterna(bbox, requestKey) {
 
 async function executarConsultaOsm(bbox) {
     if (!bbox) return resultadoOsm('INVALID_REQUEST');
-    const requestKey = obterChaveConsultaOsm(bbox);
+    const requestKey = `${ViasObstrucoesState.projectGeneration}:${obterChaveConsultaOsm(bbox)}`;
     const existente = ViasObstrucoesState.inFlightRequests.get(requestKey);
     if (existente) {
         console.info('[OSMPALETA][OSM][DEDUP] requisição já em andamento', requestKey);
@@ -340,6 +392,8 @@ async function executarConsultaOsm(bbox) {
  * Carrega vias, calçadas e edificações/obstruções da OpenStreetMap API
  */
 async function carregarContextoUrbano(lat, lon, raioMetros = 150, mapa = null, forcarCad = false) {
+    const contexto = capturarContextoOsm();
+    if (!contexto) return;
     const querCad = forcarCad || ViasObstrucoesState.desenharNoCad;
     if (!ViasObstrucoesState.ativo && !querCad) return;
 
@@ -361,6 +415,7 @@ async function carregarContextoUrbano(lat, lon, raioMetros = 150, mapa = null, f
 
     ViasObstrucoesState.carregando = true;
     const resultado = await executarConsultaOsm(bbox);
+    if (!contextoOsmAindaAtual(contexto)) return;
     ViasObstrucoesState.carregando = false;
 
     if (resultado.status === 'SUCCESS' && resultado.data) {
@@ -381,12 +436,15 @@ async function carregarContextoUrbano(lat, lon, raioMetros = 150, mapa = null, f
  * Força o desenho das vias e passeios no AutoCAD cobrindo a área da rede/mapa
  */
 async function desenharViasNoCad(forcarReconsulta = false, mapa = null) {
-    const map = mapa || (window.AppState ? window.AppState.map : null);
-    
-    if (forcarReconsulta) {
-        ViasObstrucoesState.cacheGrid.clear();
-        ViasObstrucoesState.waysProcessados.clear();
+    const contexto = capturarContextoOsm();
+    if (!contexto) {
+        if (typeof showToast === 'function') {
+            showToast('O projeto ativo ainda não possui ProjectScope vinculado.', 'warning');
+        }
+        return;
     }
+
+    const map = mapa || (window.AppState ? window.AppState.map : null);
     
     // Se já temos elementos carregados e não foi forçada reconsulta completa:
     if (!forcarReconsulta && ViasObstrucoesState.elementosAcumulados.vias.length > 0) {
@@ -449,8 +507,14 @@ async function desenharViasNoCad(forcarReconsulta = false, mapa = null) {
     }
 
     const resultado = await executarConsultaOsm(bbox);
+    if (!contextoOsmAindaAtual(contexto)) return;
 
     if (resultado.status === 'SUCCESS' && resultado.data) {
+        if (forcarReconsulta) {
+            ViasObstrucoesState.cacheGrid.clear();
+            ViasObstrucoesState.waysProcessados.clear();
+            limparElementosOsmAcumulados();
+        }
         renderizarElementosOsm(resultado.data, map, true);
         const nVias = ViasObstrucoesState.elementosAcumulados.vias.length;
         if (typeof showToast === 'function') {
@@ -820,6 +884,10 @@ function obterFusoAtual() {
  */
 function converterEEnviarParaCad(elementos) {
     if (!elementos) return;
+    if (!ViasObstrucoesState.projectScope || ViasObstrucoesState.projectGeneration < 0) {
+        console.warn('[OSMPALETA][ESCOPO] Envio ao CAD bloqueado: ProjectScope não vinculado.');
+        return;
+    }
     const fuso = obterFusoAtual();
     const snyder = window.Snyder || (typeof Snyder !== 'undefined' ? Snyder : null);
     if (!snyder || typeof snyder.latLonToUtm !== 'function') {
@@ -861,6 +929,10 @@ function converterEEnviarParaCad(elementos) {
 
     const payload = {
         action: 'desenhar_elementos_urbanos',
+        projectScope: {
+            sobId: ViasObstrucoesState.projectScope,
+            generation: ViasObstrucoesState.projectGeneration
+        },
         fuso,
         vias: viasUtm,
         calcadas: calcadasUtm,
@@ -900,6 +972,8 @@ window.executarConsultaOsm = executarConsultaOsm;
 window.executarConsultaOverpass = executarConsultaOsm;
 window.sincronizarOpcaoViasCad = sincronizarOpcaoViasCad;
 window.inicializarOpcaoViasCad = inicializarOpcaoViasCad;
+window.aplicarProjectScopeOsm = invalidarEstadoOsmPorProjectScope;
+window.handleProjectScopeChanged = invalidarEstadoOsmPorProjectScope;
 
 // Inicializa preferências de vias assim que o DOM estiver pronto
 if (document.readyState === 'loading') {

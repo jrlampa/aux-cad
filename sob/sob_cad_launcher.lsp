@@ -71,7 +71,8 @@
 ;; Executa o fluxo operacional completo da SOB com nomenclatura canônica
 (defun sob-executar-fluxo (sobInput destPath abrirCad / acadApp doc sobId sobName destinationRoot sobRoot
                              croquiDir baseDwg jsonFile logFile pyScript cmd wsh resJson f_json line_json
-                             dwgTarget f_log line_log log_txt erro_msg sucesso retVal)
+                             dwgTarget f_log line_log log_txt erro_msg sucesso retVal loaderPath loaderResult
+                             saveStatus)
 
   (setq acadApp (vlax-get-acad-object))
   (if (and acadApp (not (vl-catch-all-error-p acadApp)))
@@ -190,17 +191,67 @@
                             (progn
                               ;; Validação estrita: CURRENT_AUTOCAD_DWG == BASE_DWG (Seção 17, Etapa 24)
                               (setq activeDoc (vl-catch-all-apply 'vla-get-ActiveDocument (list acadApp)))
-                              (if (and activeDoc (not (vl-catch-all-error-p activeDoc)))
+                              (if (or (not activeDoc) (vl-catch-all-error-p activeDoc))
+                                (setq erroCad "[FALHA CRÍTICA] Não foi possível validar o documento ativo do AutoCAD.")
                                 (progn
                                   (setq currentDwg (vl-catch-all-apply 'vla-get-FullName (list activeDoc)))
-                                  (if (and (stringp currentDwg) (/= currentDwg ""))
-                                    (if (/= (strcase currentDwg) (strcase dwgTarget))
-                                      (progn
-                                        (setq erroCad (strcat "[FALHA CRÍTICA] O arquivo aberto não corresponde ao BASE_DWG esperado.\n\n"
-                                                              "BASE_DWG esperado: " dwgTarget "\n"
-                                                              "DWG efetivamente aberto: " currentDwg "\n"
-                                                              "SOB_ID: " sobId))
-                                        (princ (strcat "\n" erroCad))
+                                  (if (or (vl-catch-all-error-p currentDwg)
+                                          (not (stringp currentDwg))
+                                          (= currentDwg "")
+                                          (/= (strcase currentDwg) (strcase dwgTarget)))
+                                    (progn
+                                      (setq erroCad (strcat "[FALHA CRÍTICA] O arquivo aberto não corresponde ao BASE_DWG esperado.\n\n"
+                                                            "BASE_DWG esperado: " dwgTarget "\n"
+                                                            "DWG efetivamente aberto: "
+                                                            (if (and (stringp currentDwg) (/= currentDwg ""))
+                                                              currentDwg
+                                                              "<INDISPONÍVEL>") "\n"
+                                                            "SOB_ID: " sobId))
+                                      (princ (strcat "\n" erroCad))
+                                    )
+                                    (progn
+                                      (setq loaderPath (findfile "mapa_cad_paleta\\mapa_paleta_loader.lsp"))
+                                      (if (not loaderPath)
+                                        (setq loaderPath (findfile "mapa_paleta_loader.lsp"))
+                                      )
+                                      (if (and loaderPath (not (fboundp 'c:mapa-paleta-load-dll)))
+                                        (setq loaderResult (vl-catch-all-apply 'load (list loaderPath)))
+                                      )
+                                      (if (or (not (fboundp 'c:mapa-paleta-load-dll))
+                                              (and loaderResult (vl-catch-all-error-p loaderResult)))
+                                        (setq erroCad "[FALHA] Loader .NET da paleta não está disponível.")
+                                        (progn
+                                          (setq loaderResult
+                                            (vl-catch-all-apply 'c:mapa-paleta-load-dll nil))
+                                          (if (or (vl-catch-all-error-p loaderResult) (not loaderResult))
+                                            (setq erroCad "[FALHA] Não foi possível carregar a DLL MapaCadPaleta.")
+                                          )
+                                        )
+                                      )
+                                      (if (not erroCad)
+                                        (setq bindResult
+                                          (vl-catch-all-apply
+                                            'vl-cmdf
+                                            (list "AUXCAD_BIND_SOB" sobId dwgTarget)))
+                                      )
+                                      (if (and (not erroCad) (vl-catch-all-error-p bindResult))
+                                        (setq erroCad (strcat "[FALHA] Não foi possível vincular o ProjectScope ao DWG: "
+                                                              (vl-catch-all-error-message bindResult)))
+                                      )
+                                      (if (not erroCad)
+                                        (progn
+                                          (setq saveResult (vl-catch-all-apply 'vl-cmdf (list "_.QSAVE")))
+                                          (if (vl-catch-all-error-p saveResult)
+                                            (setq erroCad (strcat "[FALHA] ProjectScope vinculado em memória, mas não foi possível salvar o DWG: "
+                                                                  (vl-catch-all-error-message saveResult)))
+                                            (progn
+                                              (setq saveStatus (getvar "DBMOD"))
+                                              (if (or (not (numberp saveStatus)) (/= saveStatus 0))
+                                                (setq erroCad "[FALHA] QSAVE terminou, mas o DWG ainda indica alterações não salvas.")
+                                              )
+                                            )
+                                          )
+                                        )
                                       )
                                     )
                                   )
