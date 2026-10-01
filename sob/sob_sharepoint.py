@@ -444,6 +444,141 @@ class SharePointClient:
         # Sem extensão de arquivo representa pasta da SOB (ex: 'SOB_A057349839')
         return True
 
+    @staticmethod
+    def _resolver_itens_sob(
+        itens_encontrados: List[Dict[str, Any]],
+        sob_codigo: str,
+        url_contexto: str,
+    ) -> Dict[str, Any]:
+        """
+        Classifica e resolve os artefatos retornados do SharePoint para a SOB especificada.
+
+        Regras de Identidade (Seção 4):
+        - Todos os artefatos pertencentes à mesma SOB (ex: A057526153, A057526153_CROQUI.pdf,
+          A057526153_FOTOS.zip, A057526153_*.*) são reconhecidos como uma única entidade e
+          NÃO geram SobConflictError.
+        - Conflito só ocorre quando existirem entidades de SOBs realmente incompatíveis
+          (ex: A057526153 e A057526154) ou múltiplas pastas ambíguas de obras distintas.
+
+        Prioridade de resolução quando não há conflito:
+        1. Pasta cujo nome seja exatamente o SOB_ID (ou SOB_{SOB_ID});
+        2. Arquivo de croqui correspondente ao SOB_ID (ex: *CROQUI* ou *.DWG* / *.PDF*);
+        3. Demais artefatos pertencentes à mesma SOB.
+        """
+        if not itens_encontrados:
+            raise SobNotFoundError(f"[FALHA] SOB {sob_codigo} não encontrada no SharePoint.")
+
+        codigo_limpo = sob_codigo.strip().upper()
+        sob_id = codigo_limpo[4:] if codigo_limpo.startswith("SOB_") else codigo_limpo
+
+        # 1. Filtra itens únicos preservando ordem
+        itens_unicos = []
+        nomes_vistos = set()
+        for it in itens_encontrados:
+            txt = it.get("texto", "")
+            nome = txt.split("\n")[0].strip()
+            if nome and nome.upper() not in nomes_vistos:
+                nomes_vistos.add(nome.upper())
+                itens_unicos.append(it)
+
+        if not itens_unicos:
+            itens_unicos = itens_encontrados
+
+        if len(itens_unicos) == 1:
+            return itens_unicos[0]
+
+        # 2. Detecta se há conflito real entre SOBs diferentes ou pastas ambíguas
+        sobs_distintas = set()
+        pastas_candidatas = []
+        arquivos_croqui = []
+        outros_artefatos = []
+
+        extensoes_arquivo = {
+            ".DWG", ".PDF", ".ZIP", ".XLSX", ".XLSM",
+            ".KMZ", ".KML", ".PNG", ".JPG", ".JPEG",
+            ".DOC", ".DOCX", ".TXT",
+        }
+
+        for it in itens_unicos:
+            nome = it.get("texto", "").split("\n")[0].strip()
+            nome_upper = nome.upper()
+
+            # Extrai possíveis identificadores de SOB presentes no nome
+            # Padrão: A seguido de 8 a 10 dígitos, ou 8 a 10 dígitos puros
+            possiveis_sobs = re.findall(r"(?:SOB_)?([A-Z]?\d{8,10})", nome_upper)
+            for s in possiveis_sobs:
+                s_limpo = s[4:] if s.startswith("SOB_") else s
+                if s_limpo != sob_id:
+                    sobs_distintas.add(s_limpo)
+
+            tem_extensao = any(nome_upper.endswith(ext) for ext in extensoes_arquivo) or ("." in nome and len(nome.rsplit(".", 1)[-1]) <= 4)
+            eh_pasta = not tem_extensao
+
+            if eh_pasta:
+                pastas_candidatas.append(it)
+            elif "CROQUI" in nome_upper or nome_upper.endswith(".DWG") or nome_upper.endswith(".PDF"):
+                arquivos_croqui.append(it)
+            else:
+                outros_artefatos.append(it)
+
+        # Se foram encontradas SOBs realmente incompatíveis
+        if sobs_distintas:
+            try:
+                from sob.sob_fallback_manual import gerar_url_busca_sharepoint
+            except ModuleNotFoundError:
+                from sob_fallback_manual import gerar_url_busca_sharepoint
+
+            url_b = gerar_url_busca_sharepoint(sob_id, url_contexto)
+            raise SobConflictError(
+                "[FALHA] Foram encontradas múltiplas correspondências ambíguas.",
+                ocorrencias=itens_unicos,
+                url_busca=url_b,
+            )
+
+        # Se houver mais de uma pasta e nenhuma for exatamente o SOB_ID sozinho
+        # (ex: SOB_A057349839_OBRA_A vs SOB_A057349839_OBRA_B_DUPLICADA)
+        if len(pastas_candidatas) > 1:
+            pastas_exatas = [
+                p for p in pastas_candidatas
+                if p.get("texto", "").split("\n")[0].strip().upper() in (sob_id, f"SOB_{sob_id}")
+            ]
+            if not pastas_exatas:
+                try:
+                    from sob.sob_fallback_manual import gerar_url_busca_sharepoint
+                except ModuleNotFoundError:
+                    from sob_fallback_manual import gerar_url_busca_sharepoint
+
+                url_b = gerar_url_busca_sharepoint(sob_id, url_contexto)
+                raise SobConflictError(
+                    "[FALHA] Foram encontradas múltiplas correspondências ambíguas.",
+                    ocorrencias=itens_unicos,
+                    url_busca=url_b,
+                )
+
+        # 3. Resolução por Prioridade (Quando não há conflito)
+        # Prioridade 1: Pasta cujo nome seja exatamente o SOB_ID (ex: A057526153 ou SOB_A057526153)
+        for p in pastas_candidatas:
+            nome_p = p.get("texto", "").split("\n")[0].strip().upper()
+            if nome_p in (sob_id, f"SOB_{sob_id}"):
+                return p
+
+        # Se houver qualquer pasta candidata da mesma SOB, prioriza a pasta
+        if pastas_candidatas:
+            return pastas_candidatas[0]
+
+        # Prioridade 2: Arquivo de croqui correspondente ao SOB_ID
+        if arquivos_croqui:
+            for a in arquivos_croqui:
+                if "CROQUI" in a.get("texto", "").split("\n")[0].strip().upper():
+                    return a
+            return arquivos_croqui[0]
+
+        # Prioridade 3: Demais artefatos pertencentes à mesma SOB
+        if outros_artefatos:
+            return outros_artefatos[0]
+
+        return itens_unicos[0]
+
     def buscar_em_levantamentos_campo(self, sob_codigo: str) -> Optional[Dict[str, Any]]:
         """
         Busca prioritária na pasta oficial 'Levantamentos de campo' (HBT-EnelRJ-Sul).
@@ -506,29 +641,7 @@ class SharePointClient:
             if not itens_encontrados:
                 return None
 
-            # Filtra resultados únicos
-            pastas_correspondentes = []
-            nomes_unicos = set()
-            for item in itens_encontrados:
-                nome = item["texto"].split("\n")[0].strip()
-                if nome not in nomes_unicos:
-                    nomes_unicos.add(nome)
-                    pastas_correspondentes.append(item)
-
-            if len(pastas_correspondentes) > 1:
-                try:
-                    from sob.sob_fallback_manual import gerar_url_busca_sharepoint
-                except ModuleNotFoundError:
-                    from sob_fallback_manual import gerar_url_busca_sharepoint
-
-                url_b = gerar_url_busca_sharepoint(codigo_busca, target_url)
-                raise SobConflictError(
-                    "[FALHA] Foram encontradas múltiplas correspondências ambíguas.",
-                    ocorrencias=pastas_correspondentes,
-                    url_busca=url_b,
-                )
-
-            return pastas_correspondentes[0]
+            return self._resolver_itens_sob(itens_encontrados, codigo_busca, target_url)
 
         except (SobConflictError, SobAuthenticationError):
             raise
@@ -618,32 +731,7 @@ class SharePointClient:
                     f"[FALHA] SOB {sob_codigo} não encontrada no SharePoint."
                 )
 
-            # Se encontrar múltiplos resultados, verifica se pertencem estritamente à mesma SOB
-            pastas_correspondentes = []
-            nomes_unicos = set()
-            for item in itens_encontrados:
-                nome = item["texto"].split("\n")[0].strip()
-                if codigo_busca in nome.upper() and nome not in nomes_unicos:
-                    nomes_unicos.add(nome)
-                    pastas_correspondentes.append(item)
-
-            if len(pastas_correspondentes) == 0:
-                pastas_correspondentes = [itens_encontrados[0]]
-
-            if len(pastas_correspondentes) > 1:
-                try:
-                    from sob.sob_fallback_manual import gerar_url_busca_sharepoint
-                except ModuleNotFoundError:
-                    from sob_fallback_manual import gerar_url_busca_sharepoint
-
-                url_b = gerar_url_busca_sharepoint(codigo_busca, self.url)
-                raise SobConflictError(
-                    "[FALHA] Foram encontradas múltiplas correspondências ambíguas.",
-                    ocorrencias=pastas_correspondentes,
-                    url_busca=url_b,
-                )
-
-            return pastas_correspondentes[0]
+            return self._resolver_itens_sob(itens_encontrados, codigo_busca, self.url)
 
         except (SobNotFoundError, SobConflictError):
             raise
@@ -839,58 +927,84 @@ class SharePointClient:
         self.driver.get(url)
         time.sleep(4)
 
-        # 1. Tenta clicar no botão de Download na barra de comandos superior
+        # Seletores resilientes para o botão de download na barra de comandos
         seletor_download = (
             "button[name='Download'], button[name='Baixar'], "
-            "[data-automationid='downloadCommand'], button[aria-label*='Baixar'], "
-            "button[aria-label*='Download'], button[data-automationid='downloadButton']"
+            "[data-automationid='downloadCommand'], button[data-automationid='downloadButton'], "
+            "button[aria-label*='Baixar'], button[aria-label*='Download']"
         )
-        btns_download = self.driver.find_elements(By.CSS_SELECTOR, seletor_download)
-        clicado = False
-        for btn in btns_download:
-            if btn.is_displayed():
-                self.driver.execute_script("arguments[0].click();", btn)
-                clicado = True
-                break
 
-        # 2. Se não encontrou o botão diretamente, tenta marcar 'Selecionar tudo'
+        def _tentar_clicar_download() -> bool:
+            """Tenta localizar e acionar o botão de download/baixar na barra de comandos."""
+            btns = self.driver.find_elements(By.CSS_SELECTOR, seletor_download)
+            for btn in btns:
+                try:
+                    if btn.is_displayed() or btn.is_enabled():
+                        self.driver.execute_script("arguments[0].click();", btn)
+                        return True
+                except Exception:
+                    pass
+            all_b = self.driver.find_elements(By.CSS_SELECTOR, "button")
+            for b in all_b:
+                try:
+                    txt = (b.text or b.get_attribute("name") or b.get_attribute("aria-label") or "").strip().lower()
+                    if txt in ("baixar", "download", "baixar tudo", "download all") and b.is_displayed():
+                        self.driver.execute_script("arguments[0].click();", b)
+                        return True
+                except Exception:
+                    pass
+            return False
+
+        clicado = False
+
+        # 1. Tenta verificar se o botão Download já está disponível diretamente
+        if _tentar_clicar_download():
+            clicado = True
+
+        # 2. Localizar checkbox moderno e selecionar itens (SharePoint Modern Fluent UI)
         if not clicado:
-            try:
-                chks_all = self.driver.find_elements(
-                    By.CSS_SELECTOR,
-                    "[role='columnheader'] [role='checkbox'], "
-                    "button[data-automationid='FieldRenderer-selectAllCheck'], "
-                    "[data-automationid='DetailsHeader-checkAll'], "
-                    "div.ms-DetailsHeader-check"
-                )
-                if chks_all:
-                    self.driver.execute_script("arguments[0].click();", chks_all[0])
-                    time.sleep(1.5)
-                    btns_download = self.driver.find_elements(By.CSS_SELECTOR, seletor_download)
-                    for btn in btns_download:
-                        if btn.is_displayed():
-                            self.driver.execute_script("arguments[0].click();", btn)
+            seletores_checkbox_modernos = [
+                "input[data-automationid='selection-checkbox'][aria-label*='Selecionar todas']",
+                "input[data-automationid='selection-checkbox'][aria-label*='Select all']",
+                "input[aria-label*='Selecionar todas']",
+                "input[aria-label*='Select all']",
+                "input[data-automationid='selection-checkbox']",
+                "[role='columnheader'] input[type='checkbox']",
+                "[role='columnheader'] [role='checkbox']",
+                "button[data-automationid='FieldRenderer-selectAllCheck']",
+                "[data-automationid='DetailsHeader-checkAll']",
+                "div.ms-DetailsHeader-check",
+            ]
+            for sel in seletores_checkbox_modernos:
+                try:
+                    chks = self.driver.find_elements(By.CSS_SELECTOR, sel)
+                    if chks:
+                        # Dispara via JavaScript para contornar opacity:0 do Fluent UI
+                        self.driver.execute_script("arguments[0].click();", chks[0])
+                        time.sleep(1.5)
+                        if _tentar_clicar_download():
                             clicado = True
                             break
-            except Exception:
-                pass
+                except Exception:
+                    pass
 
-        # 3. Se ainda não clicou, tenta marcar a primeira linha/pasta visível
+        # 3. Fallback adicional: selecionar linhas da tabela
         if not clicado:
             try:
                 linhas = self.driver.find_elements(
                     By.CSS_SELECTOR,
                     "[role='row'], [data-automationid='DetailsRow']"
                 )
-                if linhas:
-                    chks = linhas[0].find_elements(By.CSS_SELECTOR, "[role='checkbox'], .ms-Check")
-                    if chks:
-                        self.driver.execute_script("arguments[0].click();", chks[0])
-                        time.sleep(1)
-                        btns_download = self.driver.find_elements(By.CSS_SELECTOR, seletor_download)
-                        for btn in btns_download:
-                            if btn.is_displayed():
-                                self.driver.execute_script("arguments[0].click();", btn)
+                if len(linhas) > 1:
+                    for l in linhas[1:3]:
+                        row_chks = l.find_elements(
+                            By.CSS_SELECTOR,
+                            "input[data-automationid='selection-checkbox'], [role='checkbox'], .ms-Check"
+                        )
+                        if row_chks:
+                            self.driver.execute_script("arguments[0].click();", row_chks[0])
+                            time.sleep(1.5)
+                            if _tentar_clicar_download():
                                 clicado = True
                                 break
             except Exception:

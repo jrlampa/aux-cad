@@ -170,3 +170,10 @@ O teste de integração `tests/test_digital_twin_dt02.py` foi atualizado para al
 
 ### 5. Veredito Final
 A baseline P0/P1 está formalmente encerrada, auditada e apta para servir como fundação estável do sistema.
+
+### 6. Nota Operacional Pós-Fechamento da Baseline (Hotfix SharePoint Modern)
+Após a consolidação da baseline P0/P1 (commit `5be84a7`), um teste real operacional com a SOB `A057526153` revelou duas falhas de integração no cliente SharePoint (`sob/sob_sharepoint.py`):
+1. **Seletores do SharePoint Modern**: `baixar_pasta_por_url` utilizava seletores de checkbox de tabela legados, impedindo a seleção de itens e a ativação do botão 'Baixar' no design Fluent UI. Corrigido com seletores semânticos (`input[data-automationid='selection-checkbox']`, `input[aria-label*='Selecionar todas']`) e clique via JavaScript.
+2. **Identidade da SOB vs Artefatos**: Múltiplos arquivos pertencentes à mesma SOB (`{SOB}`, `{SOB}_CROQUI.pdf`, `{SOB}_FOTOS.zip`) eram interpretados erroneamente como conflito de SOBs distintas (`SobConflictError`). Corrigido com a resolução prioritária de artefatos da mesma SOB sem falso conflito.
+
+Essa correção pontual preserva integralmente os contratos de segurança, Local-First e rollback estabelecidos em P0/P1, sem reabertura dos gates ou alteração arquitetural.

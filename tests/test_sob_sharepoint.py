@@ -571,3 +571,138 @@ def test_caso_7_sob_normalizada(sob_input):
     assert "SOB_A057349839" in res["texto"]
 
 
+def test_busca_mesma_sob_multiplos_artefatos_nao_eh_conflito():
+    """
+    Caso: A057526153 (pasta), A057526153_CROQUI.pdf, A057526153_FOTOS.zip
+    Resultado: NÃO É CONFLITO. Reconhece artefatos da mesma SOB e prioriza a pasta.
+    """
+    client = SharePointClient(login="user", senha="pwd")
+    client._autenticado = True
+
+    mock_driver = MagicMock()
+    mock_driver.current_url = "https://hbtengenharia1.sharepoint.com/sites/HBT-EnelRJ-Sul/Documentos"
+
+    row_pasta = MagicMock()
+    row_pasta.text = "A057526153\nClaudia Carvalho\nterça-feira às 11:44"
+
+    row_croqui = MagicMock()
+    row_croqui.text = "A057526153_CROQUI.pdf\nClaudia Carvalho\nterça-feira às 11:44"
+
+    row_fotos = MagicMock()
+    row_fotos.text = "A057526153_FOTOS.zip\nClaudia Carvalho\nterça-feira às 11:44"
+
+    mock_driver.find_elements.return_value = [row_pasta, row_croqui, row_fotos]
+    client.driver = mock_driver
+
+    res = client.localizar_pasta_sob_existente("A057526153")
+    assert res is not None
+    # Deve priorizar a pasta cujo nome é exatamente o SOB_ID
+    assert "A057526153" in res["texto"]
+    assert "A057526153_CROQUI.pdf" not in res["texto"]
+
+
+def test_busca_sobs_diferentes_eh_conflito():
+    """
+    Caso: A057526153 e A057526154 retornados no mesmo lote de busca.
+    Resultado: CONFLITO. Identidades de SOB distintas no mesmo lote geram SobConflictError.
+    """
+    client = SharePointClient(login="user", senha="pwd")
+    client._autenticado = True
+
+    mock_driver = MagicMock()
+    mock_driver.current_url = "https://hbtengenharia1.sharepoint.com/sites/HBT-EnelRJ-Sul/Documentos"
+
+    row_sob1 = MagicMock()
+    row_sob1.text = "A057526153\nObra 1"
+
+    row_sob2 = MagicMock()
+    row_sob2.text = "A057526154\nObra 2"
+
+    mock_driver.find_elements.return_value = [row_sob1, row_sob2]
+    client.driver = mock_driver
+
+    # Busca abrangente trazendo duas SOBs distintas
+    with pytest.raises(SobConflictError) as exc_info:
+        client.localizar_pasta_sob_existente("5752615")
+
+    assert "[FALHA] Foram encontradas múltiplas correspondências ambíguas." in str(exc_info.value)
+
+    # Valida também via invocação direta de _resolver_itens_sob
+    with pytest.raises(SobConflictError):
+        client._resolver_itens_sob(
+            [{"texto": "A057526153\nObra 1"}, {"texto": "A057526154\nObra 2"}],
+            "A057526153",
+            "https://sharepoint.com",
+        )
+
+
+def test_busca_somente_croqui_encontrado():
+    """
+    Caso: Somente A057526153_CROQUI.pdf encontrado (sem pasta separada).
+    Resultado: SOB ENCONTRADA. Retorna com sucesso o arquivo de croqui.
+    """
+    client = SharePointClient(login="user", senha="pwd")
+    client._autenticado = True
+
+    mock_driver = MagicMock()
+    mock_driver.current_url = "https://hbtengenharia1.sharepoint.com/sites/HBT-EnelRJ-Sul/Documentos"
+
+    row_croqui = MagicMock()
+    row_croqui.text = "A057526153_CROQUI.pdf\nClaudia Carvalho"
+
+    mock_driver.find_elements.return_value = [row_croqui]
+    client.driver = mock_driver
+
+    res = client.localizar_pasta_sob_existente("A057526153")
+    assert res is not None
+    assert "A057526153_CROQUI.pdf" in res["texto"]
+
+
+def test_seletores_modernos_sharepoint_em_baixar_pasta_por_url(tmp_path: Path):
+    """
+    Valida a resolução dos seletores semânticos modernos do SharePoint
+    (data-automationid='selection-checkbox', aria-label='Selecionar todas as linhas')
+    onde o botão de Download só surge no DOM após a marcação do checkbox.
+    """
+    client = SharePointClient(login="user", senha="pwd")
+    mock_driver = MagicMock()
+    client.driver = mock_driver
+    client._autenticado = True
+
+    dest = tmp_path / "CROQUI_SELETORES"
+    dest.mkdir(parents=True, exist_ok=True)
+    # Arquivo simulado para satisfazer _aguardar_e_processar_download
+    (dest / "A057526153_CROQUI.pdf").write_bytes(b"%PDF-1.4 DADOS REAIS")
+
+    mock_chk = MagicMock()
+    mock_chk.get_attribute.return_value = "selection-checkbox"
+
+    mock_btn_dl = MagicMock()
+    mock_btn_dl.is_displayed.return_value = True
+    mock_btn_dl.text = "Baixar"
+
+    checkbox_selecionado = False
+
+    def mock_find_elements(by, selector):
+        nonlocal checkbox_selecionado
+        if "selection-checkbox" in selector or "Selecionar todas" in selector:
+            return [mock_chk]
+        if "downloadCommand" in selector or "Baixar" in selector:
+            return [mock_btn_dl] if checkbox_selecionado else []
+        return []
+
+    def mock_execute_script(script, elem):
+        nonlocal checkbox_selecionado
+        if elem == mock_chk:
+            checkbox_selecionado = True
+
+    mock_driver.find_elements.side_effect = mock_find_elements
+    mock_driver.execute_script.side_effect = mock_execute_script
+
+    url_teste = "https://hbtengenharia1.sharepoint.com/:f:/s/HBT-EnelRJ-Sul/A057526153"
+    arqs = client.baixar_pasta_por_url(url_teste, dest)
+
+    assert len(arqs) >= 1
+    # Verifica que o script JS foi executado para clicar no checkbox moderno e no botão de download
+    assert mock_driver.execute_script.call_count >= 2
+    assert checkbox_selecionado is True

@@ -1017,3 +1017,12 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
      - Contrato verificado por testes de balanço de parênteses, sobreposição de cotas, arredondamento para metros inteiros e despacho no documento (`test_levantamento_condutores.py`).
    - **Status da Baseline**: **P0 E P1 AUDITADOS, VALIDADOS E FECHADOS**.
 
+12. **Hotfix Operacional Pós-Baseline — SharePoint Modern e Resolução de Identidade SOB (2026-10-01)**:
+   - **Compatibilidade SharePoint Modern (`sob/sob_sharepoint.py`)**:
+     - Seleção de múltiplos itens migrada para atributos semânticos (`input[data-automationid='selection-checkbox']`, `input[aria-label*='Selecionar todas']`, etc.) disparados via script JavaScript para contornar estilização de opacidade zero do Fluent UI.
+     - Detecção dinâmica do botão de download na barra de comandos (`Baixar` / `Download`) garantindo ativação resiliente.
+   - **Resolução de Identidade SOB vs Artefatos (`_resolver_itens_sob`)**:
+     - Busca no SharePoint distingue a entidade SOB de seus múltiplos artefatos (`A057526153`, `A057526153_CROQUI.pdf`, `A057526153_FOTOS.zip`). Múltiplos artefatos pertencentes à mesma SOB não geram mais `SobConflictError`.
+     - Precedência determinística: (1) Pasta com nome canônico da SOB; (2) Arquivo de croqui da SOB; (3) Demais artefatos da mesma SOB. Conflito reservado estritamente para SOBs distintas ou pastas de trabalho concorrentes.
+   - **Validação Física do Download e Rollback Preservado**:
+     - Confirmação física de arquivos descompactados e integridade de tamanho em disco antes de atestar sucesso da etapa. Falhas preservam reversão atômica (`rollback`) sem afetar arquivos de execuções anteriores.

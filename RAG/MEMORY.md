@@ -909,3 +909,19 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - **Alinhamento de Baseline Digital Twin (DT-02)**:
   - `tests/test_digital_twin_dt02.py`: Asserção atualizada para 44 testes, espelhando com precisão os 44 testes aprovados do harness C# `tests/dt02_harness/DT02Harness.csproj`.
 - **Status Oficial**: **BASELINE P0/P1 CONSOLIDADA E FECHADA**.
+
+### 27. Correção Operacional: Integração com SharePoint Modern e Resolução de Identidade da SOB (2026-10-01)
+- **Compatibilidade SharePoint Modern (Fluent UI)**:
+  - `sob/sob_sharepoint.py`: Atualização do método `baixar_pasta_por_url` para suportar o design moderno Fluent UI do SharePoint, onde o checkbox de cabeçalho é renderizado com atributos semânticos (`input[data-automationid='selection-checkbox']`, `input[aria-label*='Selecionar todas']`, `input[aria-label*='Select all']`).
+  - Disparo de seleção via JavaScript (`arguments[0].click()`) para garantir interação com inputs que possuem opacidade zero ou são envelopados por containers no Fluent UI.
+- **Seleção por Atributos Semânticos**:
+  - Eliminação de dependência exclusiva de classes CSS mutáveis (`DetailsHeader-checkAll`, `ms-DetailsHeader-check`).
+  - Fallbacks múltiplos incluindo clique direto no comando de download, seleção de cabeçalho moderno e seleção de linhas da tabela de detalhes.
+- **Distinção entre Identidade da SOB e seus Artefatos**:
+  - `sob/sob_sharepoint.py`: Adicionado método de resolução `_resolver_itens_sob`.
+  - Artefatos múltiplos pertencentes à mesma SOB (`{SOB}`, `{SOB}_CROQUI.pdf`, `{SOB}_FOTOS.zip`, fotos de campo) não disparam `SobConflictError`.
+  - Resolução por prioridade determinística: (1) pasta cujo nome seja exatamente o SOB_ID; (2) arquivo de croqui correspondente ao SOB_ID; (3) demais artefatos da mesma obra.
+  - Conflito restrito exclusivamente a SOBs incompatíveis (ex: `A057526153` vs `A057526154`) ou pastas de obras concorrentes não canônicas.
+- **Download Validado Fisicamente**:
+  - Validação estrita mantida via `validar_download` e `_aguardar_e_processar_download`: descompactação atômica de ZIPs, nivelamento da estrutura para `CROQUI/`, verificação de integridade física e rejeição de arquivos temporários (`.crdownload`, `.tmp`) ou com 0 bytes.
+  - Teste real com SOB `A057526153` e Base `RE`: download concluído e validado fisicamente em disco (`CROQUI/` populado com PDF de 1.6 MB, fotos em ZIP de 3.0 MB e imagens de campo).

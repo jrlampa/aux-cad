@@ -58,9 +58,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Changed
 - **AutoLISP `KMZCHECK`**: Normalização do caminho do desenho ativo via `(getvar "DWGPREFIX")` com remoção de barra invertida terminal (`vl-string-right-trim`), invocando o subprocesso via `cd /d "<dwg_dir>"` e repassando o diretório como argumento explícito.
-- **Deduplicação de Consultas no Traçado Cartográfico**: Eliminação da chamada redundante de contexto urbano em `tracado.js`, centralizando a aquisição de vias em `app.js` (raio unificado de 140m) e preservando a cobertura do vão.
 
 ### Fixed
+- **SharePoint Modern & Resolução de Identidade da SOB**:
+  - `sob/sob_sharepoint.py`: Atualização do método `baixar_pasta_por_url` para compatibilidade com SharePoint Modern (Fluent UI), empregando seletores semânticos (`input[data-automationid='selection-checkbox']`, `input[aria-label*='Selecionar todas']`) e acionamento via JavaScript para ativar o botão 'Baixar' na barra de comandos.
+  - `sob/sob_sharepoint.py`: Resolução determinística de artefatos da SOB via `_resolver_itens_sob`, evitando falso `SobConflictError` quando a busca retorna pasta e arquivos (`.pdf`, `.zip`, imagens) da mesma SOB, priorizando a pasta canônica e croquis.
+  - Validação física de download comprovada em execução real com SOB `A057526153` (Base `RE`), com descompactação e nivelamento em `CROQUI/` sem falhas.
+- **Deduplicação de Consultas no Traçado Cartográfico**: Eliminação da chamada redundante de contexto urbano em `tracado.js`, centralizando a aquisição de vias em `app.js` (raio unificado de 140m) e preservando a cobertura do vão.
 - **Crash STATUS_STACK_OVERFLOW no OXCAD (0xc00000fd)**: Eliminação definitiva de recursão infinita na paleta C# WPF através de controle de concorrência com `ContextRefreshGate.cs` e despacho assíncrono via `BeginInvoke` em `PaletteHost.cs`.
 - **Permissão Negada no Checklist Ambiental**: Correção do erro `[Errno 13] Permission denied: 'C:\Windows\System32\CHECKLIST_*.xlsx'` que ocorria quando o modelo Word não estava acessível e o processo AutoCAD iniciava o subprocesso sem diretório de trabalho definido.
 - **Prevenção de Falso Sucesso em Execuções Técnicas**: Subprocessos com `exit_code == 0` que não geram artefato físico não-vazio válido são marcados como falha (`ARTIFACT_NOT_VERIFIED`).
