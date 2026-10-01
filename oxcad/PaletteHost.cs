@@ -1,4 +1,5 @@
 using System;
+using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Windows;
 
 namespace OxCad
@@ -67,6 +68,21 @@ namespace OxCad
             {
                 MostrarPaleta();
             }
+        }
+
+        public static void NotificarDocumentoAtivoAlterado()
+        {
+            _oxCadControl?.NotificarDocumentoAtivoAlterado();
+        }
+
+        public static void NotificarDocumentoFechando(Document? document)
+        {
+            _oxCadControl?.NotificarDocumentoFechando(document);
+        }
+
+        public static void NotificarDocumentoSalvo(Document document)
+        {
+            _oxCadControl?.NotificarDocumentoSalvo(document);
         }
     }
 }

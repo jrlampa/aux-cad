@@ -867,3 +867,45 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - DT-05: Consulta topologica no frontend JS com BFS/DFS (MEDIA).
 - **Restricoes Confirmadas**: Z = 0.0 (2.5D), DWG como persistencia primaria, sem banco externo obrigatorio, sem CIM/IEC 61968 nesta fase, sem telemetria real-time.
 - **Status**: PLANEJAMENTO ARQUITETURAL CONCLUIDO | IMPLEMENTACAO PENDENTE (inicio pelo Sprint DT-01).
+
+---
+
+## 22. OXCAD — Fechamento Baseline P0/P1, Resiliência MDI e Autoridade de Identidade (2026-10-01)
+
+- **Objetivo**: Consolidar a arquitetura de autoridade do OXCAD, eliminar causas de falha em runtime (.NET MDI), estabelecer a cadeia de confiança criptográfica e homologar os contratos P0 e P1.
+- **Resiliência MDI e Fim do Stack Overflow**:
+  - `ContextRefreshGate.cs`: Portão de concorrência com controle por `Ticket` e `Generation` monotonicamente crescente. Impede loops recursivos causados por chamadas síncronas na thread UI durante a troca de documentos no AutoCAD.
+  - `PaletteHost.cs`: Despacho de atualização do contexto via `BeginInvoke` (assíncrono) na UI thread com verificação prévia de `TicketAindaAtivo`.
+  - Comparação de identidade de desenho via `FingerprintGuid` e caminho absoluto, eliminando dependência frágil de `ReferenceEquals` sobre wrappers gerenciados do AutoCAD.
+- **Autoridade de Identidade Host -> CLI (Gate 1)**:
+  - O Host C# (`acad.exe`) é a única autoridade de contexto.
+  - Protocolo de transporte seguro via `stdin` com envelope JSON assinado pelo PID e token de sessão do processo AutoCAD ativo.
+  - Verificação estrita em `workspace_context_cli.py` (`_verificar_envelope_host` e `_autocad_parent_verified` via Win32 API): rejeição imediata de flags manuais/declaradas com `DWG_CONTEXT_NOT_VERIFIED`.
+  - Verificação de vínculo com o DWG via Xrecord `AUXCAD_PROJECT_SCOPE` v1 gravado por transação e pareado com `Database.FingerprintGuid`.
+- **Registro Imutável de Execução (P0.3)**:
+  - `OxCadExecutionRegistry.cs` e `OxCadExecution.cs`: Registro em memória com lock reentrante que impõe unicidade de `ExecutionId` e desacopla estritamente `ExecutionId` de `CorrelationId`.
+  - Estados formais de execução (`Iniciado`, `Executando`, `Concluido`, `Cancelado`, `Falhou`) sincronizados com eventos nativos do AutoCAD (`CommandEnded`, `CommandCancelled`, fechamento do documento).
+- **Contratos de Validação e Entrega (P1)**:
+  - **P1.1 (Validação CQT)**: `workspace_validation.py` com `ValidationSource` capturando `sha256` e `mtime_ns` diretamente dos bytes no momento da validação. Requer contexto `Bound` ou `host_verified`.
+  - **P1.2 (Versionamento)**: `workspace_versions.py` com captura e restauração atômica (`xb`) de snapshots validados por hash SHA-256.
+  - **P1.3 (Pendências)**: `workspace_pending.py` com store autoritativo em `.oxcad/pending.json` operando via lock exclusivo e replace atômico.
+  - **P1.4 (Entrega)**: `workspace_delivery.py` com manifesto digital, checksum SHA-256 e recusa estrita de validações obsoletas (`VALIDATION_SOURCE_CHANGED`). Verificação de integridade antes da aprovação formal.
+- **Proteção Contra Falso Sucesso e Auditoria Estrita**:
+  - `_artefato_tecnico_gerado`: Subprocesso com `exit_code == 0` que não produza alteração física verificável tem estado convertido para `Falhou` com erro `ARTIFACT_NOT_VERIFIED`.
+  - `common/logging_config.py`: `emitir_obrigatorio` e `registrar_evento_obrigatorio` com `os.fsync` garantem que falhas de gravação de log abortem operações críticas em vez de mascarar ausência de auditoria.
+- **Política Local-First da SOB**:
+  - `sob/sob_manager.py`: Fluxo resiliente com tratamento independente de falhas de rede no SharePoint e GOMNET (pergunta de decisão ao usuário com rollback controlado).
+  - Validação estrita do retorno da gravação do manifesto de execução final da SOB.
+- **Evidência Real de Runtime no AutoCAD 2026**:
+  - Sessão interativa real com Autodesk AutoCAD 2026 (PID `34088`).
+  - DWG: `G:\Meu Drive\1-HBT\05_PROJETOS_HISTORICOS\SETEMBRO\21\SOB_A057385505\SG_A057385505_DESENHO.dwg`.
+  - SOB: `A057385505` vinculada com sucesso via `AUXCAD_BIND_SOB` e `QSAVE`.
+  - FingerprintGuid: `{3DD86E03-797C-0A41-9446-ADA594C4E383}` lido e validado pelo .NET.
+- **Módulo Integrante de Levantamento de Condutores (`LEVANTAR_CONDUTORES`)**:
+  - `orcamento/levantamento_condutores.lsp`: Extração e soma quantitativa de comprimentos por tipo de condutor (instalar/retirar) analisando entidades `DIMENSION`, `TEXT` e `MTEXT` com geração de tabela AutoCAD via ActiveX (`vla-AddTable`).
+  - Integração com a paleta OXCAD: Disparado diretamente via botão `BtnLevantamentoCondutores` (`OxCadControl.xaml` / `OxCadControl.xaml.cs`) no documento ativo.
+  - Carregador global: Registrado e carregado automaticamente via `acaddoc.lsp`.
+  - Cobertura de Testes: `tests/test_levantamento_condutores.py` com 6 testes aprovados (100% PASS).
+- **Alinhamento de Baseline Digital Twin (DT-02)**:
+  - `tests/test_digital_twin_dt02.py`: Asserção atualizada para 44 testes, espelhando com precisão os 44 testes aprovados do harness C# `tests/dt02_harness/DT02Harness.csproj`.
+- **Status Oficial**: **BASELINE P0/P1 CONSOLIDADA E FECHADA**.

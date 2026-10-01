@@ -9,7 +9,7 @@ Diretrizes:
 - Logs estruturados em formato JSON Lines (.jsonl).
 - Destino canônico: aux cad/logs/application.jsonl e logs/errors.jsonl.
 - Rastreabilidade via correlation_id propagado entre C# e Python.
-- Resiliência: falhas de I/O em logs nunca quebram o fluxo de negócio.
+- Resiliência: logs auxiliares toleram I/O; eventos de integridade falham explicitamente.
 - Sanitização estrita: senhas, tokens, cookies e credenciais são mascarados.
 """
 
@@ -124,8 +124,14 @@ class JsonLinesFormatter(logging.Formatter):
         # Extração de campos contextuais passados via extra
         contexto_campos = (
             "correlation_id",
+            "execution_id",
+            "execution_state",
             "sob_id",
             "dwg_path",
+            "dwg_identity",
+            "origin",
+            "started_at",
+            "finished_at",
             "module",
             "action",
             "operation",
@@ -136,12 +142,40 @@ class JsonLinesFormatter(logging.Formatter):
             "subproc_pid",
             "target_pid",
             "pid",
+            "error",
+            "artifacts",
+            "validation_rule_id",
+            "validation_status",
+            "validation_source",
+            "validation_value",
+            "validation_criterion",
+            "validation_summary",
+            "version_snapshot_id",
+            "version_status",
+            "version_manifest",
+            "pending_id",
+            "pending_status",
+            "pending_evidence",
+            "delivery_package_id",
+            "delivery_status",
+            "delivery_manifest_sha256",
+            "delivery_approval_state",
         )
 
         for campo in contexto_campos:
             val = getattr(record, campo, None)
             if val is not None:
                 if campo == "command":
+                    evento[campo] = sanitizar_dados(val)
+                elif campo in {
+                    "artifacts",
+                    "validation_source",
+                    "validation_value",
+                    "validation_criterion",
+                    "validation_summary",
+                    "version_manifest",
+                    "pending_evidence",
+                }:
                     evento[campo] = sanitizar_dados(val)
                 elif campo == "duration_ms":
                     try:
@@ -180,6 +214,40 @@ class SafeRotatingFileHandler(RotatingFileHandler):
     def handleError(self, record):
         # Previne que exceções de logging quebrem a execução da aplicação
         pass
+
+    def emitir_obrigatorio(self, record: logging.LogRecord) -> None:
+        self.acquire()
+        try:
+            if self.shouldRollover(record):
+                RotatingFileHandler.doRollover(self)
+            if self.stream is None:
+                self.stream = self._open()
+            self.stream.write(self.format(record) + self.terminator)
+            self.flush()
+            os.fsync(self.stream.fileno())
+        finally:
+            self.release()
+
+
+def registrar_evento_obrigatorio(
+    logger: "OxCadLoggerAdapter",
+    message: str,
+    extra: Dict[str, Any],
+    level: int = logging.INFO,
+) -> None:
+    """Grava evento de integridade no JSONL existente ou falha explicitamente."""
+    handlers = [
+        handler for handler in logging.getLogger().handlers
+        if isinstance(handler, SafeRotatingFileHandler)
+        and Path(handler.baseFilename).name == "application.jsonl"
+    ]
+    if len(handlers) != 1:
+        raise OSError("AUDIT_LOG_UNAVAILABLE")
+    record = logger.logger.makeRecord(
+        logger.logger.name, level, "", 0, message, (), None,
+        extra={**logger.extra, **extra},
+    )
+    handlers[0].emitir_obrigatorio(record)
 
 
 class OxCadLoggerAdapter(logging.LoggerAdapter):

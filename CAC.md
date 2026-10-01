@@ -990,3 +990,30 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
    - **Eliminação de Warnings de Compilação**: Eliminados todos os avisos CS8600, CS8601, CS8602, CS8604 em `CadBridge.cs` e `MapaControl.xaml.cs`. Compilação `net48` e `net8.0-windows` limpa com 0 avisos de código.
    - **Status Geral**: IMPLEMENTAÇÃO: COMPLETA | INTEGRAÇÃO INTERNA: COMPLETA | TESTES OFFLINE: PASS (59/59) | BUILD: PASS (0 erros) | RUNTIME AUTOCAD: NÃO VALIDADO (acad.exe ausente) | HOMOLOGAÇÃO ASSISTIDA: PENDENTE.
 
+11. **Arquitetura OXCAD Baseline P0/P1 — Identidade, MDI e Contratos de Integridade (2026-10-01)**:
+   - **Fronteira de Confiança Host -> CLI**:
+     - Princípio: O AutoCAD (.NET C# em `acad.exe`) é o único ponto de autoridade sobre o desenho ativo e sua identidade.
+     - Comunicação: O Host dispara o CLI (`workspace_context_cli.py`) através de canal protegido por `stdin` transmitindo o envelope JSON autenticado.
+     - Verificação de Integridade: O CLI valida via Win32 API (`QueryFullProcessImageNameW`) que o processo pai chamador é genuinamente `acad.exe` com o PID correspondente, recusando parâmetros forjados por linha de comando (`DWG_CONTEXT_NOT_VERIFIED`).
+   - **Resiliência MDI (.NET C#)**:
+     - Desacoplamento de concorrência com `ContextRefreshGate.cs` utilizando números de geração monotônicos (`context_generation`) e tickets de sessão.
+     - Despacho assíncrono na thread de interface via `Dispatcher.BeginInvoke` em `PaletteHost.cs`, evitando reentrância e eliminando a condição de corrida causadora do `STATUS_STACK_OVERFLOW` (`0xc00000fd`).
+     - Identidade de desenho ancorada em `Database.FingerprintGuid` e caminho normalizado do arquivo DWG.
+   - **Registro de Execuções e Ciclo de Vida (P0.3)**:
+     - `OxCadExecutionRegistry.cs` gerencia o ciclo formal de ações com lock seguro, garantindo `ExecutionId != CorrelationId` e proibindo reutilização de identificadores.
+     - Sincronização de encerramento atrelada a eventos nativos do documento no AutoCAD.
+   - **Contratos P1 de Validação e Entrega**:
+     - **P1.1 Validação (`workspace_validation.py`)**: `ValidationSource` captura o hash SHA-256 e `mtime_ns` da fonte de dados no momento da leitura, impedindo o reuso de resultados obsoletos.
+     - **P1.2 Versionamento (`workspace_versions.py`)**: Snapshots imutáveis em `.auxcad_versions/` com restauração exclusiva (`xb`) e conferência de checksum.
+     - **P1.3 Pendências (`workspace_pending.py`)**: Cadastro autoritativo de pendências em `.oxcad/pending.json` com atomicidade via rename e locking exclusivo.
+     - **P1.4 Entrega (`workspace_delivery.py`)**: Geração de pacotes em `.oxcad/deliveries/` com manifesto digital assinado por SHA-256. Recusa pacotes onde a fonte sofreu alterações pós-validação (`VALIDATION_SOURCE_CHANGED`).
+   - **Garantia de Não-Falso Sucesso e Auditoria**:
+     - `_artefato_tecnico_gerado`: Subprocesso que encerra com código 0 mas não gera arquivo modificado com dados válidos é marcado como `Falhou` (`ARTIFACT_NOT_VERIFIED`).
+     - `common/logging_config.py`: `emitir_obrigatorio` e `registrar_evento_obrigatorio` forçam `os.fsync`, assegurando que eventos de ciclo de vida sejam persistidos ou abortem com exceção explícita.
+   - **Módulo Integrante de Orçamento no OXCAD (`levantamento_condutores.lsp`)**:
+     - Rotina AutoLISP (`c:LEVANTAR_CONDUTORES`) para levantamento expedito de condutores no DWG ativo através da seleção de cotas e textos (`DIMENSION`, `TEXT`, `MTEXT`).
+     - Integração na UI do OXCAD: disparado via `BtnLevantarCondutores_Click` no `OxCadControl.xaml.cs`.
+     - Carregamento transparente via `acaddoc.lsp` com tratamento seguro de erros (`load-aux-safe`).
+     - Contrato verificado por testes de balanço de parênteses, sobreposição de cotas, arredondamento para metros inteiros e despacho no documento (`test_levantamento_condutores.py`).
+   - **Status da Baseline**: **P0 E P1 AUDITADOS, VALIDADOS E FECHADOS**.
+

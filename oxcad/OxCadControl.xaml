@@ -55,6 +55,8 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -90,8 +92,40 @@
                         <Button x:Name="BtnSob" Grid.Row="2" Grid.Column="1" Content="📁 Preparar SOB" Height="30" Margin="2"
                                 Background="#2A3B4C" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
                                 Cursor="Hand" Click="BtnAcao_Click" Tag="sob" />
+
+                        <!-- Levantamento genérico de condutores -->
+                        <Button x:Name="BtnLevantamentoCondutores" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+                            Content="📏 Levantar Condutores" Height="30" Margin="2"
+                            Background="#315442" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
+                            Cursor="Hand" Click="BtnLevantarCondutores_Click" />
+
+                        <Button x:Name="BtnValidar" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                            Content="✓ Validar Entregáveis" Height="30" Margin="2"
+                            Background="#37645A" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
+                            Cursor="Hand" Click="BtnAcao_Click" Tag="validar" />
                     </Grid>
                 </Border>
+
+                <StackPanel x:Name="PainelValidacao" Visibility="Collapsed" Margin="0,0,0,10">
+                    <TextBlock Text="VALIDAÇÃO TÉCNICA" FontSize="10" FontWeight="SemiBold" Foreground="#7E7E94" Margin="0,0,0,6" />
+                    <TextBlock x:Name="TxtValidationSummary" Text="" FontSize="11" FontWeight="SemiBold" Foreground="#E2E2EC" TextWrapping="Wrap" Margin="0,0,0,4" />
+                    <ItemsControl x:Name="ListaValidacoes">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="#353544" BorderThickness="0,0,0,1" Padding="4,6">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <TextBlock Text="{Binding RuleId}" FontSize="10" FontWeight="SemiBold" Foreground="#FFFFFF" />
+                                            <TextBlock Text="{Binding Status}" FontSize="10" FontWeight="Bold" Foreground="#52B788" HorizontalAlignment="Right" />
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding Message}" FontSize="10" Foreground="#C5C5D2" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                        <TextBlock Text="{Binding EvidenceDisplay}" FontSize="9" Foreground="#8A8A9E" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
 
                 <!-- SEÇÃO TEMPO DO PROJETO (OXCAD 0.5.0) -->
                 <TextBlock Text="TEMPO DO PROJETO" FontSize="10" FontWeight="SemiBold" Foreground="#7E7E94" Margin="0,4,0,6" />

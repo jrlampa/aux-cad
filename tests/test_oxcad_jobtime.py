@@ -296,12 +296,25 @@ def test_relogio_retrocedido_delta_negativo(tmp_path: Path):
     assert entry.estado == TimeState.PAUSADO
 
 
-def test_integracao_cli_tempo(tmp_path: Path):
+def test_integracao_cli_tempo(tmp_path: Path, simulated_host_protocol):
     """Valida extração e ações operacionais de tempo via workspace_context_cli.py com acad-pid."""
     sob_dir = tmp_path / "SOB_CLI_01"
     sob_dir.mkdir()
     dwg = sob_dir / "desenho.dwg"
     dwg.write_text("cad", encoding="utf-8")
+    sob_id = "A057349839"
+    (sob_dir / ".sob_state.json").write_text(
+        json.dumps({
+            "sob_id": sob_id, "status": "CONCLUÍDO", "base_dwg": str(dwg)
+        }), encoding="utf-8",
+    )
+
+    def acao_tempo(nome: str):
+        return executar_acao_operacional(
+            nome, dwg_path=str(dwg), acad_pid=5555,
+            sob_id_esperada=sob_id,
+            host_context=simulated_host_protocol(dwg, sob_id),
+        )
 
     # 1. Extrair contexto
     ctx = extrair_contexto_operacional(str(dwg))
@@ -310,31 +323,31 @@ def test_integracao_cli_tempo(tmp_path: Path):
     assert ctx["tempo"]["tempo_formatado"] == "00:00:00"
 
     # 2. Executar ação de início via CLI com acad_pid
-    res_inicio = executar_acao_operacional("tempo_iniciar", dwg_path=str(dwg), acad_pid=5555)
+    res_inicio = acao_tempo("tempo_iniciar")
     assert res_inicio["sucesso"] is True
     assert res_inicio["estado"] == TimeState.EM_EXECUCAO.value
 
     # 3. Executar ação de heartbeat
-    res_hb = executar_acao_operacional("tempo_heartbeat", dwg_path=str(dwg), acad_pid=5555)
+    res_hb = acao_tempo("tempo_heartbeat")
     assert res_hb["sucesso"] is True
 
     # 4. Executar ação de pausa
-    res_pausa = executar_acao_operacional("tempo_pausar", dwg_path=str(dwg))
+    res_pausa = acao_tempo("tempo_pausar")
     assert res_pausa["sucesso"] is True
     assert res_pausa["estado"] == TimeState.PAUSADO.value
 
     # 5. Executar retomada
-    res_retomar = executar_acao_operacional("tempo_retomar", dwg_path=str(dwg), acad_pid=5555)
+    res_retomar = acao_tempo("tempo_retomar")
     assert res_retomar["sucesso"] is True
     assert res_retomar["estado"] == TimeState.EM_EXECUCAO.value
 
     # 6. Executar conclusão
-    res_fim = executar_acao_operacional("tempo_concluir", dwg_path=str(dwg))
+    res_fim = acao_tempo("tempo_concluir")
     assert res_fim["sucesso"] is True
     assert res_fim["estado"] == TimeState.CONCLUIDO.value
 
     # 7. Executar reabertura
-    res_reabrir = executar_acao_operacional("tempo_reabrir", dwg_path=str(dwg))
+    res_reabrir = acao_tempo("tempo_reabrir")
     assert res_reabrir["sucesso"] is True
     assert res_reabrir["estado"] == TimeState.PAUSADO.value
 

@@ -14,4 +14,4 @@ def test_dt02_semantic_graph_harness():
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "DT-02: 30 tests passed." in result.stdout
+    assert "DT-02: 44 tests passed." in result.stdout

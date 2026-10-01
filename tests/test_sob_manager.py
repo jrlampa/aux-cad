@@ -85,6 +85,33 @@ def test_executar_fluxo_completo_com_mock_sharepoint(tmp_path: Path, fake_pranch
     assert fake_prancha_dwg.stat().st_size > 0
 
 
+@pytest.mark.parametrize("status_falha", ["EM_EXECUCAO", "CONCLUÍDO"])
+def test_gravacao_obrigatoria_do_manifesto_nao_da_falso_sucesso(
+    tmp_path: Path, fake_prancha_dwg: Path, monkeypatch, status_falha: str
+):
+    import sob_manager
+
+    destino = tmp_path / "projetos"
+    destino.mkdir()
+    original = sob_manager.gravar_manifesto_execucao
+
+    def fail_selected_status(root, dados):
+        if dados["status"] == status_falha:
+            return False
+        return original(root, dados)
+
+    monkeypatch.setattr(
+        sob_manager, "gravar_manifesto_execucao", fail_selected_status
+    )
+    result = SobOrchestrator(origem_base=fake_prancha_dwg).executar(
+        sob_raw="A057349839", destino_dir=str(destino),
+        baixar_croqui_sp=False, consultar_gomnet=False, abrir_cad=False,
+    )
+
+    assert result["sucesso"] is False
+    assert result["status"] != "CONCLUÍDO"
+
+
 def test_executar_sob_invalida(tmp_path: Path, fake_prancha_dwg: Path):
     """Valida interrupção quando a SOB é vazia ou inválida."""
     orquestrador = SobOrchestrator(origem_base=fake_prancha_dwg)
@@ -349,7 +376,7 @@ def test_executar_sem_permissao_criacao(tmp_path: Path, fake_prancha_dwg: Path, 
 
 
 def test_fase_a_pre_validacao_atomica_falha_sharepoint(tmp_path: Path, fake_prancha_dwg: Path):
-    """Comprova a regra de atomicidade da Seção 17: falha na Fase A não cria absolutamente nada no disco."""
+    """Comprova que falha na consulta ao SharePoint com cancelamento executa rollback completo e limpa o disco."""
     mock_client = MagicMock(spec=SharePointClient)
     mock_client.autenticar.side_effect = SobAuthenticationError(
         "[FALHA] Não foi possível autenticar no SharePoint."
@@ -363,14 +390,14 @@ def test_fase_a_pre_validacao_atomica_falha_sharepoint(tmp_path: Path, fake_pran
         sob_raw="A057349839",
         destino_dir=str(tmp_path),
         baixar_croqui_sp=True,
+        continuar_sem_sharepoint_em_falha=False,
     )
 
     assert resultado["sucesso"] is False
     assert resultado["status"] == "BLOQUEADO"
-    assert resultado["pre_validacao"] == "BLOQUEADA"
-    assert resultado["fase"] == "FASE_A"
+    assert resultado["rollback"] == "ROLLBACK_CONCLUÍDO"
     assert "[FALHA] Não foi possível autenticar no SharePoint." in resultado["mensagem"]
-    # Comprovação absoluta de que NADA foi criado no disco
+    # Comprovação de que o rollback removeu os diretórios criados nesta execução
     assert not (tmp_path / "SOB_A057349839").exists()
 
 

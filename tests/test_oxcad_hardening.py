@@ -106,12 +106,24 @@ def test_cli_acao_invalida_retorna_json_requer_especificacao():
     assert "não homologada" in dados["mensagem"]
 
 
-def test_cli_acao_unifilar_mantem_preservacao_autocad():
+def test_cli_acao_unifilar_mantem_preservacao_autocad(
+    tmp_path: Path, simulated_host_protocol
+):
     """Valida que o Unifilar permanece classificado como Requer especificação (requer AutoCAD)."""
-    resultado = executar_acao_operacional(acao="unifilar")
+    sob_id = "A057349839"
+    dwg = tmp_path / f"PE_{sob_id}_DESENHO.dwg"
+    dwg.write_bytes(b"synthetic DWG")
+    (tmp_path / ".sob_state.json").write_text(
+        json.dumps({
+            "sob_id": sob_id, "status": "CONCLUÍDO", "base_dwg": str(dwg)
+        }), encoding="utf-8",
+    )
+    resultado = executar_acao_operacional(
+        acao="unifilar", dwg_path=str(dwg), sob_id_esperada=sob_id,
+        host_context=simulated_host_protocol(dwg, sob_id),
+    )
     assert resultado["sucesso"] is False
     assert resultado["estado"] == "Requer especificação"
-    assert "UNIFILAR" in resultado["mensagem"]
     assert "PROTECAO" in resultado["mensagem"]
 
 

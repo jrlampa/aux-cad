@@ -61,11 +61,28 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Deduplicação de Consultas no Traçado Cartográfico**: Eliminação da chamada redundante de contexto urbano em `tracado.js`, centralizando a aquisição de vias em `app.js` (raio unificado de 140m) e preservando a cobertura do vão.
 
 ### Fixed
+- **Crash STATUS_STACK_OVERFLOW no OXCAD (0xc00000fd)**: Eliminação definitiva de recursão infinita na paleta C# WPF através de controle de concorrência com `ContextRefreshGate.cs` e despacho assíncrono via `BeginInvoke` em `PaletteHost.cs`.
 - **Permissão Negada no Checklist Ambiental**: Correção do erro `[Errno 13] Permission denied: 'C:\Windows\System32\CHECKLIST_*.xlsx'` que ocorria quando o modelo Word não estava acessível e o processo AutoCAD iniciava o subprocesso sem diretório de trabalho definido.
+- **Prevenção de Falso Sucesso em Execuções Técnicas**: Subprocessos com `exit_code == 0` que não geram artefato físico não-vazio válido são marcados como falha (`ARTIFACT_NOT_VERIFIED`).
+- **Resiliência de Auditoria Síncrona**: `emitir_obrigatorio` e `registrar_evento_obrigatorio` com `os.fsync` forçado em `common/logging_config.py`.
+- **Persistência de Manifesto SOB**: Validação obrigatória do retorno de `gravar_manifesto_execucao` em `sob/sob_manager.py`.
+
+### Added (Baseline P0/P1)
+- **Autoridade de Identidade Host -> CLI (Gate 1)**: Transporte via stdin protegido com verificação de processo pai `acad.exe` por Win32 API e pareamento com `AUXCAD_PROJECT_SCOPE` e `Database.FingerprintGuid`.
+- **Registro Imutável de Execuções (P0.3)**: `OxCadExecutionRegistry.cs` e `OxCadExecution.cs` garantindo unicidade de `ExecutionId` e separação estrita de `CorrelationId`.
+- **Contratos P1 de Engenharia**:
+  - `workspace_validation.py` (P1.1): Validação baseada em regras com fixação de SHA-256 e `mtime_ns` da fonte de dados.
+  - `workspace_versions.py` (P1.2): Snapshots versionados imutáveis com hash e restauração atômica.
+  - `workspace_pending.py` (P1.3): Gerenciamento autoritativo de pendências técnicas.
+  - `workspace_delivery.py` (P1.4): Pacotes de entrega com manifesto digital e rejeição de evidências obsoletas (`VALIDATION_SOURCE_CHANGED`).
+- **Política Local-First da SOB**: Desacoplamento de falhas externas do SharePoint e GOMNET com rollback seguro.
+- **Módulo Integrante de Levantamento de Condutores**: Rotina AutoLISP `orcamento/levantamento_condutores.lsp` integrada à paleta OXCAD (`BtnLevantamentoCondutores`) e ao carregador `acaddoc.lsp`, com suíte de testes `tests/test_levantamento_condutores.py`.
 
 ### Technical
+- **Alinhamento do Baseline de Teste DT-02**: Atualização de `tests/test_digital_twin_dt02.py` para sincronizar o contador com o harness `DT02Harness.csproj` (44 testes aprovados).
 - **Validação Cruzada de Plataforma**:
-  - 300 testes automatizados via `pytest` (297 PASS, 3 SKIP por unidade externa `G:`).
-  - 43 arquivos JavaScript validados com `node --check` (0 erros).
-  - Compilação Release .NET multi-target (`net48` e `net8.0-windows`) com 0 erros.
-  - Verificação de 10 comandos críticos via AutoCAD 2026 Core Console (`accoreconsole.exe`).
+  - Suíte completa de testes aprovada (100% PASS).
+  - 92 testes direcionados de autoridade, isolamento e contratos P0/P1 aprovados (100% PASS).
+  - Harness .NET `tests/oxcad_context_gate` aprovado com 0 erros.
+  - Compilação Release .NET multi-target (`net48` e `net8.0-windows`) com 0 erros e 2 avisos conhecidos de referências Autodesk.
+  - Validação real de runtime homologada no Autodesk AutoCAD 2026 (PID 34088).

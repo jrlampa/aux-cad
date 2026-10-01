@@ -131,6 +131,7 @@
 
 ;; 6. Módulo Orçamento e Levantamento Automático de Materiais
 (load-aux-safe "orcamento\\orcamento_cad_extractor.lsp")
+(load-aux-safe "orcamento\\levantamento_condutores.lsp")
 
 ;; 7. Módulo Estúdio Web de Satélite de Postes & Cargas
 (load-aux-safe "mapa_postes\\mapa_cad_launcher.lsp")
@@ -218,6 +219,7 @@
   (princ "\n")
   (princ "\n  [ORÇAMENTO & LEVANTAMENTO DE MATERIAIS]")
   (princ "\n   - ORCAD ou ORCAMENTO : Levantamento de postes, cabos e materiais no DWG")
+  (princ "\n   - LEVANTAR_CONDUTORES : Soma comprimentos por condutor para instalar/retirar")
   (princ "\n   - ORCUI : Abre a interface de orçamento e banco de preços")
   (princ "\n")
   (princ "\n  [PARTICIPAÇÃO FINANCEIRA - CPFC REN 1.000 / 1.059]")

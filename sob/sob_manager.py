@@ -122,6 +122,59 @@ class SobOrchestrator:
         if cancelado:
             raise SobCancellationRequestedError("[CANCELADO] Operação cancelada pelo usuário.")
 
+    def _perguntar_decisao_sharepoint(
+        self,
+        erro: Exception,
+        callback_progresso: Optional[Any],
+        etapa: str,
+        continuar_em_falha: Optional[bool] = None,
+    ) -> bool:
+        """
+        Pergunta ao usuário se deseja ignorar a falha do SharePoint e continuar
+        (uma vez que a preparação local já foi realizada com sucesso) ou cancelar e fazer rollback.
+        Retorna True para IGNORAR E CONTINUAR, ou False para CANCELAR E FAZER ROLLBACK.
+        """
+        if continuar_em_falha is not None:
+            return bool(continuar_em_falha)
+
+        dados = {
+            "tipo": "ERRO_SHAREPOINT",
+            "motivo": "ERRO_ACESSO_SHAREPOINT",
+            "erro": str(erro),
+            "etapa": etapa,
+            "mensagem": (
+                f"Erro na consulta ao SharePoint ({etapa}): {erro}\n"
+                "A preparação local (pastas e modelo DWG) já foi realizada com sucesso."
+            ),
+        }
+
+        # 1. Callback com método dedicado perguntar_continuar_sem_sharepoint
+        if callback_progresso and hasattr(callback_progresso, "perguntar_continuar_sem_sharepoint"):
+            return bool(callback_progresso.perguntar_continuar_sem_sharepoint(dados))
+
+        # 2. Callback com aguardar_intervencao genérico
+        if callback_progresso and hasattr(callback_progresso, "aguardar_intervencao"):
+            res = callback_progresso.aguardar_intervencao(dados)
+            if isinstance(res, bool):
+                return res
+            if isinstance(res, dict):
+                return bool(res.get("continuar_sem_sharepoint", res.get("ignorar", False)))
+            if isinstance(res, str):
+                return res.strip().lower() in ("sim", "s", "true", "continuar", "ignorar")
+            return False
+
+        # 3. Terminal interativo (CLI)
+        if sys.stdin and hasattr(sys.stdin, "isatty") and sys.stdin.isatty():
+            try:
+                print(f"\n[SHAREPOINT] Falha na consulta ({etapa}): {erro}")
+                print("A preparação local já foi realizada com sucesso.")
+                resp = input("Deseja IGNORAR e continuar? (S/N) [N]: ")
+                return resp.strip().lower() in ("s", "sim", "y", "yes", "ignorar")
+            except Exception:
+                return False
+
+        return False
+
     def _perguntar_decisao_gomnet(
         self,
         erro: Exception,
@@ -186,6 +239,8 @@ class SobOrchestrator:
         self.logger.error(msg_str)
 
         if rollback_ctx and rollback_ctx.houve_alteracao_em_disco():
+            resultado["dwg_path"] = ""
+            resultado["estado"] = "ROLLBACK_EM_EXECUCAO"
             self._notificar_progresso(
                 callback_progresso,
                 "ROLLBACK_EM_EXECUCAO",
@@ -201,6 +256,7 @@ class SobOrchestrator:
             resultado["rollback_info"] = relatorio_rb
             self.logger.info(f"Rollback executado: {resultado['rollback']}")
             st_rb = "ROLLBACK_CONCLUIDO" if resultado["rollback"] == "ROLLBACK_CONCLUÍDO" else "ROLLBACK_PARCIAL"
+            resultado["estado"] = st_rb
             self._notificar_progresso(
                 callback_progresso,
                 st_rb,
@@ -245,9 +301,11 @@ class SobOrchestrator:
         callback_progresso: Optional[Any] = None,
         verificador_cancelamento: Optional[Any] = None,
         continuar_sem_gomnet_em_falha: Optional[bool] = None,
+        continuar_sem_sharepoint_em_falha: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Executa o fluxo completo da SOB de acordo com as regras de negócio e validações da Seção 14.
+        Garante a ordem estrita: Preparação Local -> SharePoint -> GOMNET.
         """
         resultado: Dict[str, Any] = {
             "sucesso": False,
@@ -459,11 +517,118 @@ class SobOrchestrator:
                 )
             checklist["BASE_DWG disponível"] = True
 
-            # ETAPAS A11 a A14: SharePoint na Pré-Validação
+            # ETAPA A15: Encerrar pré-validação preliminar com sucesso
+            checklist["Pré-validação concluída"] = True
+            resultado["pre_validacao"] = "OK"
+
+            # =========================================================================
+            # FASE 1 — PREPARAÇÃO LOCAL (Pastas, Cópia dos Modelos, Renomeação e Validação)
+            # =========================================================================
+            resultado["fase"] = "PREPARACAO_LOCAL"
+            resultado["estado"] = "PREPARANDO_LOCAL"
+            resultado["etapa"] = "CRIAR_ESTRUTURA"
+            self._notificar_progresso(callback_progresso, "PREPARANDO_LOCAL", "Criando pastas locais do projeto...", 5)
+            self._checar_cancelamento(verificador_cancelamento or callback_progresso)
+
+            if rollback_ctx:
+                rollback_ctx.inicializar_fase_b()
+
+            # Criação de diretórios locais: SOB_ROOT e CROQUI_DIR
+            sob_root_criado, croqui_dir_criado = criar_estrutura_sob(destination_root, sob_name)
+            estrutura_criada_nesta_execucao = True
+            if rollback_ctx:
+                rollback_ctx.registrar_criacao("SOB_ROOT", sob_root_criado, tipo="dir")
+                rollback_ctx.registrar_criacao("CROQUI_DIR", croqui_dir_criado, tipo="dir")
+
+            checklist["SOB_ROOT criado"] = True
+            checklist["CROQUI_DIR criado"] = True
+            self.logger.info("Pasta da SOB criada")
+            self.logger.info("Pasta CROQUI criada")
+
+            # Grava manifesto inicial de execução em andamento (Seção 19.5)
+            if not gravar_manifesto_execucao(
+                sob_root_criado,
+                {
+                    "run_id": resultado["RUN_ID"],
+                    "sob_id": sob_id,
+                    "sob_name": sob_name,
+                    "status": "EM_EXECUCAO",
+                    "etapa": "PREPARANDO_LOCAL",
+                    "timestamp_inicio": datetime.now(timezone.utc).isoformat(),
+                },
+            ):
+                raise IOError("Manifesto inicial SOB não persistido.")
+
+            # Cópia do arquivo-modelo BASE_TEMPLATE e renomeação para BASE_DWG
+            resultado["etapa"] = "CRIAR_BASE_DWG"
+            self._notificar_progresso(callback_progresso, "CRIAR_BASE_DWG", f"Copiando modelo para {base_dwg.name}...", 6)
+            self._checar_cancelamento(verificador_cancelamento or callback_progresso)
+            dwg_copiado = copiar_arquivo_base(
+                base_template,
+                sob_root_path,
+                nome_destino=base_dwg.name,
+            )
+            if rollback_ctx:
+                rollback_ctx.registrar_criacao("BASE_DWG", dwg_copiado, tipo="file")
+
+            self._checar_cancelamento(verificador_cancelamento or callback_progresso)
+
+            checklist["BASE_DWG criado"] = True
+            checklist["Integridade validada"] = True
+            checklist["BASE_TEMPLATE preservado"] = True
+            self.logger.info("Arquivo-base copiado e renomeado")
+
+            # Validação do cabeçalho binário do DWG
+            resultado["etapa"] = "VALIDAR_DWG"
+            if not validar_arquivo_dwg(dwg_copiado):
+                raise SobIntegrityError(
+                    f"[FALHA] Falha na validação do arquivo DWG copiado: {dwg_copiado}"
+                )
+
+            checklist["BASE_DWG validado"] = True
+            resultado["BASE_DWG"] = str(dwg_copiado)
+            resultado["dwg_path"] = str(dwg_copiado)
+
+            # Validação da estrutura local
+            if not (
+                sob_root_path.is_dir()
+                and croqui_dir.is_dir()
+                and dwg_copiado.is_file()
+                and dwg_copiado.parent.resolve() == sob_root_path.resolve()
+                and base_template.is_file()
+            ):
+                raise SobIntegrityError(
+                    "[FALHA] Estrutura local da SOB não passou na validação."
+                )
+
+            checklist["Estrutura final validada"] = True
+            resultado["estado"] = "LOCAL_PREPARADO"
+            resultado["etapa"] = "LOCAL_PREPARADO"
+            self.logger.info("Estrutura local preparada e validada com sucesso")
+
+            # Grava manifesto intermediário de estrutura local preparada
+            if not gravar_manifesto_execucao(
+                sob_root_criado,
+                {
+                    "run_id": resultado["RUN_ID"],
+                    "sob_id": sob_id,
+                    "sob_name": sob_name,
+                    "status": "LOCAL_PREPARADO",
+                    "etapa": "LOCAL_PREPARADO",
+                    "base_dwg": str(dwg_copiado),
+                    "timestamp_inicio": datetime.now(timezone.utc).isoformat(),
+                },
+            ):
+                raise IOError("Manifesto inicial SOB não persistido.")
+
+            # =========================================================================
+            # FASE 2 — CONSULTA E DOWNLOAD DO SHAREPOINT (Somente após LOCAL_PREPARADO)
+            # =========================================================================
             if baixar_croqui_sp:
-                resultado["etapa"] = "SHAREPOINT_PRE_VALIDACAO"
-                self.logger.info("Pré-validação SharePoint iniciada")
-                self._notificar_progresso(callback_progresso, "SHAREPOINT_AUTENTICACAO", "Autenticando no SharePoint corporativo...", 5)
+                resultado["estado"] = "SHAREPOINT_PENDENTE"
+                resultado["etapa"] = "SHAREPOINT_CONSULTA"
+                self.logger.info("Iniciando consulta ao SharePoint corporativo...")
+                self._notificar_progresso(callback_progresso, "SHAREPOINT_CONSULTA", "Consultando SharePoint corporativo...", 7)
                 self._checar_cancelamento(verificador_cancelamento or callback_progresso)
 
                 client = self.sharepoint_client
@@ -472,65 +637,119 @@ class SobOrchestrator:
                     self.logger.adicionar_segredo(senha)
                     client = SharePointClient(login=login, senha=senha, headless=True, logger=self.logger)
 
-                # ETAPA A11 & A12: Credenciais e Autenticação
-                checklist["Credenciais SharePoint validadas"] = True
-                client.autenticar()
-                checklist["Autenticação validada"] = True
-                resultado["estado"] = "SHAREPOINT_AUTENTICADO"
-
-                # ETAPA A13 & A14: Localizar SOB e Validar conteúdo
-                self.logger.info("SOB localizada")
-                self._notificar_progresso(callback_progresso, "SHAREPOINT_LOCALIZAR", "Localizando pasta da SOB no SharePoint...", 6)
-                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
                 try:
-                    pasta_info = client.localizar_pasta_sob(sob_id)
-                    checklist["SOB encontrada no SharePoint"] = True
-                    resultado["estado"] = "SOB_LOCALIZADA"
-                    client.validar_conteudo_disponivel(pasta_info)
-                    checklist["Conteúdo disponível para download"] = True
-                except (SobConflictError, SobNotFoundError) as e_loc:
-                    ocorrencias = getattr(e_loc, "ocorrencias", [])
-                    url_b = getattr(e_loc, "url_busca", "")
-                    motivo = "MÚLTIPLAS_OCORRÊNCIAS_SHAREPOINT" if isinstance(e_loc, SobConflictError) else "SOB_NÃO_ENCONTRADA_SHAREPOINT"
-                    res_fb = executar_fallback_intervencao_manual(
-                        sob_id=sob_id,
-                        ocorrencias=ocorrencias,
-                        url_busca=url_b,
-                        callback_progresso=callback_progresso,
-                        logger=self.logger,
-                        motivo=motivo,
-                    )
-                    if res_fb.get("url_sharepoint"):
-                        url_sp = res_fb["url_sharepoint"]
-                        pasta_info = {"tipo": "url_direta", "url": url_sp, "sob": sob_id}
-                        resultado["CROQUI"] = "DOWNLOAD_AUTOMATICO_POR_LINK"
-                    elif res_fb.get("sem_croqui"):
-                        pasta_info = None
-                        resultado["CROQUI"] = "SEM_ARQUIVOS"
-                        arquivos_manuais_validados = []
-                    else:
-                        pasta_info = None
-                        resultado["CROQUI"] = "DOWNLOAD_MANUAL_VALIDADO"
-                        arquivos_manuais_validados = res_fb.get("arquivos", [])
+                    checklist["Credenciais SharePoint validadas"] = True
+                    client.autenticar()
+                    checklist["Autenticação validada"] = True
 
-                    checklist["SOB encontrada no SharePoint"] = True
-                    checklist["Conteúdo disponível para download"] = True
-                    resultado["estado"] = "SOB_LOCALIZADA"
+                    try:
+                        pasta_info = client.localizar_pasta_sob(sob_id)
+                        checklist["SOB encontrada no SharePoint"] = True
+                        client.validar_conteudo_disponivel(pasta_info)
+                        checklist["Conteúdo disponível para download"] = True
+                    except (SobConflictError, SobNotFoundError) as e_loc:
+                        ocorrencias = getattr(e_loc, "ocorrencias", [])
+                        url_b = getattr(e_loc, "url_busca", "")
+                        motivo = "MÚLTIPLAS_OCORRÊNCIAS_SHAREPOINT" if isinstance(e_loc, SobConflictError) else "SOB_NÃO_ENCONTRADA_SHAREPOINT"
+                        res_fb = executar_fallback_intervencao_manual(
+                            sob_id=sob_id,
+                            ocorrencias=ocorrencias,
+                            url_busca=url_b,
+                            callback_progresso=callback_progresso,
+                            logger=self.logger,
+                            motivo=motivo,
+                        )
+                        if res_fb.get("url_sharepoint"):
+                            url_sp = res_fb["url_sharepoint"]
+                            pasta_info = {"tipo": "url_direta", "url": url_sp, "sob": sob_id}
+                            resultado["CROQUI"] = "DOWNLOAD_AUTOMATICO_POR_LINK"
+                            checklist["SOB encontrada no SharePoint"] = True
+                            checklist["Conteúdo disponível para download"] = True
+                        elif res_fb.get("sem_croqui"):
+                            pasta_info = None
+                            resultado["CROQUI"] = "SEM_ARQUIVOS"
+                            arquivos_manuais_validados = []
+                            checklist["SOB encontrada no SharePoint"] = True
+                            checklist["Conteúdo disponível para download"] = True
+                        elif res_fb.get("arquivos"):
+                            pasta_info = None
+                            resultado["CROQUI"] = "DOWNLOAD_MANUAL_VALIDADO"
+                            arquivos_manuais_validados = res_fb.get("arquivos", [])
+                            checklist["SOB encontrada no SharePoint"] = True
+                            checklist["Conteúdo disponível para download"] = True
+                        else:
+                            raise e_loc
+
+                    # Download do conteúdo do croqui
+                    if arquivos_manuais_validados:
+                        arqs_copiados = copiar_arquivos_manuais_para_croqui(arquivos_manuais_validados, croqui_dir)
+                        if rollback_ctx:
+                            for a in arqs_copiados:
+                                rollback_ctx.registrar_download_arquivo(a)
+                        checklist["Download concluído"] = True
+                        checklist["Conteúdo do CROQUI validado"] = True
+                        resultado["arquivos_croqui"] = [str(a) for a in arqs_copiados]
+                    elif resultado.get("CROQUI") == "SEM_ARQUIVOS":
+                        checklist["Download concluído"] = True
+                        checklist["Conteúdo do CROQUI validado"] = True
+                        resultado["arquivos_croqui"] = []
+                    elif pasta_info:
+                        arqs = client.baixar_croqui(pasta_info, croqui_dir)
+                        if rollback_ctx:
+                            for a in arqs:
+                                rollback_ctx.registrar_download_arquivo(a)
+                        client.validar_download(croqui_dir)
+                        checklist["Download concluído"] = True
+                        checklist["Conteúdo do CROQUI validado"] = True
+                        resultado["arquivos_croqui"] = [str(a) for a in arqs]
+                    else:
+                        checklist["Download concluído"] = True
+                        checklist["Conteúdo do CROQUI validado"] = True
+
+                    resultado["estado"] = "SHAREPOINT_CONCLUIDO"
+                    self.logger.info("Consulta e download SharePoint concluídos com sucesso")
+
+                except Exception as e_sp:
+                    if isinstance(e_sp, SobCancellationRequestedError):
+                        self.logger.info("Cancelamento solicitado pelo usuário no SharePoint.")
+                        raise e_sp
+                    self.logger.warning(f"Falha na consulta ao SharePoint: {e_sp}")
+                    if self._perguntar_decisao_sharepoint(e_sp, callback_progresso, "SHAREPOINT_CONSULTA", continuar_sem_sharepoint_em_falha):
+                        self.logger.info("Usuário optou por IGNORAR a falha do SharePoint e continuar com a estrutura local.")
+                        checklist["Credenciais SharePoint validadas"] = True
+                        checklist["Autenticação validada"] = True
+                        checklist["SOB encontrada no SharePoint"] = True
+                        checklist["Conteúdo disponível para download"] = True
+                        checklist["Download concluído"] = True
+                        checklist["Conteúdo do CROQUI validado"] = True
+                        resultado["estado"] = "SHAREPOINT_IGNORADO"
+                        resultado["SHAREPOINT_IGNORADO"] = True
+                        resultado["aviso_sharepoint"] = f"SharePoint ignorado a pedido do usuário: {e_sp}"
+                    else:
+                        self.logger.info("Usuário optou por CANCELAR e executar rollback devido a erro no SharePoint.")
+                        raise e_sp
             else:
-                # Modo offline (para testes unitários sem rede externa)
+                # Modo offline
                 checklist["Credenciais SharePoint validadas"] = True
                 checklist["Autenticação validada"] = True
                 checklist["SOB encontrada no SharePoint"] = True
                 checklist["Conteúdo disponível para download"] = True
+                checklist["Download concluído"] = True
+                checklist["Conteúdo do CROQUI validado"] = True
+                resultado["arquivos_croqui"] = []
 
-            # ETAPA A14-G: Validar e pré-consultar GOMNET (Seção 19.7)
+            # =========================================================================
+            # FASE 3 — CONSULTA E DOWNLOAD DO GOMNET (Somente após SharePoint)
+            # =========================================================================
             anexos_gomnet: List[GomnetAnexo] = []
             gom_client = self.gomnet_client
             if consultar_gomnet and (self.gomnet_client is not None or (baixar_croqui_sp and self.sharepoint_client is None)):
-                resultado["etapa"] = "GOMNET_PRE_VALIDACAO"
-                self.logger.info("Pré-validação GOMNET iniciada")
-                self._notificar_progresso(callback_progresso, "GOMNET_AUTENTICACAO", "Autenticando sessão no GOMNET...", 8)
+                resultado["estado"] = "GOMNET_PENDENTE"
+                resultado["etapa"] = "GOMNET_CONSULTA"
+                self.logger.info("Iniciando consulta ao GOMNET...")
+                self._notificar_progresso(callback_progresso, "GOMNET_CONSULTA", "Consultando GOMNET...", 9)
                 self._checar_cancelamento(verificador_cancelamento or callback_progresso)
+
                 if not gom_client:
                     try:
                         u, s, url = carregar_credenciais_gomnet()
@@ -543,221 +762,68 @@ class SobOrchestrator:
                 if gom_client:
                     try:
                         gom_client.autenticar()
-                        self._notificar_progresso(callback_progresso, "GOMNET_CONSULTAR", "Consultando modal de anexos da SOB no GOMNET...", 9)
+                        self._notificar_progresso(callback_progresso, "GOMNET_CONSULTAR", "Consultando modal de anexos da SOB no GOMNET...", 10)
                         self._checar_cancelamento(verificador_cancelamento or callback_progresso)
                         anexos_gomnet = gom_client.localizar_sob_e_listar_anexos(sob_id)
                         checklist["GOMNET validado"] = True
                         self.logger.info(f"GOMNET: {len(anexos_gomnet)} anexo(s) identificado(s)")
+
+                        if anexos_gomnet:
+                            created_files, attach_info = baixar_anexos_gomnet_fase_b(
+                                anexos_gomnet=anexos_gomnet,
+                                gom_client=gom_client,
+                                croqui_dir=croqui_dir,
+                                rollback_ctx=rollback_ctx,
+                                callback_progresso=callback_progresso,
+                                checar_cancelamento_fn=lambda: self._checar_cancelamento(verificador_cancelamento or callback_progresso),
+                                logger=self.logger,
+                            )
+                            resultado["ANEXOS_DIR"] = str(croqui_dir / "ANEXOS")
+                            resultado["GOMNET_CREATED_FILES"].extend(created_files)
+                            resultado["GOMNET_ATTACHMENTS"].extend(attach_info)
+
+                        checklist["Download GOMNET concluído"] = True
+                        resultado["estado"] = "GOMNET_CONCLUIDO"
+                        self.logger.info("Download de anexos GOMNET concluído com sucesso")
+
                     except Exception as e_gom:
-                        self.logger.warning(f"Erro ao acessar o GOMNET na pré-validação: {e_gom}")
-                        if self._perguntar_decisao_gomnet(e_gom, callback_progresso, "GOMNET_PRE_VALIDACAO", continuar_sem_gomnet_em_falha):
-                            self.logger.info("Usuário optou por continuar a preparação da SOB sem o fluxo do GOMNET.")
-                            anexos_gomnet = []
-                            gom_client = None
+                        if isinstance(e_gom, SobCancellationRequestedError):
+                            self.logger.info("Cancelamento solicitado pelo usuário no GOMNET.")
+                            raise e_gom
+                        self.logger.warning(f"Erro ao acessar o GOMNET: {e_gom}")
+                        if self._perguntar_decisao_gomnet(e_gom, callback_progresso, "GOMNET_CONSULTA", continuar_sem_gomnet_em_falha):
+                            self.logger.info("Usuário optou por IGNORAR a falha do GOMNET e continuar.")
                             checklist["GOMNET validado"] = True
+                            checklist["Download GOMNET concluído"] = True
+                            resultado["estado"] = "GOMNET_IGNORADO"
                             resultado["GOMNET_IGNORADO"] = True
+                            resultado["GOMNET_DOWNLOAD_IGNORADO"] = True
                             resultado["aviso_gomnet"] = f"GOMNET ignorado a pedido do usuário: {e_gom}"
                         else:
-                            self.logger.info("Usuário optou por fazer rollback / cancelar devido a erro no GOMNET.")
+                            self.logger.info("Usuário optou por CANCELAR e executar rollback devido a erro no GOMNET.")
                             raise e_gom
                 else:
                     checklist["GOMNET validado"] = True
+                    checklist["Download GOMNET concluído"] = True
             else:
                 checklist["GOMNET validado"] = True
-
-            # ETAPA A15: Encerrar pré-validação com sucesso
-            checklist["Pré-validação concluída"] = True
-            resultado["pre_validacao"] = "OK"
-            resultado["estado"] = "PRE_VALIDACAO_CONCLUIDA"
-            self.logger.info("Pré-validação concluída com sucesso - Iniciando FASE B: CRIAÇÃO E EXECUÇÃO")
-
-            # =========================================================================
-            # FASE B — CRIAÇÃO E EXECUÇÃO (Somente após PRE_VALIDACAO = OK)
-            # =========================================================================
-            resultado["fase"] = "FASE_B"
-            if rollback_ctx:
-                rollback_ctx.inicializar_fase_b()
-
-            # ETAPA B01 & B02: Criar SOB_ROOT e CROQUI_DIR
-            resultado["etapa"] = "CRIAR_ESTRUTURA"
-            sob_root_criado, croqui_dir_criado = criar_estrutura_sob(destination_root, sob_name)
-            estrutura_criada_nesta_execucao = True
-            if rollback_ctx:
-                rollback_ctx.registrar_criacao("SOB_ROOT", sob_root_criado, tipo="dir")
-                rollback_ctx.registrar_criacao("CROQUI_DIR", croqui_dir_criado, tipo="dir")
-
-            checklist["SOB_ROOT criado"] = True
-            checklist["CROQUI_DIR criado"] = True
-            resultado["estado"] = "ESTRUTURA_CRIADA"
-            self.logger.info("Pasta da SOB criada")
-            self.logger.info("Pasta CROQUI criada")
-
-            # Persiste manifesto inicial de execução (Seção 19.5 e 19.14)
-            gravar_manifesto_execucao(
-                sob_root_criado,
-                {
-                    "run_id": resultado["RUN_ID"],
-                    "sob_id": sob_id,
-                    "sob_name": sob_name,
-                    "status": "EM_EXECUCAO",
-                    "etapa": "ESTRUTURA_CRIADA",
-                    "timestamp_inicio": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-
-            # ETAPA B03 & B04: Baixar conteúdo da SOB e Validar download
-            if arquivos_manuais_validados:
-                resultado["etapa"] = "DOWNLOAD_CROQUI"
-                self.logger.info("Transferindo arquivos manuais validados para CROQUI")
-                self._notificar_progresso(callback_progresso, "DOWNLOAD_CROQUI", "Copiando arquivos manuais para o croqui...", 7)
-                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
-                arqs_copiados = copiar_arquivos_manuais_para_croqui(arquivos_manuais_validados, croqui_dir)
-                if rollback_ctx:
-                    for a in arqs_copiados:
-                        rollback_ctx.registrar_download_arquivo(a)
-                checklist["Download concluído"] = True
-                checklist["Conteúdo do CROQUI validado"] = True
-                resultado["estado"] = "DOWNLOAD_VALIDADO"
-                resultado["arquivos_croqui"] = [str(a) for a in arqs_copiados]
-                self.logger.info("Arquivos manuais copiados para o croqui")
-            elif resultado.get("CROQUI") == "SEM_ARQUIVOS":
-                resultado["etapa"] = "DOWNLOAD_CROQUI"
-                self.logger.info("CROQUI = SEM_ARQUIVOS | Prosseguindo com criação da estrutura e modelo DWG")
-                self._notificar_progresso(callback_progresso, "DOWNLOAD_CROQUI", "Estrutura do croqui criada sem arquivos adicionais...", 7)
-                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
-                checklist["Download concluído"] = True
-                checklist["Conteúdo do CROQUI validado"] = True
-                resultado["estado"] = "DOWNLOAD_VALIDADO"
-                resultado["arquivos_croqui"] = []
-            elif baixar_croqui_sp and client and pasta_info:
-                resultado["etapa"] = "DOWNLOAD_CROQUI"
-                self.logger.info("Download iniciado")
-                self._notificar_progresso(callback_progresso, "DOWNLOAD_CROQUI", "Baixando arquivos do SharePoint...", 7)
-                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
-                arquivos = client.baixar_croqui(pasta_info, croqui_dir)
-                if rollback_ctx:
-                    for a in arquivos:
-                        rollback_ctx.registrar_download_arquivo(a)
-
-                client.validar_download(croqui_dir)
-                checklist["Download concluído"] = True
-                checklist["Conteúdo do CROQUI validado"] = True
-                resultado["estado"] = "DOWNLOAD_VALIDADO"
-                resultado["arquivos_croqui"] = [str(a) for a in arquivos]
-                self.logger.info("Download concluído")
-            else:
-                checklist["Download concluído"] = True
-                checklist["Conteúdo do CROQUI validado"] = True
-                resultado["estado"] = "DOWNLOAD_VALIDADO"
-
-            # ETAPA B04-G: Baixar e validar anexos do GOMNET em CROQUI\ANEXOS (Seção 19.8 a 19.12)
-            if anexos_gomnet and gom_client:
-                resultado["etapa"] = "DOWNLOAD_GOMNET"
-                self.logger.info("Download de anexos GOMNET iniciado")
-                self._notificar_progresso(callback_progresso, "DOWNLOAD_GOMNET", "Baixando anexos identificados no GOMNET...", 10)
-                self._checar_cancelamento(verificador_cancelamento or callback_progresso)
-
-                try:
-                    created_files, attach_info = baixar_anexos_gomnet_fase_b(
-                        anexos_gomnet=anexos_gomnet,
-                        gom_client=gom_client,
-                        croqui_dir=croqui_dir,
-                        rollback_ctx=rollback_ctx,
-                        callback_progresso=callback_progresso,
-                        checar_cancelamento_fn=lambda: self._checar_cancelamento(verificador_cancelamento or callback_progresso),
-                        logger=self.logger,
-                    )
-                    resultado["ANEXOS_DIR"] = str(croqui_dir / "ANEXOS")
-                    resultado["GOMNET_CREATED_FILES"].extend(created_files)
-                    resultado["GOMNET_ATTACHMENTS"].extend(attach_info)
-                    checklist["Download GOMNET concluído"] = True
-                    self.logger.info("Download de anexos GOMNET concluído")
-                except Exception as e_dl:
-                    self.logger.warning(f"Erro ao baixar anexos do GOMNET: {e_dl}")
-                    if self._perguntar_decisao_gomnet(e_dl, callback_progresso, "DOWNLOAD_GOMNET", continuar_sem_gomnet_em_falha):
-                        self.logger.info("Usuário optou por continuar a preparação da SOB sem o fluxo do GOMNET após erro de download.")
-                        checklist["Download GOMNET concluído"] = True
-                        checklist["Conteúdo do CROQUI validado"] = True
-                        resultado["estado"] = "DOWNLOAD_VALIDADO"
-                        resultado["GOMNET_DOWNLOAD_IGNORADO"] = True
-                        resultado["aviso_gomnet"] = f"Download GOMNET ignorado a pedido do usuário: {e_dl}"
-                    else:
-                        self.logger.info("Usuário optou por fazer rollback após erro no download do GOMNET.")
-                        raise e_dl
-            else:
                 checklist["Download GOMNET concluído"] = True
-                checklist["Conteúdo do CROQUI validado"] = True
-                resultado["estado"] = "DOWNLOAD_VALIDADO"
 
-            # ETAPA B05, B06 e B07: Copiar BASE_TEMPLATE, Validar BASE_DWG e Preservação
-            resultado["etapa"] = "COPIAR_ARQUIVO_BASE"
-            self._notificar_progresso(callback_progresso, "CRIAR_BASE_DWG", f"Criando {base_dwg.name}...", 11)
-            self._checar_cancelamento(verificador_cancelamento or callback_progresso)
-            dwg_copiado = copiar_arquivo_base(
-                base_template,
-                sob_root_path,
-                nome_destino=base_dwg.name,
-            )
-            if rollback_ctx:
-                rollback_ctx.registrar_criacao("BASE_DWG", dwg_copiado, tipo="file")
-
-            checklist["BASE_DWG criado"] = True
-            checklist["Integridade validada"] = True
-            checklist["BASE_TEMPLATE preservado"] = True
-            resultado["estado"] = "BASE_COPIADO"
-            self.logger.info("Arquivo-base copiado")
-
-            # Validação do cabeçalho binário do DWG
-            resultado["etapa"] = "VALIDAR_DWG"
-            if not validar_arquivo_dwg(dwg_copiado):
-                raise SobIntegrityError(
-                    f"[FALHA] Falha na validação do arquivo DWG copiado: {dwg_copiado}"
-                )
-
-            checklist["BASE_DWG validado"] = True
-            resultado["BASE_DWG"] = str(dwg_copiado)
-            resultado["dwg_path"] = str(dwg_copiado)
-            self.logger.info("DWG validado")
-
-            # ETAPA B08: Validar estrutura final completa
-            resultado["etapa"] = "VALIDAR_ESTRUTURA_FINAL"
-            self._notificar_progresso(callback_progresso, "VALIDAR_PROJETO", "Validando integridade final do projeto...", 12)
-            self._checar_cancelamento(verificador_cancelamento or callback_progresso)
-            if not (
-                sob_root_path.is_dir()
-                and croqui_dir.is_dir()
-                and dwg_copiado.is_file()
-                and dwg_copiado.parent.resolve() == sob_root_path.resolve()
-                and base_template.is_file()
-            ):
-                raise SobIntegrityError(
-                    "[FALHA] Estrutura final da SOB não passou na validação."
-                )
-
-            checklist["Estrutura final validada"] = True
-            resultado["estado"] = "ESTRUTURA_VALIDADA"
-
-            # ETAPA B09 & B10: Abertura no AutoCAD (se solicitado via CLI)
+            # =========================================================================
+            # FASE 4 — CONCLUSÃO E FINALIZAÇÃO
+            # =========================================================================
             if abrir_cad:
                 resultado["etapa"] = "ABRIR_AUTOCAD"
                 self._abrir_no_autocad(dwg_copiado)
                 if rollback_ctx:
                     rollback_ctx.marcar_dwg_aberto()
                 resultado["estado"] = "AUTOCAD_ABERTO"
-                self.logger.info("DWG aberto")
+                self.logger.info("DWG aberto no AutoCAD")
 
             # ETAPA B11: Validação final (Regra de Não Falso Sucesso)
             if all(checklist.values()):
-                resultado["sucesso"] = True
-                resultado["status"] = "CONCLUÍDO"
-                resultado["estado"] = "CONCLUÍDO"
-                resultado["etapa"] = "FINALIZADO"
-                resultado["mensagem"] = "Processo concluído com sucesso."
-                self._notificar_progresso(callback_progresso, "CONCLUIDO", "Projeto preparado com sucesso!", 12, perc=100.0, estado="SUCESSO")
-                self.logger.info("Processo concluído")
-
                 # Persiste o manifesto definitivo de execução concluída (Seção 19.5 e 19.7)
-                gravar_manifesto_execucao(
+                if not gravar_manifesto_execucao(
                     sob_root_path,
                     {
                         "run_id": resultado["RUN_ID"],
@@ -770,7 +836,16 @@ class SobOrchestrator:
                         "arquivos_croqui": resultado.get("arquivos_croqui", []),
                         "timestamp_conclusao": datetime.now(timezone.utc).isoformat(),
                     },
-                )
+                ):
+                    raise IOError("Manifesto final SOB não persistido.")
+
+                resultado["sucesso"] = True
+                resultado["status"] = "CONCLUÍDO"
+                resultado["estado"] = "CONCLUÍDO"
+                resultado["etapa"] = "FINALIZADO"
+                resultado["mensagem"] = "Processo concluído com sucesso."
+                self._notificar_progresso(callback_progresso, "CONCLUIDO", "Projeto preparado com sucesso!", 12, perc=100.0, estado="SUCESSO")
+                self.logger.info("Processo concluído")
 
                 # Inicialização do controle operacional de tempo do OXCAD para a nova SOB (OXCAD 0.5.0)
                 try:

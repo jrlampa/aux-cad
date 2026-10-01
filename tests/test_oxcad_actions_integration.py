@@ -28,6 +28,16 @@ WORKSPACE_DIR = ROOT_DIR / "workspace"
 CLI_PATH = WORKSPACE_DIR / "workspace_context_cli.py"
 
 
+def _vincular_dwg(dwg: Path) -> str:
+    sob_id = "A057349839"
+    (dwg.parent / ".sob_state.json").write_text(
+        json.dumps({
+            "sob_id": sob_id, "status": "CONCLUÍDO", "base_dwg": str(dwg)
+        }), encoding="utf-8",
+    )
+    return sob_id
+
+
 # ==============================================================================
 # 1. Testes de Execução das Ações via executar_acao_operacional
 # ==============================================================================
@@ -35,7 +45,7 @@ CLI_PATH = WORKSPACE_DIR / "workspace_context_cli.py"
 @patch("workspace.workspace_actions.WorkspaceActionDispatcher.executar_cqt")
 def test_acao_cqt_executa_via_dispatcher(mock_cqt, tmp_path):
     """Valida despacho da ação CQT para o WorkspaceActionDispatcher."""
-    from workspace.workspace_context_cli import executar_acao_operacional
+    from workspace.workspace_context_cli import _executar_acao_operacional_impl
 
     mock_proc = MagicMock()
     mock_proc.pid = 1111
@@ -46,7 +56,9 @@ def test_acao_cqt_executa_via_dispatcher(mock_cqt, tmp_path):
     dwg = pasta_sob / "PE_A057349839_DESENHO.dwg"
     dwg.write_text("dummy")
 
-    res = executar_acao_operacional("cqt", dwg_path=str(dwg))
+    res = _executar_acao_operacional_impl(
+        "cqt", dwg_path=str(dwg), sob_id_esperada=_vincular_dwg(dwg)
+    )
 
     assert res["sucesso"] is True
     assert res["acao"] == "cqt"
@@ -59,7 +71,7 @@ def test_acao_cqt_executa_via_dispatcher(mock_cqt, tmp_path):
 @patch("workspace.workspace_actions.WorkspaceActionDispatcher.executar_orcamento")
 def test_acao_orcamento_executa_via_dispatcher(mock_orc, tmp_path):
     """Valida despacho da ação Orçamento para o WorkspaceActionDispatcher."""
-    from workspace.workspace_context_cli import executar_acao_operacional
+    from workspace.workspace_context_cli import _executar_acao_operacional_impl
 
     mock_proc = MagicMock()
     mock_proc.pid = 2222
@@ -70,7 +82,9 @@ def test_acao_orcamento_executa_via_dispatcher(mock_orc, tmp_path):
     dwg = pasta_sob / "PE_A057349839_DESENHO.dwg"
     dwg.write_text("dummy")
 
-    res = executar_acao_operacional("orcamento", dwg_path=str(dwg))
+    res = _executar_acao_operacional_impl(
+        "orcamento", dwg_path=str(dwg), sob_id_esperada=_vincular_dwg(dwg)
+    )
 
     assert res["sucesso"] is True
     assert res["acao"] == "orcamento"
@@ -82,7 +96,7 @@ def test_acao_orcamento_executa_via_dispatcher(mock_orc, tmp_path):
 @patch("workspace.workspace_actions.WorkspaceActionDispatcher.executar_cpfc")
 def test_acao_cpfc_executa_via_dispatcher(mock_cpfc, tmp_path):
     """Valida despacho da ação CPFC para o WorkspaceActionDispatcher."""
-    from workspace.workspace_context_cli import executar_acao_operacional
+    from workspace.workspace_context_cli import _executar_acao_operacional_impl
 
     mock_proc = MagicMock()
     mock_proc.pid = 3333
@@ -93,7 +107,9 @@ def test_acao_cpfc_executa_via_dispatcher(mock_cpfc, tmp_path):
     dwg = pasta_sob / "PE_A057349839_DESENHO.dwg"
     dwg.write_text("dummy")
 
-    res = executar_acao_operacional("cpfc", dwg_path=str(dwg))
+    res = _executar_acao_operacional_impl(
+        "cpfc", dwg_path=str(dwg), sob_id_esperada=_vincular_dwg(dwg)
+    )
 
     assert res["sucesso"] is True
     assert res["acao"] == "cpfc"
@@ -105,7 +121,7 @@ def test_acao_cpfc_executa_via_dispatcher(mock_cpfc, tmp_path):
 @patch("workspace.workspace_actions.WorkspaceActionDispatcher.executar_ambiental")
 def test_acao_ambiental_executa_via_dispatcher(mock_amb, tmp_path):
     """Valida despacho da ação Ambiental para o WorkspaceActionDispatcher."""
-    from workspace.workspace_context_cli import executar_acao_operacional
+    from workspace.workspace_context_cli import _executar_acao_operacional_impl
 
     mock_proc = MagicMock()
     mock_proc.pid = 4444
@@ -116,7 +132,9 @@ def test_acao_ambiental_executa_via_dispatcher(mock_amb, tmp_path):
     dwg = pasta_sob / "PE_A057349839_DESENHO.dwg"
     dwg.write_text("dummy")
 
-    res = executar_acao_operacional("ambiental", dwg_path=str(dwg))
+    res = _executar_acao_operacional_impl(
+        "ambiental", dwg_path=str(dwg), sob_id_esperada=_vincular_dwg(dwg)
+    )
 
     assert res["sucesso"] is True
     assert res["acao"] == "ambiental"
@@ -128,7 +146,7 @@ def test_acao_ambiental_executa_via_dispatcher(mock_amb, tmp_path):
 @patch("workspace.workspace_actions.WorkspaceActionDispatcher.executar_prancha")
 def test_acao_prancha_executa_via_dispatcher(mock_prancha, tmp_path):
     """Valida despacho da ação AutoPrancha para o WorkspaceActionDispatcher."""
-    from workspace.workspace_context_cli import executar_acao_operacional
+    from workspace.workspace_context_cli import _executar_acao_operacional_impl
 
     mock_proc = MagicMock()
     mock_proc.pid = 5555
@@ -139,7 +157,9 @@ def test_acao_prancha_executa_via_dispatcher(mock_prancha, tmp_path):
     dwg = pasta_sob / "PE_A057349839_DESENHO.dwg"
     dwg.write_text("dummy")
 
-    res = executar_acao_operacional("prancha", dwg_path=str(dwg))
+    res = _executar_acao_operacional_impl(
+        "prancha", dwg_path=str(dwg), sob_id_esperada=_vincular_dwg(dwg)
+    )
 
     assert res["sucesso"] is True
     assert res["acao"] == "prancha"
@@ -179,7 +199,7 @@ def test_acao_unifilar_indica_interacao_autocad():
     assert res["sucesso"] is False
     assert res["acao"] == "unifilar"
     assert res["estado"] == "Requer especificação"
-    assert "AutoCAD" in res["mensagem"]
+    assert res["erro"] == "DWG_CONTEXT_NOT_VERIFIED"
     assert res["pid"] is None
 
 
@@ -256,7 +276,7 @@ def test_cli_executa_acao_unifilar():
     dados = json.loads(proc.stdout)
     assert dados["acao"] == "unifilar"
     assert dados["estado"] == "Requer especificação"
-    assert "UNIFILAR" in dados["mensagem"]
+    assert dados["erro"] == "DWG_CONTEXT_NOT_VERIFIED"
 
 
 def test_cli_executa_acao_abrir_inexistente():

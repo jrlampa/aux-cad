@@ -5,6 +5,7 @@ Responsabilidade única: Inspecionar e detectar artefatos de engenharia no siste
 de forma não-destrutiva, determinística e exclusivamente em modo leitura.
 """
 
+import json
 import os
 from pathlib import Path
 import re
@@ -100,6 +101,49 @@ class WorkspaceScanner:
                     return sob_f
 
         return None
+
+    @classmethod
+    def detectar_sobs_candidatas(
+        cls,
+        root_dir: Union[str, Path],
+        excluir_dwg: Optional[Union[str, Path]] = None,
+    ) -> List[str]:
+        """Retorna SOBs sugeridas por DWGs sem escolher uma."""
+        p_root = Path(root_dir).resolve()
+        if not p_root.exists() or not p_root.is_dir():
+            return []
+
+        caminho_excluido = Path(excluir_dwg).resolve() if excluir_dwg else None
+        candidatas = set()
+        pastas = [p_root]
+        pastas.extend(path for path in p_root.iterdir() if path.is_dir())
+
+        for pasta in pastas:
+            manifesto = pasta / ".sob_state.json"
+            if manifesto.is_file():
+                try:
+                    dados = json.loads(manifesto.read_text(encoding="utf-8"))
+                    sob_id = cls.extrair_sob_de_texto(
+                        str(dados.get("sob_id", ""))
+                    )
+                    if sob_id:
+                        candidatas.add(sob_id)
+                except (
+                    OSError,
+                    UnicodeDecodeError,
+                    json.JSONDecodeError,
+                    AttributeError,
+                ):
+                    pass
+
+            for dwg in pasta.glob("*_DESENHO.dwg"):
+                if caminho_excluido and dwg.resolve() == caminho_excluido:
+                    continue
+                sob_id = cls.extrair_sob_de_texto(dwg.name)
+                if sob_id:
+                    candidatas.add(sob_id)
+
+        return sorted(candidatas)
 
     @classmethod
     def detectar_base_sigla(cls, root_dir: Path, sob_id: str) -> str:

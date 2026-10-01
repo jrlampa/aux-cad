@@ -148,6 +148,35 @@ def test_06_correlation_id_preservado(tmp_path):
     assert ultimo["correlation_id"] == cid
 
 
+def test_execution_fields_sao_preservados_no_jsonl(tmp_path):
+    dir_logs = tmp_path / "logs"
+    configurar_logging(diretorio_logs=tmp_path)
+    logger = get_logger("test.execution")
+
+    logger.info(
+        "Execução atualizada",
+        extra={
+            "execution_id": "exec-001",
+            "execution_state": "Executando",
+            "correlation_id": "corr-001",
+            "sob_id": "A057349839",
+            "dwg_path": "A.dwg",
+            "dwg_identity": "fingerprint-a",
+            "origin": "oxcad.palette",
+            "artifacts": [{"path": "CQT.xlsx", "operation": "criado"}],
+        },
+    )
+
+    event = _ler_linhas_json(dir_logs / "application.jsonl")[-1]
+    assert event["execution_id"] == "exec-001"
+    assert event["execution_state"] == "Executando"
+    assert event["correlation_id"] == "corr-001"
+    assert event["sob_id"] == "A057349839"
+    assert event["dwg_identity"] == "fingerprint-a"
+    assert event["origin"] == "oxcad.palette"
+    assert event["artifacts"][0]["operation"] == "criado"
+
+
 def test_07_sob_id_preservado_no_contexto(tmp_path):
     """7. Contexto da SOB (sob_id, dwg_path) é preservado."""
     dir_logs = tmp_path / "logs"

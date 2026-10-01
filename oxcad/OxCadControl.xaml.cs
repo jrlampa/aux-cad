@@ -6,6 +6,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Autodesk.AutoCAD.ApplicationServices;
+using MapaCadPaleta;
+using AcDb = Autodesk.AutoCAD.DatabaseServices;
 using acApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace OxCad
@@ -18,7 +20,14 @@ namespace OxCad
     {
         private bool _isUpdating = false;
         private bool _isActionRunning = false;
+        private readonly ContextRefreshGate _contextRefreshGate = new ContextRefreshGate();
+        private readonly object _refreshScheduleLock = new object();
+        private bool _isRefreshScheduled = false;
+        private string? _nativeCommandExecutionId = null;
         private string? _ultimoDwgFullPath = null;
+        private string? _ultimoSobId = null;
+        private string? _ultimoDwgIdentity = null;
+        private bool _projectScopeResolved = false;
 
         // Gerenciamento de Tempo Operacional (OXCAD 0.5.0)
         private System.Windows.Threading.DispatcherTimer? _uiTimer;
@@ -32,6 +41,7 @@ namespace OxCad
             CarregarIconeHeader();
             ConfigurarTimerVisual();
             Loaded += OxCadControl_Loaded;
+            Unloaded += OxCadControl_Unloaded;
         }
 
         private void CarregarIconeHeader()
@@ -70,7 +80,14 @@ namespace OxCad
 
         private void OxCadControl_Loaded(object sender, RoutedEventArgs e)
         {
+            OxCadExecutionRegistry.ExecutionChanged -= OnExecutionChanged;
+            OxCadExecutionRegistry.ExecutionChanged += OnExecutionChanged;
             _ = AtualizarContextoAsync();
+        }
+
+        private void OxCadControl_Unloaded(object sender, RoutedEventArgs e)
+        {
+            OxCadExecutionRegistry.ExecutionChanged -= OnExecutionChanged;
         }
 
         private void BtnAtualizar_Click(object sender, RoutedEventArgs e)
@@ -84,6 +101,224 @@ namespace OxCad
         public void AtualizarContexto()
         {
             _ = AtualizarContextoAsync();
+        }
+
+        public void NotificarDocumentoAtivoAlterado()
+        {
+            ExecutarNaThreadUi(() => _ = AtualizarContextoAsync());
+        }
+
+        public void NotificarDocumentoFechando(Document? document)
+        {
+            ExecutarNaThreadUi(() =>
+            {
+                if (document == null)
+                {
+                    _ = AtualizarContextoAsync();
+                    return;
+                }
+
+                if (!_contextRefreshGate.IsCurrentDocument(document))
+                    return;
+
+                _contextRefreshGate.Invalidate();
+                _isUpdating = false;
+                InvalidarContextoVisual("Documento sendo fechado...");
+                BtnAtualizar.IsEnabled = true;
+                BtnAtualizar.Content = "🔄 Atualizar Contexto";
+            });
+        }
+
+        public void NotificarDocumentoSalvo(Document document)
+        {
+            ExecutarNaThreadUi(() =>
+            {
+                if (ReferenceEquals(document, acApp.DocumentManager.MdiActiveDocument))
+                    _ = AtualizarContextoAsync();
+            });
+        }
+
+        private void ExecutarNaThreadUi(Action action)
+        {
+            if (Dispatcher.CheckAccess())
+                action();
+            else
+                Dispatcher.BeginInvoke(action);
+        }
+
+        private void AgendarAtualizacaoContextoAssincrona()
+        {
+            lock (_refreshScheduleLock)
+            {
+                if (_isRefreshScheduled)
+                    return;
+                _isRefreshScheduled = true;
+            }
+
+            Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Background,
+                new Action(() =>
+                {
+                    lock (_refreshScheduleLock)
+                    {
+                        _isRefreshScheduled = false;
+                    }
+                    _ = AtualizarContextoAsync();
+                }));
+        }
+
+        private void OnExecutionChanged(object? sender, OxCadExecutionChangedEventArgs eventArgs)
+        {
+            OxCadExecutionSnapshot execution = eventArgs.Execution;
+            if (!string.Equals(execution.Origin, "oxcad.palette", StringComparison.Ordinal))
+                return;
+
+            ExecutarNaThreadUi(() =>
+            {
+                if (string.Equals(
+                        execution.ExecutionId,
+                        _nativeCommandExecutionId,
+                        StringComparison.Ordinal) &&
+                    execution.FinishedAt.HasValue)
+                {
+                    _nativeCommandExecutionId = null;
+                    _isActionRunning = false;
+                    HabilitarBotoesAcao(true);
+                }
+
+                if (execution.ContextGeneration != _contextRefreshGate.CurrentGeneration)
+                    return;
+
+                if (!string.IsNullOrWhiteSpace(execution.DwgIdentity) &&
+                    !string.Equals(
+                        execution.DwgIdentity,
+                        _ultimoDwgIdentity,
+                        StringComparison.OrdinalIgnoreCase))
+                    return;
+
+                TxtAcaoEstado.Text = execution.StateText;
+                TxtAcaoEstado.Foreground = execution.State switch
+                {
+                    OxCadExecutionState.Concluido => new SolidColorBrush(Color.FromRgb(82, 183, 136)),
+                    OxCadExecutionState.Falhou => new SolidColorBrush(Color.FromRgb(231, 111, 81)),
+                    OxCadExecutionState.Cancelado => new SolidColorBrush(Color.FromRgb(247, 127, 0)),
+                    _ => new SolidColorBrush(Color.FromRgb(244, 162, 97))
+                };
+                TxtAcaoMensagem.Text = execution.FinishedAt.HasValue
+                    ? $"{execution.Message} ({FormatarDuracaoExecucao(execution.DurationMs)})"
+                    : execution.Message;
+            });
+        }
+
+        private OxCadExecutionRecord IniciarExecucaoPaleta(
+            string acao,
+            Document? document = null)
+        {
+            string correlationId = Guid.NewGuid().ToString("N");
+            string executionId;
+            do
+            {
+                executionId = Guid.NewGuid().ToString("N");
+            }
+            while (string.Equals(executionId, correlationId, StringComparison.OrdinalIgnoreCase));
+
+            string? dwgPath = _ultimoDwgFullPath;
+            string? sobId = _ultimoSobId;
+            string? dwgIdentity = _ultimoDwgIdentity;
+            if (document != null)
+            {
+                dwgPath = string.IsNullOrWhiteSpace(document.Database.Filename)
+                    ? null
+                    : document.Database.Filename;
+                dwgIdentity = document.Database.FingerprintGuid;
+                if (!string.Equals(dwgIdentity, _ultimoDwgIdentity, StringComparison.OrdinalIgnoreCase))
+                    sobId = null;
+            }
+
+            string? projectRoot = string.IsNullOrWhiteSpace(dwgPath)
+                ? null
+                : Path.GetDirectoryName(dwgPath);
+            OxCadExecutionRecord execution = OxCadExecutionRegistry.Iniciar(
+                executionId,
+                correlationId,
+                sobId,
+                dwgPath,
+                dwgIdentity,
+                acao,
+                "oxcad.palette",
+                projectRoot,
+                _contextRefreshGate.CurrentGeneration);
+            OxCadExecutionRegistry.Transicionar(
+                execution,
+                OxCadExecutionState.Executando,
+                $"Executando {acao}.");
+            return execution;
+        }
+
+        private static string FormatarDuracaoExecucao(double durationMs)
+        {
+            TimeSpan duration = TimeSpan.FromMilliseconds(Math.Max(0, durationMs));
+            return duration.TotalHours >= 1
+                ? $"{(int)duration.TotalHours:00}:{duration.Minutes:00}:{duration.Seconds:00}"
+                : $"{duration.Minutes:00}:{duration.Seconds:00}";
+        }
+
+        private static void FinalizarExecucaoPaleta(
+            OxCadExecutionRecord execution,
+            OxCadActionResult? result,
+            Exception? exception = null)
+        {
+            bool sucesso = exception == null && result?.Sucesso == true &&
+                result.Estado != "Requer especificação" && result.Estado != "Falhou";
+            OxCadExecutionRegistry.Transicionar(
+                execution,
+                sucesso ? OxCadExecutionState.Concluido : OxCadExecutionState.Falhou,
+                exception?.Message ?? result?.Mensagem ?? "Execução falhou.",
+                exception?.ToString() ?? result?.Erro,
+                result?.Pid);
+        }
+
+        private bool ContextoDwgAtivoCoerente(bool requireProjectScope)
+        {
+            try
+            {
+                Document? activeDocument = acApp.DocumentManager.MdiActiveDocument;
+                if (activeDocument == null || !_contextRefreshGate.IsCurrentDocument(activeDocument))
+                    return false;
+                if (!requireProjectScope)
+                    return true;
+
+                string identity = activeDocument.Database.FingerprintGuid;
+                return _projectScopeResolved &&
+                       string.Equals(identity, _ultimoDwgIdentity, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private OxCadVerifiedDwgContext CapturarContextoVerificado()
+        {
+            Document? document = acApp.DocumentManager.MdiActiveDocument;
+            if (document == null || !_contextRefreshGate.IsCurrentDocument(document))
+                throw new InvalidOperationException("CONTEXTO_INCOMPATIVEL");
+
+            AcDb.Database database = document.Database;
+            long generation = _contextRefreshGate.CurrentGeneration;
+            ProjectScope scope = DwgProjectScopeStore.Read(database);
+            string path = database.Filename;
+            string fingerprint = database.FingerprintGuid;
+            if (!scope.IsBound || !_projectScopeResolved ||
+                !string.Equals(scope.SobId, _ultimoSobId, StringComparison.Ordinal) ||
+                !string.Equals(fingerprint, _ultimoDwgIdentity, StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(path) || !File.Exists(path) ||
+                !string.Equals(Path.GetFullPath(path), Path.GetFullPath(_ultimoDwgFullPath ?? string.Empty), StringComparison.OrdinalIgnoreCase) ||
+                !_contextRefreshGate.IsCurrentGeneration(generation) ||
+                !ReferenceEquals(document, acApp.DocumentManager.MdiActiveDocument))
+                throw new InvalidOperationException("CONTEXTO_INCOMPATIVEL");
+
+            return new OxCadVerifiedDwgContext(scope.SobId!, path, fingerprint, generation);
         }
 
         /// <summary>
@@ -116,6 +351,31 @@ namespace OxCad
             if (_isActionRunning || _isUpdating)
                 return;
 
+            bool requerProjectScope = !string.Equals(acao, "sob", StringComparison.OrdinalIgnoreCase);
+            if (requerProjectScope && !_projectScopeResolved)
+                return;
+            if (_ultimoDwgIdentity != null &&
+                !ContextoDwgAtivoCoerente(requerProjectScope))
+                return;
+
+            OxCadVerifiedDwgContext? source = null;
+            try
+            {
+                if (requerProjectScope)
+                    source = CapturarContextoVerificado();
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            long contextGeneration = _contextRefreshGate.CurrentGeneration;
+            OxCadExecutionRecord execution = IniciarExecucaoPaleta(acao);
+            OxCadVerifiedDwgContext? verified = source == null ? null :
+                new OxCadVerifiedDwgContext(
+                    source.SobId, source.DwgPath, source.DwgIdentity,
+                    source.ContextGeneration, execution.ExecutionId,
+                    execution.CorrelationId);
             _isActionRunning = true;
             HabilitarBotoesAcao(false);
 
@@ -125,32 +385,44 @@ namespace OxCad
                 TxtAcaoEstado.Foreground = new SolidColorBrush(Color.FromRgb(244, 162, 97)); // Laranja
                 TxtAcaoMensagem.Text = $"Disparando módulo {acao.ToUpper()}...";
 
-                var resultado = await WorkspaceService.ExecutarAcaoAsync(acao, _ultimoDwgFullPath);
+                var resultado = await WorkspaceService.ExecutarAcaoAsync(
+                    acao,
+                    execution.DwgPath,
+                    correlationId: execution.CorrelationId,
+                    sobId: execution.SobId,
+                    requireProjectScope: requerProjectScope,
+                    executionId: execution.ExecutionId,
+                    dwgIdentity: execution.DwgIdentity,
+                    executionOrigin: execution.Origin,
+                    waitForCompletion: true,
+                    executionManagedByHost: true,
+                    verifiedContext: verified);
 
-                TxtAcaoEstado.Text = resultado.Estado;
-                TxtAcaoMensagem.Text = resultado.Mensagem;
+                FinalizarExecucaoPaleta(execution, resultado);
 
-                if (resultado.Sucesso)
-                {
-                    TxtAcaoEstado.Foreground = new SolidColorBrush(Color.FromRgb(82, 183, 136)); // Verde
-                }
-                else if (resultado.Estado == "Requer especificação")
-                {
-                    TxtAcaoEstado.Foreground = new SolidColorBrush(Color.FromRgb(247, 127, 0)); // Laranja/Aviso
-                }
-                else
-                {
-                    TxtAcaoEstado.Foreground = new SolidColorBrush(Color.FromRgb(231, 111, 81)); // Coral/Erro
-                }
+                if (!_contextRefreshGate.IsCurrentGeneration(contextGeneration))
+                    return;
 
-                // Atualiza o contexto pós-execução para refletir novos artefatos gerados
-                await AtualizarContextoAsync();
+                if (string.Equals(acao, "validar", StringComparison.OrdinalIgnoreCase))
+                {
+                    AtualizarResultadosValidacao(resultado);
+                }
+                else if (ContextoDwgAtivoCoerente(requerProjectScope))
+                {
+                    await AtualizarContextoAsync(preserveExecutionSummary: true);
+                }
             }
             catch (Exception ex)
             {
-                TxtAcaoEstado.Text = "Falhou";
-                TxtAcaoEstado.Foreground = new SolidColorBrush(Color.FromRgb(231, 111, 81));
-                TxtAcaoMensagem.Text = ex.Message;
+                FinalizarExecucaoPaleta(execution, null, ex);
+                OxCadLogger.LogError(
+                    $"Falha na execução {execution.ExecutionId} ({acao})",
+                    ex,
+                    correlationId: execution.CorrelationId,
+                    sobId: execution.SobId,
+                    dwgPath: execution.DwgPath,
+                    action: acao,
+                    executionId: execution.ExecutionId);
             }
             finally
             {
@@ -164,105 +436,251 @@ namespace OxCad
         /// </summary>
         private async Task ExecutarAberturaArtefatoAsync(string caminho)
         {
-            if (_isActionRunning)
+            if (_isActionRunning || !_projectScopeResolved || !ContextoDwgAtivoCoerente(true))
                 return;
 
+            OxCadVerifiedDwgContext source;
+            try { source = CapturarContextoVerificado(); }
+            catch (InvalidOperationException) { return; }
+
+            OxCadExecutionRecord execution = IniciarExecucaoPaleta("abrir");
+            var verified = new OxCadVerifiedDwgContext(
+                source.SobId, source.DwgPath, source.DwgIdentity,
+                source.ContextGeneration, execution.ExecutionId, execution.CorrelationId);
+            _isActionRunning = true;
+            HabilitarBotoesAcao(false);
             try
             {
                 TxtAcaoEstado.Text = "Abrindo...";
                 TxtAcaoEstado.Foreground = new SolidColorBrush(Color.FromRgb(244, 162, 97));
                 TxtAcaoMensagem.Text = $"Abrindo artefato: {Path.GetFileName(caminho)}...";
 
-                var resultado = await WorkspaceService.ExecutarAcaoAsync("abrir", _ultimoDwgFullPath, caminho);
-
-                TxtAcaoEstado.Text = resultado.Estado;
-                TxtAcaoMensagem.Text = resultado.Mensagem;
-                TxtAcaoEstado.Foreground = resultado.Sucesso 
-                    ? new SolidColorBrush(Color.FromRgb(82, 183, 136)) 
-                    : new SolidColorBrush(Color.FromRgb(231, 111, 81));
+                var resultado = await WorkspaceService.ExecutarAcaoAsync(
+                    "abrir",
+                    execution.DwgPath,
+                    caminho,
+                    correlationId: execution.CorrelationId,
+                    sobId: execution.SobId,
+                    requireProjectScope: true,
+                    executionId: execution.ExecutionId,
+                    dwgIdentity: execution.DwgIdentity,
+                    executionOrigin: execution.Origin,
+                    waitForCompletion: true,
+                    executionManagedByHost: true,
+                    verifiedContext: verified);
+                FinalizarExecucaoPaleta(execution, resultado);
             }
             catch (Exception ex)
             {
-                TxtAcaoEstado.Text = "Falhou";
-                TxtAcaoEstado.Foreground = new SolidColorBrush(Color.FromRgb(231, 111, 81));
-                TxtAcaoMensagem.Text = ex.Message;
+                FinalizarExecucaoPaleta(execution, null, ex);
+                OxCadLogger.LogError(
+                    $"Falha na execução {execution.ExecutionId} (abrir)",
+                    ex,
+                    correlationId: execution.CorrelationId,
+                    sobId: execution.SobId,
+                    dwgPath: execution.DwgPath,
+                    action: "abrir",
+                    executionId: execution.ExecutionId);
+            }
+            finally
+            {
+                _isActionRunning = false;
+                HabilitarBotoesAcao(true);
             }
         }
 
         private void HabilitarBotoesAcao(bool habilitado)
         {
-            BtnCqt.IsEnabled = habilitado;
-            BtnOrcamento.IsEnabled = habilitado;
-            BtnCpfc.IsEnabled = habilitado;
-            BtnAmbiental.IsEnabled = habilitado;
-            BtnPrancha.IsEnabled = habilitado;
-            BtnSob.IsEnabled = habilitado;
+            bool enabled = habilitado && !_isActionRunning;
+            bool habilitadoComProjectScope = enabled && _projectScopeResolved;
+            BtnCqt.IsEnabled = habilitadoComProjectScope;
+            BtnValidar.IsEnabled = habilitadoComProjectScope;
+            BtnOrcamento.IsEnabled = habilitadoComProjectScope;
+            BtnCpfc.IsEnabled = habilitadoComProjectScope;
+            BtnAmbiental.IsEnabled = habilitadoComProjectScope;
+            BtnPrancha.IsEnabled = habilitadoComProjectScope;
+            BtnSob.IsEnabled = enabled;
+            BtnLevantamentoCondutores.IsEnabled = enabled;
+            BtnTempoAcaoPrincipal.IsEnabled = habilitadoComProjectScope;
+            BtnTempoConcluir.IsEnabled = habilitadoComProjectScope &&
+                _currentTempo != null &&
+                _currentTempo.Estado != "NaoIniciado" &&
+                _currentTempo.Estado != "Concluido";
+        }
+
+        private void BtnLevantarCondutores_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isActionRunning)
+                return;
+
+            Document? doc = acApp.DocumentManager.MdiActiveDocument;
+            if (doc == null)
+            {
+                TxtAcaoEstado.Text = "Indisponível";
+                TxtAcaoMensagem.Text = "Abra um desenho no AutoCAD antes de iniciar o levantamento.";
+                return;
+            }
+
+            OxCadExecutionRecord execution = IniciarExecucaoPaleta(
+                "LEVANTAR_CONDUTORES",
+                doc);
+            _nativeCommandExecutionId = execution.ExecutionId;
+            _isActionRunning = true;
+            HabilitarBotoesAcao(false);
+            try
+            {
+                OxCadExecutionRegistry.RegistrarComandoNativo(
+                    execution,
+                    "LEVANTAR_CONDUTORES");
+                doc.SendStringToExecute("_.LEVANTAR_CONDUTORES ", true, false, false);
+            }
+            catch (Exception ex)
+            {
+                _nativeCommandExecutionId = null;
+                _isActionRunning = false;
+                FinalizarExecucaoPaleta(execution, null, ex);
+                HabilitarBotoesAcao(true);
+                TxtAcaoMensagem.Text = ex.Message;
+            }
         }
 
         /// <summary>
         /// Consulta assíncrona do contexto operacional com controle de concorrência.
         /// </summary>
-        public async Task AtualizarContextoAsync()
+        public async Task AtualizarContextoAsync(bool preserveExecutionSummary = false)
         {
-            if (_isUpdating)
-                return;
+            Document? document = null;
+            AcDb.Database? database = null;
+            try
+            {
+                document = acApp.DocumentManager.MdiActiveDocument;
+                database = document?.Database;
+            }
+            catch
+            {
+                // AutoCAD pode não ter documento durante encerramento ou inicialização.
+            }
 
+            if (document == null || database == null)
+            {
+                _contextRefreshGate.Invalidate();
+                _isUpdating = false;
+                InvalidarContextoVisual("Nenhum documento ativo.");
+                ExibirEstadoSemDocumento();
+                BtnAtualizar.IsEnabled = true;
+                BtnAtualizar.Content = "🔄 Atualizar Contexto";
+                HabilitarBotoesAcao(true);
+                return;
+            }
+
+            string dwgIdentity = database.FingerprintGuid;
+            ContextRefreshTicket ticket = _contextRefreshGate.Begin(document, database, dwgIdentity);
             _isUpdating = true;
+            InvalidarContextoVisual("Atualizando contexto...", preserveExecutionSummary);
+            _ultimoDwgIdentity = dwgIdentity;
+            TxtDwg.Text = document.Name;
+            BtnAtualizar.IsEnabled = false;
+            BtnAtualizar.Content = "⏳ Consultando...";
+            HabilitarBotoesAcao(false);
 
             try
             {
-                BtnAtualizar.IsEnabled = false;
-                BtnAtualizar.Content = "⏳ Consultando...";
-
-                Document? doc = null;
-                try
-                {
-                    doc = acApp.DocumentManager.MdiActiveDocument;
-                }
-                catch
-                {
-                    // Ambiente sem ApplicationServices ativo
-                }
-
-                if (doc == null || doc.Database == null)
-                {
-                    _ultimoDwgFullPath = null;
-                    ExibirEstadoSemDocumento();
-                    return;
-                }
-
-                string? dwgFilename = null;
-                try
-                {
-                    dwgFilename = doc.Database.Filename;
-                }
-                catch
-                {
-                    dwgFilename = null;
-                }
-
-                _ultimoDwgFullPath = dwgFilename;
-
+                string dwgFilename = database.Filename;
                 if (string.IsNullOrWhiteSpace(dwgFilename) || !File.Exists(dwgFilename))
                 {
-                    ExibirEstadoDesenhoNaoSalvo();
+                    if (TicketAindaAtivo(ticket))
+                        ExibirEstadoDesenhoNaoSalvo();
                     return;
                 }
 
-                OxCadWorkspaceContext contexto = await WorkspaceService.ConsultarContextoAsync(dwgFilename);
+                ProjectScope projectScope = DwgProjectScopeStore.Read(database);
+                if (!TicketAindaAtivo(ticket))
+                    return;
 
+                if (!projectScope.IsBound)
+                {
+                    _ultimoDwgFullPath = dwgFilename;
+                    ExibirEstadoProjectScope(projectScope, dwgFilename);
+                    return;
+                }
+
+                string correlationId = Guid.NewGuid().ToString("N");
+                var verified = new OxCadVerifiedDwgContext(
+                    projectScope.SobId!, dwgFilename, dwgIdentity,
+                    ticket.Generation, correlationId: correlationId);
+
+                OxCadWorkspaceContext contexto = await WorkspaceService.ConsultarContextoAsync(
+                    dwgFilename,
+                    correlationId: correlationId,
+                    sobId: projectScope.SobId,
+                    verifiedContext: verified);
+
+                if (!TicketAindaAtivo(ticket))
+                    return;
+
+                _ultimoDwgFullPath = dwgFilename;
+                _ultimoDwgIdentity = dwgIdentity;
+                _ultimoSobId = projectScope.SobId;
                 AplicarContextoNaInterface(contexto);
             }
             catch (Exception ex)
             {
-                TxtStatus.Text = $"Falha ao atualizar: {ex.Message}";
-                TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(231, 111, 81));
+                if (TicketAindaAtivo(ticket))
+                {
+                    TxtStatus.Text = $"Falha ao atualizar: {ex.Message}";
+                    TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(231, 111, 81));
+                }
             }
             finally
             {
-                _isUpdating = false;
-                BtnAtualizar.IsEnabled = true;
-                BtnAtualizar.Content = "🔄 Atualizar Contexto";
+                if (_contextRefreshGate.IsCurrentGeneration(ticket.Generation))
+                {
+                    if (!TicketAindaAtivo(ticket))
+                    {
+                        _contextRefreshGate.Invalidate();
+                        _isUpdating = false;
+                        AgendarAtualizacaoContextoAssincrona();
+                    }
+                    else
+                    {
+                        _isUpdating = false;
+                        HabilitarBotoesAcao(true);
+                        BtnAtualizar.IsEnabled = true;
+                        BtnAtualizar.Content = "🔄 Atualizar Contexto";
+                    }
+                }
+            }
+        }
+
+        private bool TicketAindaAtivo(ContextRefreshTicket ticket)
+        {
+            try
+            {
+                Document? activeDocument = acApp.DocumentManager.MdiActiveDocument;
+                if (activeDocument == null)
+                    return false;
+                AcDb.Database? activeDatabase = activeDocument.Database;
+                if (activeDatabase == null)
+                    return false;
+
+                string? activeFingerprint = null;
+                try
+                {
+                    activeFingerprint = activeDatabase.FingerprintGuid;
+                }
+                catch
+                {
+                }
+
+                return _contextRefreshGate.IsCurrent(
+                    ticket,
+                    activeDocument,
+                    activeDatabase,
+                    activeFingerprint);
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -303,8 +721,17 @@ namespace OxCad
         /// </summary>
         private async Task ExecutarAcaoTempoAsync(string acaoTempo)
         {
-            if (_isActionRunning || _isUpdating) return;
+            if (_isActionRunning || _isUpdating || !_projectScopeResolved ||
+                !ContextoDwgAtivoCoerente(true)) return;
 
+            OxCadVerifiedDwgContext source;
+            try { source = CapturarContextoVerificado(); }
+            catch (InvalidOperationException) { return; }
+
+            OxCadExecutionRecord execution = IniciarExecucaoPaleta(acaoTempo);
+            var verified = new OxCadVerifiedDwgContext(
+                source.SobId, source.DwgPath, source.DwgIdentity,
+                source.ContextGeneration, execution.ExecutionId, execution.CorrelationId);
             _isActionRunning = true;
             HabilitarBotoesAcao(false);
             BtnTempoAcaoPrincipal.IsEnabled = false;
@@ -316,21 +743,33 @@ namespace OxCad
                 TxtAcaoEstado.Foreground = new SolidColorBrush(Color.FromRgb(244, 162, 97));
                 TxtAcaoMensagem.Text = $"Atualizando apontamento de tempo ({acaoTempo})...";
 
-                var resultado = await WorkspaceService.ControlarTempoAsync(acaoTempo, _ultimoDwgFullPath);
+                var resultado = await WorkspaceService.ControlarTempoAsync(
+                    acaoTempo,
+                    execution.DwgPath,
+                    correlationId: execution.CorrelationId,
+                    sobId: execution.SobId,
+                    requireProjectScope: true,
+                    executionId: execution.ExecutionId,
+                    dwgIdentity: execution.DwgIdentity,
+                    executionOrigin: execution.Origin,
+                    waitForCompletion: true,
+                    executionManagedByHost: true,
+                    verifiedContext: verified);
+                FinalizarExecucaoPaleta(execution, resultado);
 
-                TxtAcaoEstado.Text = resultado.Estado;
-                TxtAcaoMensagem.Text = resultado.Mensagem;
-                TxtAcaoEstado.Foreground = resultado.Sucesso
-                    ? new SolidColorBrush(Color.FromRgb(82, 183, 136))
-                    : new SolidColorBrush(Color.FromRgb(231, 111, 81));
-
-                await AtualizarContextoAsync();
+                await AtualizarContextoAsync(preserveExecutionSummary: true);
             }
             catch (Exception ex)
             {
-                TxtAcaoEstado.Text = "Falhou";
-                TxtAcaoEstado.Foreground = new SolidColorBrush(Color.FromRgb(231, 111, 81));
-                TxtAcaoMensagem.Text = ex.Message;
+                FinalizarExecucaoPaleta(execution, null, ex);
+                OxCadLogger.LogError(
+                    $"Falha na execução {execution.ExecutionId} ({acaoTempo})",
+                    ex,
+                    correlationId: execution.CorrelationId,
+                    sobId: execution.SobId,
+                    dwgPath: execution.DwgPath,
+                    action: acaoTempo,
+                    executionId: execution.ExecutionId);
             }
             finally
             {
@@ -356,12 +795,28 @@ namespace OxCad
                     _heartbeatCounter = 0;
                     if (!_isHeartbeatRunning && !string.IsNullOrWhiteSpace(_ultimoDwgFullPath))
                     {
+                        OxCadVerifiedDwgContext source;
+                        try { source = CapturarContextoVerificado(); }
+                        catch (InvalidOperationException) { return; }
+                        var heartbeat = new OxCadVerifiedDwgContext(
+                            source.SobId, source.DwgPath, source.DwgIdentity,
+                            source.ContextGeneration,
+                            Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N"));
+
                         _isHeartbeatRunning = true;
                         _ = Task.Run(async () =>
                         {
                             try
                             {
-                                await WorkspaceService.ControlarTempoAsync("tempo_heartbeat", _ultimoDwgFullPath);
+                                await WorkspaceService.ControlarTempoAsync(
+                                    "tempo_heartbeat",
+                                    heartbeat.DwgPath,
+                                    correlationId: heartbeat.CorrelationId,
+                                    sobId: heartbeat.SobId,
+                                    requireProjectScope: true,
+                                    executionId: heartbeat.ExecutionId,
+                                    dwgIdentity: heartbeat.DwgIdentity,
+                                    verifiedContext: heartbeat);
                             }
                             catch
                             {
@@ -375,6 +830,54 @@ namespace OxCad
                     }
                 }
             }
+        }
+
+        private void InvalidarContextoVisual(
+            string status,
+            bool preserveExecutionSummary = false)
+        {
+            _ultimoDwgFullPath = null;
+            _ultimoSobId = null;
+            _ultimoDwgIdentity = null;
+            _projectScopeResolved = false;
+            _uiTimer?.Stop();
+
+            TxtStatus.Text = status;
+            TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(244, 162, 97));
+            TxtSob.Text = "-";
+            TxtDwg.Text = "-";
+            TxtPasta.Text = "-";
+            TxtMunicipio.Text = "-";
+            TxtBairro.Text = "-";
+            TxtEndereco.Text = "-";
+            if (!preserveExecutionSummary)
+            {
+                TxtAcaoEstado.Text = "Pronto";
+                TxtAcaoMensagem.Text = string.Empty;
+            }
+            CardInconsistencia.Visibility = Visibility.Collapsed;
+            ListaArtefatos.ItemsSource = null;
+            ListaValidacoes.ItemsSource = null;
+            TxtValidationSummary.Text = string.Empty;
+            PainelValidacao.Visibility = Visibility.Collapsed;
+            AplicarTempoNaInterface(null);
+            BtnTempoAcaoPrincipal.IsEnabled = false;
+            BtnTempoConcluir.IsEnabled = false;
+            HabilitarBotoesAcao(false);
+        }
+
+        private void AtualizarResultadosValidacao(OxCadActionResult resultado)
+        {
+            ListaValidacoes.ItemsSource = resultado.ValidationResults;
+            int CountFor(string status)
+                => resultado.ValidationSummary.TryGetValue(status, out int count) ? count : 0;
+
+            TxtValidationSummary.Text =
+                $"Validação: {CountFor("OK")} OK | " +
+                $"{CountFor("ALERTA")} ALERTA | " +
+                $"{CountFor("ERRO")} ERRO | " +
+                $"{CountFor("NÃO DISPONÍVEL")} NÃO DISPONÍVEL";
+            PainelValidacao.Visibility = Visibility.Visible;
         }
 
         private static string FormatarSegundos(double segundosTotais)
@@ -511,6 +1014,29 @@ namespace OxCad
             BtnTempoConcluir.IsEnabled = false;
         }
 
+        private void ExibirEstadoProjectScope(ProjectScope projectScope, string dwgFilename)
+        {
+            TxtStatus.Text = projectScope.Status switch
+            {
+                ProjectScopeStatus.Unbound => "Contexto não identificado.",
+                ProjectScopeStatus.Ambiguous => "Vínculo de projeto ambíguo.",
+                _ => $"Vínculo de projeto inválido: {projectScope.Detail ?? "metadata inválida"}."
+            };
+            TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(244, 162, 97));
+            TxtSob.Text = projectScope.SobId ?? "-";
+            TxtDwg.Text = Path.GetFileName(dwgFilename);
+            TxtPasta.Text = Path.GetDirectoryName(dwgFilename) ?? "-";
+            TxtMunicipio.Text = "-";
+            TxtBairro.Text = "-";
+            TxtEndereco.Text = "-";
+            CardInconsistencia.Visibility = projectScope.Status == ProjectScopeStatus.Ambiguous
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            TxtInconsistenciaMsg.Text = projectScope.Detail ?? "Mais de uma identidade de projeto foi encontrada no DWG.";
+            ListaArtefatos.ItemsSource = null;
+            AplicarTempoNaInterface(null);
+        }
+
         private void ExibirEstadoDesenhoNaoSalvo()
         {
             TxtStatus.Text = "Desenho ainda não salvo.";
@@ -530,6 +1056,9 @@ namespace OxCad
 
         private void AplicarContextoNaInterface(OxCadWorkspaceContext contexto)
         {
+            _projectScopeResolved = contexto.ProjectScopeResolved &&
+                string.Equals(contexto.SobId, _ultimoSobId, StringComparison.Ordinal);
+
             TxtStatus.Text = contexto.Status;
             TxtSob.Text = contexto.SobId;
             TxtDwg.Text = contexto.DwgPrincipal;
@@ -537,6 +1066,18 @@ namespace OxCad
             TxtMunicipio.Text = contexto.Municipio;
             TxtBairro.Text = contexto.Bairro;
             TxtEndereco.Text = contexto.Endereco;
+
+            if (!_projectScopeResolved)
+            {
+                TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(244, 162, 97));
+                CardInconsistencia.Visibility = contexto.ProjectScopeStatus == "Ambiguous"
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                TxtInconsistenciaMsg.Text = contexto.MensagemInconsistencia;
+                ListaArtefatos.ItemsSource = null;
+                AplicarTempoNaInterface(null);
+                return;
+            }
 
             if (contexto.Inconsistencia)
             {

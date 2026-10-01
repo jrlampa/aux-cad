@@ -241,6 +241,8 @@ def inicializar_tempo_projeto(
     iniciar_imediatamente: bool = False,
     timestamp_custom: Optional[str] = None,
     sobrescrever: bool = False,
+    execution_id: Optional[str] = None,
+    correlation_id: Optional[str] = None,
 ) -> OxCadTimeEntry:
     """
     Inicializa o apontamento para uma nova SOB.
@@ -274,6 +276,16 @@ def inicializar_tempo_projeto(
         sessoes=[],
     )
     salvar_tempo_projeto(root_dir, entry)
+    if execution_id:
+        logger.info(
+            f"Apontamento inicializado para SOB {sob_id_final}",
+            extra={
+                "action": "tempo.inicializado",
+                "sob_id": sob_id_final,
+                "execution_id": execution_id,
+                "correlation_id": correlation_id,
+            },
+        )
     return entry
 
 
@@ -376,6 +388,8 @@ def iniciar_ou_retomar_tempo(
     timestamp_iso: Optional[str] = None,
     pid: Optional[int] = None,
     token_sessao: Optional[str] = None,
+    execution_id: Optional[str] = None,
+    correlation_id: Optional[str] = None,
 ) -> OxCadTimeEntry:
     """Inicia ou retoma o apontamento de tempo do projeto."""
     p_root = Path(root_dir).resolve()
@@ -390,6 +404,8 @@ def iniciar_ou_retomar_tempo(
             dwg_path=dwg_path,
             iniciar_imediatamente=True,
             timestamp_custom=agora,
+            execution_id=execution_id,
+            correlation_id=correlation_id,
         )
 
     # Idempotência: se já está em execução, apenas atualiza DWG, PID, token e timestamp sem alterar contagem
@@ -428,7 +444,9 @@ def iniciar_ou_retomar_tempo(
             "action": "tempo.iniciado",
             "sob_id": entry.sob_id,
             "dwg_path": entry.dwg_path,
-            "process_id": pid
+            "process_id": pid,
+            "execution_id": execution_id,
+            "correlation_id": correlation_id,
         }
     )
     return entry
@@ -438,6 +456,8 @@ def pausar_tempo(
     root_dir: Union[str, Path],
     timestamp_custom: Optional[str] = None,
     timestamp_iso: Optional[str] = None,
+    execution_id: Optional[str] = None,
+    correlation_id: Optional[str] = None,
 ) -> Optional[OxCadTimeEntry]:
     """Pausa a contagem acumulando a duração da sessão ativa."""
     entry = carregar_tempo_projeto(root_dir)
@@ -483,7 +503,13 @@ def pausar_tempo(
     salvar_tempo_projeto(root_dir, entry)
     logger.info(
         f"Tempo de projeto pausado para SOB {entry.sob_id} ({entry.obter_tempo_formatado()})",
-        extra={"action": "tempo.pausado", "sob_id": entry.sob_id, "duration_ms": duracao_sessao * 1000.0}
+        extra={
+            "action": "tempo.pausado",
+            "sob_id": entry.sob_id,
+            "duration_ms": duracao_sessao * 1000.0,
+            "execution_id": execution_id,
+            "correlation_id": correlation_id,
+        },
     )
     return entry
 
@@ -492,6 +518,8 @@ def concluir_tempo(
     root_dir: Union[str, Path],
     timestamp_custom: Optional[str] = None,
     timestamp_iso: Optional[str] = None,
+    execution_id: Optional[str] = None,
+    correlation_id: Optional[str] = None,
 ) -> Optional[OxCadTimeEntry]:
     """Conclui em definitivo o apontamento do projeto."""
     entry = carregar_tempo_projeto(root_dir)
@@ -528,7 +556,12 @@ def concluir_tempo(
     salvar_tempo_projeto(root_dir, entry)
     logger.info(
         f"Tempo de projeto concluído para SOB {entry.sob_id} ({entry.obter_tempo_formatado()})",
-        extra={"action": "tempo.concluido", "sob_id": entry.sob_id}
+        extra={
+            "action": "tempo.concluido",
+            "sob_id": entry.sob_id,
+            "execution_id": execution_id,
+            "correlation_id": correlation_id,
+        }
     )
     return entry
 
@@ -537,6 +570,8 @@ def reabrir_tempo(
     root_dir: Union[str, Path],
     timestamp_custom: Optional[str] = None,
     timestamp_iso: Optional[str] = None,
+    execution_id: Optional[str] = None,
+    correlation_id: Optional[str] = None,
 ) -> Optional[OxCadTimeEntry]:
     """Reabre um apontamento previamente concluído, mantendo o histórico acumulado."""
     entry = carregar_tempo_projeto(root_dir)
@@ -554,6 +589,11 @@ def reabrir_tempo(
     salvar_tempo_projeto(root_dir, entry)
     logger.info(
         f"Tempo de projeto reaberto para SOB {entry.sob_id}",
-        extra={"action": "tempo.reaberto", "sob_id": entry.sob_id}
+        extra={
+            "action": "tempo.reaberto",
+            "sob_id": entry.sob_id,
+            "execution_id": execution_id,
+            "correlation_id": correlation_id,
+        }
     )
     return entry

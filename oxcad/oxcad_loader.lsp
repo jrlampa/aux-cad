@@ -63,47 +63,96 @@
       (if (findfile full-path) full-path nil)))
 )
 
-(defun c:oxcad-load-dll ( / dll-path dll-dir curr-path dll-name )
+(defun c:oxcad-load-dll ( / dll-path dll-dir curr-path dll-name netload-res )
   "Carrega a DLL da paleta OXCAD em memoria via NETLOAD nativo."
-  (setq dll-path (c:oxcad-get-dll-path))
-  (if (and dll-path (stringp dll-path) (findfile dll-path))
+  ;; Se ja estiver carregada com comando registrado, nao chama NETLOAD novamente
+  (if (or (getcname "OXCAD_DIAGNOSTICO") (getcname "OXCAD"))
+    t
     (progn
-      (setq dll-dir (vl-filename-directory dll-path))
-      (setq curr-path (getenv "PATH"))
-      (if (and (stringp curr-path) (not (vl-string-search dll-dir curr-path)))
-        (setenv "PATH" (strcat dll-dir ";" curr-path)))
-      (setq dll-name (strcat (vl-filename-base dll-path) (vl-filename-extension dll-path)))
-      (princ (strcat "\n[AUX CAD] Carregando Paleta OXCAD: " dll-name "..."))
-      (setvar "FILEDIA" 0)
-      (vl-catch-all-apply '(lambda () (vl-cmdf "_.NETLOAD" dll-path)))
-      (setvar "FILEDIA" 1)
-      t)
-    (progn
-      (princ "\n[AUX CAD ERRO] DLL OxCadPaleta.dll nao encontrada em bin/Release.")
-      (princ "\nExecute 'dotnet build oxcad/OxCadPaleta.csproj -c Release' para compilar.")
-      nil))
+      (setq dll-path (c:oxcad-get-dll-path))
+      (if (and dll-path (stringp dll-path) (findfile dll-path))
+        (progn
+          (setq dll-dir (vl-filename-directory dll-path))
+          (setq curr-path (getenv "PATH"))
+          (if (and (stringp curr-path) (not (vl-string-search dll-dir curr-path)))
+            (setenv "PATH" (strcat dll-dir ";" curr-path)))
+          (setq dll-name (strcat (vl-filename-base dll-path) (vl-filename-extension dll-path)))
+          (princ (strcat "\n[AUX CAD] Carregando Paleta OXCAD: " dll-name "..."))
+          (setvar "FILEDIA" 0)
+          (setq netload-res (vl-catch-all-apply '(lambda () (command "_.NETLOAD" dll-path))))
+          (setvar "FILEDIA" 1)
+          (if (vl-catch-all-error-p netload-res)
+            (progn
+              (princ (strcat "\n[AUX CAD ERRO] Falha na execucao do NETLOAD: "
+                             (vl-catch-all-error-message netload-res)))
+              nil)
+            (if (or (getcname "OXCAD_DIAGNOSTICO") (getcname "OXCAD"))
+              t
+              (progn
+                (princ "\n[AUX CAD ERRO] NETLOAD terminou, mas os comandos do OXCAD nao foram registrados.")
+                nil))))
+        (progn
+          (princ "\n[AUX CAD ERRO] DLL OxCadPaleta.dll nao encontrada em bin/Release.")
+          (princ "\nExecute 'dotnet build oxcad/OxCadPaleta.csproj -c Release' para compilar.")
+          nil))))
 )
 
 ;;; Comandos de Acesso Rapido no AutoCAD
-(defun c:OXCAD ()
+(defun c:OXCAD ( / command-result )
   "Abre a Paleta lateral OXCAD integrada no AutoCAD."
-  (c:oxcad-load-dll)
-  (vl-catch-all-apply '(lambda () (vl-cmdf "_.OXCAD")))
+  (if (or (getcname "OXCAD_DIAGNOSTICO")
+          (c:oxcad-load-dll))
+    (progn
+      (setq command-result
+        (vl-catch-all-apply '(lambda () (command "_.OXCAD"))))
+      (if (vl-catch-all-error-p command-result)
+        (princ (strcat "\n[AUX CAD ERRO] Falha ao executar OXCAD: "
+                       (vl-catch-all-error-message command-result)))))
+    (princ "\n[AUX CAD ERRO] A paleta OXCAD nao sera aberta porque a DLL nao foi carregada."))
   (princ)
 )
 
-(defun c:FECHAR_OXCAD ()
+(defun c:FECHAR_OXCAD ( / command-result )
   "Fecha ou oculta a Paleta OXCAD."
-  (vl-catch-all-apply '(lambda () (vl-cmdf "_.FECHAR_OXCAD")))
-  (princ "\n[AUX CAD] Paleta OXCAD fechada.")
+  (if (or (getcname "OXCAD_DIAGNOSTICO")
+          (c:oxcad-load-dll))
+    (progn
+      (setq command-result
+        (vl-catch-all-apply '(lambda () (command "_.FECHAR_OXCAD"))))
+      (if (vl-catch-all-error-p command-result)
+        (princ (strcat "\n[AUX CAD ERRO] Falha ao executar FECHAR_OXCAD: "
+                       (vl-catch-all-error-message command-result)))
+        (princ "\n[AUX CAD] Paleta OXCAD fechada.")))
+    (princ "\n[AUX CAD ERRO] A paleta OXCAD nao esta carregada."))
   (princ)
 )
 
-(defun c:RECARREGAR_OXCAD ()
+(defun c:RECARREGAR_OXCAD ( / command-result )
   "Recarrega o contexto ativo na Paleta OXCAD."
-  (c:oxcad-load-dll)
-  (vl-catch-all-apply '(lambda () (vl-cmdf "_.RECARREGAR_OXCAD")))
-  (princ "\n[AUX CAD] Paleta OXCAD recarregada.")
+  (if (or (getcname "OXCAD_DIAGNOSTICO")
+          (c:oxcad-load-dll))
+    (progn
+      (setq command-result
+        (vl-catch-all-apply '(lambda () (command "_.RECARREGAR_OXCAD"))))
+      (if (vl-catch-all-error-p command-result)
+        (princ (strcat "\n[AUX CAD ERRO] Falha ao executar RECARREGAR_OXCAD: "
+                       (vl-catch-all-error-message command-result)))
+        (princ "\n[AUX CAD] Solicitacao de recarga da paleta OXCAD concluida.")))
+    (princ "\n[AUX CAD ERRO] Recarga cancelada porque a DLL nao foi carregada."))
+  (princ)
+)
+
+(defun c:OXCAD_DIAGNOSTICO ( / command-result )
+  "Executa o diagnostico da extensao OXCAD."
+  (if (or (getcname "OXCAD_DIAGNOSTICO")
+          (c:oxcad-load-dll))
+    (progn
+      (setq command-result
+        (vl-catch-all-apply '(lambda () (command "_.OXCAD_DIAGNOSTICO"))))
+      (if (vl-catch-all-error-p command-result)
+        (princ (strcat "\n[AUX CAD ERRO] Falha ao executar OXCAD_DIAGNOSTICO: "
+                       (vl-catch-all-error-message command-result)))))
+    (princ "\n[AUX CAD ERRO] Diagnostico cancelado porque a DLL nao foi carregada."))
   (princ)
 )
 

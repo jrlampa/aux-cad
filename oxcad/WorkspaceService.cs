@@ -124,6 +124,55 @@ namespace OxCad
 
         [JsonPropertyName("erro")]
         public string? Erro { get; set; }
+
+        [JsonPropertyName("project_scope_status")]
+        public string ProjectScopeStatus { get; set; } = "NotRequired";
+
+        [JsonPropertyName("project_scope_resolved")]
+        public bool ProjectScopeResolved { get; set; }
+
+        [JsonPropertyName("project_scope_candidates")]
+        public List<string> ProjectScopeCandidates { get; set; } = new List<string>();
+    }
+
+    public sealed class OxCadVerifiedDwgContext
+    {
+        public OxCadVerifiedDwgContext(
+            string sobId, string dwgPath, string dwgIdentity,
+            long contextGeneration, string? executionId = null,
+            string? correlationId = null)
+        {
+            SobId = sobId;
+            DwgPath = dwgPath;
+            DwgIdentity = dwgIdentity;
+            ContextGeneration = contextGeneration;
+            ExecutionId = executionId;
+            CorrelationId = correlationId;
+        }
+
+        [JsonPropertyName("contract_version")]
+        public int ContractVersion => 1;
+
+        [JsonPropertyName("project_scope_status")]
+        public string ProjectScopeStatus => "Bound";
+
+        [JsonPropertyName("sob_id")]
+        public string SobId { get; }
+
+        [JsonPropertyName("dwg_path")]
+        public string DwgPath { get; }
+
+        [JsonPropertyName("dwg_identity")]
+        public string DwgIdentity { get; }
+
+        [JsonPropertyName("context_generation")]
+        public long ContextGeneration { get; }
+
+        [JsonPropertyName("execution_id")]
+        public string? ExecutionId { get; }
+
+        [JsonPropertyName("correlation_id")]
+        public string? CorrelationId { get; }
     }
 
     /// <summary>
@@ -372,7 +421,11 @@ namespace OxCad
         /// <summary>
         /// Executa a consulta de contexto de forma assíncrona, desacoplada e segura.
         /// </summary>
-        public static async Task<OxCadWorkspaceContext> ConsultarContextoAsync(string? dwgFullPath, string? correlationId = null)
+        public static async Task<OxCadWorkspaceContext> ConsultarContextoAsync(
+            string? dwgFullPath,
+            string? correlationId = null,
+            string? sobId = null,
+            OxCadVerifiedDwgContext? verifiedContext = null)
         {
             correlationId ??= Guid.NewGuid().ToString("N");
             var sw = Stopwatch.StartNew();
@@ -417,14 +470,16 @@ namespace OxCad
                     int timeout = ObterTimeoutMilissegundos();
                     int currentPid = Process.GetCurrentProcess().Id;
                     string sessionToken = InstanciaSessionToken;
+                    string scopeArgument = string.IsNullOrWhiteSpace(sobId) ? string.Empty : $" --sob \"{sobId}\"";
 
                     var psi = new ProcessStartInfo
                     {
                         FileName = pythonExe,
-                        Arguments = $"\"{scriptPath}\" --dwg \"{dwgFullPath}\" --acad-pid {currentPid} --acad-token \"{sessionToken}\" --correlation-id \"{correlationId}\"",
+                        Arguments = $"\"{scriptPath}\" --dwg \"{dwgFullPath}\"{scopeArgument} --require-project-scope{(verifiedContext != null ? " --host-context-stdin" : "")} --acad-pid {currentPid} --acad-token \"{sessionToken}\" --correlation-id \"{correlationId}\"",
                         WorkingDirectory = rootDir,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
+                        RedirectStandardInput = verifiedContext != null,
                         UseShellExecute = false,
                         CreateNoWindow = true,
                         StandardOutputEncoding = Encoding.UTF8,
@@ -442,6 +497,11 @@ namespace OxCad
                         try
                         {
                             proc.Start();
+                            if (verifiedContext != null)
+                            {
+                                proc.StandardInput.WriteLine(JsonSerializer.Serialize(verifiedContext));
+                                proc.StandardInput.Close();
+                            }
                         }
                         catch (System.ComponentModel.Win32Exception winEx)
                         {
@@ -560,7 +620,20 @@ namespace OxCad
         /// <summary>
         /// Executa uma ação de engenharia de forma assíncrona através do WorkspaceActionDispatcher.
         /// </summary>
-        public static async Task<OxCadActionResult> ExecutarAcaoAsync(string acao, string? dwgFullPath, string? alvo = null, string? correlationId = null)
+        public static async Task<OxCadActionResult> ExecutarAcaoAsync(
+            string acao,
+            string? dwgFullPath,
+            string? alvo = null,
+            string? correlationId = null,
+            string? sobId = null,
+            bool requireProjectScope = false,
+            string? executionId = null,
+            string? dwgIdentity = null,
+            string executionOrigin = "oxcad.palette",
+            bool waitForCompletion = false,
+            bool executionManagedByHost = false,
+            List<string>? validationRules = null,
+            OxCadVerifiedDwgContext? verifiedContext = null)
         {
             correlationId ??= Guid.NewGuid().ToString("N");
             var sw = Stopwatch.StartNew();
@@ -571,7 +644,13 @@ namespace OxCad
                 {
                     Acao = acao,
                     Estado = "Executando...",
-                    CorrelationId = correlationId
+                    CorrelationId = correlationId,
+                    ExecutionId = executionId,
+                    SobId = sobId,
+                    DwgPath = dwgFullPath,
+                    DwgIdentity = dwgIdentity,
+                    Origin = executionOrigin,
+                    ExecutionState = "Executando"
                 };
 
                 try
@@ -580,7 +659,8 @@ namespace OxCad
                         $"Iniciando ação '{acao}' (alvo: {(string.IsNullOrWhiteSpace(alvo) ? "-" : Path.GetFileName(alvo))})",
                         correlationId: correlationId,
                         dwgPath: dwgFullPath,
-                        action: acao
+                        action: acao,
+                        executionId: executionId
                     );
 
                     string rootDir = ObterDiretorioRaizProjeto(dwgFullPath);
@@ -598,7 +678,8 @@ namespace OxCad
                             $"Script do Workspace não encontrado: {scriptPath}",
                             correlationId: correlationId,
                             dwgPath: dwgFullPath,
-                            action: acao
+                            action: acao,
+                            executionId: executionId
                         );
                         return resultado;
                     }
@@ -609,7 +690,32 @@ namespace OxCad
                     var argsBuilder = new StringBuilder();
                     argsBuilder.Append($"\"{scriptPath}\" --acao \"{acao}\"");
 
-                    if (!string.IsNullOrWhiteSpace(dwgFullPath) && File.Exists(dwgFullPath))
+                    if (requireProjectScope)
+                    {
+                        argsBuilder.Append(" --require-project-scope");
+                        if (verifiedContext == null && !string.IsNullOrWhiteSpace(sobId))
+                        {
+                            argsBuilder.Append($" --sob \"{sobId}\"");
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(executionId))
+                        argsBuilder.Append($" --execution-id \"{executionId}\"");
+                    if (verifiedContext == null && !string.IsNullOrWhiteSpace(dwgIdentity))
+                        argsBuilder.Append($" --dwg-identity \"{dwgIdentity}\"");
+                    if (!string.IsNullOrWhiteSpace(executionOrigin))
+                        argsBuilder.Append($" --execution-origin \"{executionOrigin}\"");
+                    if (waitForCompletion)
+                        argsBuilder.Append(" --wait-for-completion");
+                    if (executionManagedByHost)
+                        argsBuilder.Append(" --execution-managed-by-host");
+                    if (validationRules != null)
+                    {
+                        foreach (string rule in validationRules)
+                            argsBuilder.Append($" --validation-rule \"{rule}\"");
+                    }
+
+                    if (verifiedContext == null && !string.IsNullOrWhiteSpace(dwgFullPath) && File.Exists(dwgFullPath))
                     {
                         argsBuilder.Append($" --dwg \"{dwgFullPath}\"");
                     }
@@ -622,6 +728,8 @@ namespace OxCad
                     int currentPid = Process.GetCurrentProcess().Id;
                     string sessionToken = InstanciaSessionToken;
                     argsBuilder.Append($" --acad-pid {currentPid} --acad-token \"{sessionToken}\" --correlation-id \"{correlationId}\"");
+                    if (verifiedContext != null)
+                        argsBuilder.Append(" --host-context-stdin");
 
                     var psi = new ProcessStartInfo
                     {
@@ -630,6 +738,7 @@ namespace OxCad
                         WorkingDirectory = rootDir,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
+                        RedirectStandardInput = verifiedContext != null,
                         UseShellExecute = false,
                         CreateNoWindow = true,
                         StandardOutputEncoding = Encoding.UTF8,
@@ -647,6 +756,11 @@ namespace OxCad
                         try
                         {
                             proc.Start();
+                            if (verifiedContext != null)
+                            {
+                                proc.StandardInput.WriteLine(JsonSerializer.Serialize(verifiedContext));
+                                proc.StandardInput.Close();
+                            }
                         }
                         catch (System.ComponentModel.Win32Exception winEx)
                         {
@@ -661,7 +775,8 @@ namespace OxCad
                                 winEx,
                                 correlationId: correlationId,
                                 dwgPath: dwgFullPath,
-                                action: acao
+                                action: acao,
+                                executionId: executionId
                             );
                             return resultado;
                         }
@@ -669,7 +784,16 @@ namespace OxCad
                         proc.BeginOutputReadLine();
                         proc.BeginErrorReadLine();
 
-                        bool finished = proc.WaitForExit(timeout);
+                        bool finished;
+                        if (waitForCompletion)
+                        {
+                            proc.WaitForExit();
+                            finished = true;
+                        }
+                        else
+                        {
+                            finished = proc.WaitForExit(timeout);
+                        }
 
                         if (!finished)
                         {
@@ -684,7 +808,8 @@ namespace OxCad
                                 $"Timeout na ação '{acao}' ({sw.Elapsed.TotalMilliseconds:F1}ms)",
                                 correlationId: correlationId,
                                 dwgPath: dwgFullPath,
-                                action: acao
+                                action: acao,
+                                executionId: executionId
                             );
                             return resultado;
                         }
@@ -710,6 +835,11 @@ namespace OxCad
                                 if (resDeserializado != null)
                                 {
                                     resDeserializado.CorrelationId = correlationId;
+                                    resDeserializado.ExecutionId = executionId ?? resDeserializado.ExecutionId;
+                                    resDeserializado.SobId = sobId ?? resDeserializado.SobId;
+                                    resDeserializado.DwgPath = dwgFullPath ?? resDeserializado.DwgPath;
+                                    resDeserializado.DwgIdentity = dwgIdentity ?? resDeserializado.DwgIdentity;
+                                    resDeserializado.Origin = executionOrigin;
                                     resDeserializado.DurationMs = durationMs;
                                     if (resDeserializado.Sucesso)
                                     {
@@ -719,7 +849,8 @@ namespace OxCad
                                             dwgPath: dwgFullPath,
                                             action: acao,
                                             durationMs: durationMs,
-                                            result: "sucesso"
+                                            result: "sucesso",
+                                            executionId: executionId
                                         );
                                     }
                                     else
@@ -728,7 +859,8 @@ namespace OxCad
                                             $"Ação '{acao}' retornou insucesso ({durationMs:F1}ms): {resDeserializado.Mensagem}",
                                             correlationId: correlationId,
                                             dwgPath: dwgFullPath,
-                                            action: acao
+                                            action: acao,
+                                            executionId: executionId
                                         );
                                     }
                                     return resDeserializado;
@@ -740,7 +872,8 @@ namespace OxCad
                                     $"Aviso: Resposta da ação '{acao}' não era JSON válido: {exJson.Message}",
                                     correlationId: correlationId,
                                     dwgPath: dwgFullPath,
-                                    action: acao
+                                    action: acao,
+                                    executionId: executionId
                                 );
                             }
                         }
@@ -755,7 +888,8 @@ namespace OxCad
                                 $"Ação '{acao}' encerrou com exit code {proc.ExitCode} ({durationMs:F1}ms): {resultado.Mensagem}",
                                 correlationId: correlationId,
                                 dwgPath: dwgFullPath,
-                                action: acao
+                                action: acao,
+                                executionId: executionId
                             );
                         }
                         else
@@ -766,7 +900,8 @@ namespace OxCad
                                 dwgPath: dwgFullPath,
                                 action: acao,
                                 durationMs: durationMs,
-                                result: "sucesso"
+                                result: "sucesso",
+                                executionId: executionId
                             );
                         }
                     }
@@ -784,7 +919,8 @@ namespace OxCad
                         ex,
                         correlationId: correlationId,
                         dwgPath: dwgFullPath,
-                        action: acao
+                        action: acao,
+                        executionId: executionId
                     );
                 }
 
@@ -795,10 +931,32 @@ namespace OxCad
         /// <summary>
         /// Envia um comando de controle de tempo para o backend Python (iniciar, pausar, retomar, concluir, reabrir).
         /// </summary>
-        public static async Task<OxCadActionResult> ControlarTempoAsync(string acaoTempo, string? dwgFullPath, string? correlationId = null)
+        public static async Task<OxCadActionResult> ControlarTempoAsync(
+            string acaoTempo,
+            string? dwgFullPath,
+            string? correlationId = null,
+            string? sobId = null,
+            bool requireProjectScope = false,
+            string? executionId = null,
+            string? dwgIdentity = null,
+            string executionOrigin = "oxcad.palette",
+            bool waitForCompletion = false,
+            bool executionManagedByHost = false,
+            OxCadVerifiedDwgContext? verifiedContext = null)
         {
             string acaoNormalizada = acaoTempo.StartsWith("tempo_") ? acaoTempo : $"tempo_{acaoTempo}";
-            return await ExecutarAcaoAsync(acaoNormalizada, dwgFullPath, correlationId: correlationId);
+            return await ExecutarAcaoAsync(
+                acaoNormalizada,
+                dwgFullPath,
+                correlationId: correlationId,
+                sobId: sobId,
+                requireProjectScope: requireProjectScope,
+                executionId: executionId,
+                dwgIdentity: dwgIdentity,
+                executionOrigin: executionOrigin,
+                waitForCompletion: waitForCompletion,
+                executionManagedByHost: executionManagedByHost,
+                verifiedContext: verifiedContext);
         }
     }
 
@@ -830,6 +988,116 @@ namespace OxCad
 
         [JsonPropertyName("duration_ms")]
         public double? DurationMs { get; set; }
+
+        [JsonPropertyName("execution_id")]
+        public string? ExecutionId { get; set; }
+
+        [JsonPropertyName("execution_state")]
+        public string? ExecutionState { get; set; }
+
+        [JsonPropertyName("sob_id")]
+        public string? SobId { get; set; }
+
+        [JsonPropertyName("dwg_path")]
+        public string? DwgPath { get; set; }
+
+        [JsonPropertyName("dwg_identity")]
+        public string? DwgIdentity { get; set; }
+
+        [JsonPropertyName("started_at")]
+        public string? StartedAt { get; set; }
+
+        [JsonPropertyName("finished_at")]
+        public string? FinishedAt { get; set; }
+
+        [JsonPropertyName("origin")]
+        public string? Origin { get; set; }
+
+        [JsonPropertyName("artifacts")]
+        public List<OxCadExecutionArtifact> Artifacts { get; set; } = new List<OxCadExecutionArtifact>();
+
+        [JsonPropertyName("validation_summary")]
+        public Dictionary<string, int> ValidationSummary { get; set; } = new Dictionary<string, int>();
+
+        [JsonPropertyName("validation_results")]
+        public List<OxCadValidationResultDto> ValidationResults { get; set; } = new List<OxCadValidationResultDto>();
+
+        [JsonPropertyName("exception_type")]
+        public string? ExceptionType { get; set; }
+
+        [JsonPropertyName("exit_code")]
+        public int? ExitCode { get; set; }
+    }
+
+    public sealed class OxCadValidationSourceDto
+    {
+        [JsonPropertyName("tipo")]
+        public string Tipo { get; set; } = string.Empty;
+
+        [JsonPropertyName("arquivo")]
+        public string? Arquivo { get; set; }
+
+        [JsonPropertyName("localizacao")]
+        public string? Localizacao { get; set; }
+
+        [JsonPropertyName("origem")]
+        public string Origem { get; set; } = string.Empty;
+    }
+
+    public sealed class OxCadValidationResultDto
+    {
+        [JsonPropertyName("rule_id")]
+        public string RuleId { get; set; } = string.Empty;
+
+        [JsonPropertyName("description")]
+        public string Description { get; set; } = string.Empty;
+
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = string.Empty;
+
+        [JsonPropertyName("value")]
+        public JsonElement? Value { get; set; }
+
+        [JsonPropertyName("criterion")]
+        public JsonElement? Criterion { get; set; }
+
+        [JsonPropertyName("source")]
+        public OxCadValidationSourceDto Source { get; set; } = new OxCadValidationSourceDto();
+
+        [JsonPropertyName("timestamp")]
+        public string Timestamp { get; set; } = string.Empty;
+
+        [JsonPropertyName("message")]
+        public string Message { get; set; } = string.Empty;
+
+        [JsonPropertyName("execution_id")]
+        public string ExecutionId { get; set; } = string.Empty;
+
+        [JsonPropertyName("correlation_id")]
+        public string CorrelationId { get; set; } = string.Empty;
+
+        [JsonPropertyName("sob_id")]
+        public string SobId { get; set; } = string.Empty;
+
+        [JsonPropertyName("dwg_path")]
+        public string? DwgPath { get; set; }
+
+        [JsonPropertyName("dwg_identity")]
+        public string? DwgIdentity { get; set; }
+
+        [JsonPropertyName("database_fingerprint")]
+        public string? DatabaseFingerprint { get; set; }
+
+        [JsonPropertyName("revision")]
+        public string? Revision { get; set; }
+
+        [JsonPropertyName("origin")]
+        public string Origin { get; set; } = string.Empty;
+
+        public string EvidenceDisplay =>
+            string.IsNullOrWhiteSpace(Source.Localizacao)
+                ? Source.Arquivo ?? Source.Origem
+                : $"{Source.Arquivo} · {Source.Localizacao}";
     }
 }
 

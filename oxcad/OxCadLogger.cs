@@ -99,7 +99,16 @@ namespace OxCad
             double? durationMs = null,
             string? result = null,
             Exception? ex = null,
-            string loggerName = "oxcad.net")
+            string loggerName = "oxcad.net",
+            string? executionId = null,
+            string? executionState = null,
+            string? dwgIdentity = null,
+            string? origin = null,
+            string? startedAt = null,
+            string? finishedAt = null,
+            string? error = null,
+            IReadOnlyList<OxCadExecutionArtifact>? artifacts = null,
+            bool mandatory = false)
         {
             try
             {
@@ -125,6 +134,24 @@ namespace OxCad
                 if (!string.IsNullOrWhiteSpace(operation)) evento["operation"] = operation;
                 if (durationMs.HasValue) evento["duration_ms"] = Math.Round(durationMs.Value, 2);
                 if (!string.IsNullOrWhiteSpace(result)) evento["result"] = result;
+                if (!string.IsNullOrWhiteSpace(executionId)) evento["execution_id"] = executionId;
+                if (!string.IsNullOrWhiteSpace(executionState)) evento["execution_state"] = executionState;
+                if (!string.IsNullOrWhiteSpace(dwgIdentity)) evento["dwg_identity"] = dwgIdentity;
+                if (!string.IsNullOrWhiteSpace(origin)) evento["origin"] = origin;
+                if (!string.IsNullOrWhiteSpace(startedAt)) evento["started_at"] = startedAt;
+                if (!string.IsNullOrWhiteSpace(finishedAt)) evento["finished_at"] = finishedAt;
+                if (!string.IsNullOrWhiteSpace(error)) evento["error"] = Sanitizar(error);
+                if (artifacts != null)
+                {
+                    evento["artifacts"] = artifacts.Select(artifact => new Dictionary<string, object?>
+                    {
+                        ["path"] = Sanitizar(artifact.Caminho),
+                        ["type"] = artifact.Tipo,
+                        ["operation"] = artifact.Operacao,
+                        ["exists"] = artifact.Existe,
+                        ["timestamp"] = artifact.TimestampUtc
+                    }).ToArray();
+                }
 
                 if (ex != null)
                 {
@@ -137,41 +164,50 @@ namespace OxCad
 
                 lock (_fileLock)
                 {
-                    EscreverLinhaComRotacao(appLogFile, jsonLine);
+                    EscreverLinhaComRotacao(appLogFile, jsonLine, mandatory);
 
                     if (level.Equals("ERROR", StringComparison.OrdinalIgnoreCase) ||
                         level.Equals("CRITICAL", StringComparison.OrdinalIgnoreCase))
                     {
                         string errLogFile = Path.Combine(logDir, "errors.jsonl");
-                        EscreverLinhaComRotacao(errLogFile, jsonLine);
+                        EscreverLinhaComRotacao(errLogFile, jsonLine, mandatory);
                     }
                 }
             }
             catch
             {
-                // Resiliência estrita: falhas de log nunca derrubam o AutoCAD
+                if (mandatory)
+                    throw;
+                // Logs auxiliares não interrompem o AutoCAD.
             }
         }
 
-        private static void EscreverLinhaComRotacao(string filePath, string jsonLine)
+        private static void EscreverLinhaComRotacao(string filePath, string jsonLine, bool mandatory)
         {
             try
             {
-                VerificarERotacionar(filePath);
+                VerificarERotacionar(filePath, mandatory);
 
                 using (var fs = new FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
                 using (var sw = new StreamWriter(fs, Encoding.UTF8))
                 {
                     sw.WriteLine(jsonLine);
+                    if (mandatory)
+                    {
+                        sw.Flush();
+                        fs.Flush(true);
+                    }
                 }
             }
             catch
             {
+                if (mandatory)
+                    throw;
                 // Descarta em caso de contenção transitória de SO
             }
         }
 
-        private static void VerificarERotacionar(string filePath)
+        private static void VerificarERotacionar(string filePath, bool mandatory)
         {
             try
             {
@@ -197,21 +233,53 @@ namespace OxCad
             }
             catch
             {
+                if (mandatory)
+                    throw;
                 // Não interrompe execução se houver contenção na rotação
             }
         }
 
-        public static void LogInfo(string message, string? correlationId = null, string? sobId = null, string? dwgPath = null, string? action = null, double? durationMs = null, string? result = null)
-            => Log("INFO", message, correlationId, sobId, dwgPath, null, action, null, durationMs, result, null);
+        public static void LogInfo(string message, string? correlationId = null, string? sobId = null, string? dwgPath = null, string? action = null, double? durationMs = null, string? result = null, string? executionId = null)
+            => Log("INFO", message, correlationId, sobId, dwgPath, null, action, null, durationMs, result, null, executionId: executionId);
 
-        public static void LogWarning(string message, string? correlationId = null, string? sobId = null, string? dwgPath = null, string? action = null)
-            => Log("WARNING", message, correlationId, sobId, dwgPath, null, action, null, null, null, null);
+        public static void LogWarning(string message, string? correlationId = null, string? sobId = null, string? dwgPath = null, string? action = null, string? executionId = null)
+            => Log("WARNING", message, correlationId, sobId, dwgPath, null, action, null, null, null, null, executionId: executionId);
 
-        public static void LogError(string message, Exception? ex = null, string? correlationId = null, string? sobId = null, string? dwgPath = null, string? action = null)
-            => Log("ERROR", message, correlationId, sobId, dwgPath, null, action, null, null, "falha", ex);
+        public static void LogError(string message, Exception? ex = null, string? correlationId = null, string? sobId = null, string? dwgPath = null, string? action = null, string? executionId = null)
+            => Log("ERROR", message, correlationId, sobId, dwgPath, null, action, null, null, "falha", ex, executionId: executionId);
 
         public static void LogDebug(string message, string? correlationId = null, string? sobId = null)
             => Log("DEBUG", message, correlationId, sobId);
+
+        public static void LogExecutionTransition(OxCadExecutionSnapshot execution)
+        {
+            string state = execution.StateText;
+            string level = execution.State == OxCadExecutionState.Falhou
+                ? "ERROR"
+                : execution.State == OxCadExecutionState.Cancelado
+                    ? "WARNING"
+                    : "INFO";
+
+            Log(
+                level,
+                $"Execução {execution.Action}: {state}. {execution.Message}",
+                correlationId: execution.CorrelationId,
+                sobId: execution.SobId,
+                dwgPath: execution.DwgPath,
+                action: execution.Action,
+                operation: "action_execution.transition",
+                durationMs: execution.DurationMs,
+                result: state,
+                executionId: execution.ExecutionId,
+                executionState: state,
+                dwgIdentity: execution.DwgIdentity,
+                origin: execution.Origin,
+                startedAt: execution.StartedAt.ToString("O"),
+                finishedAt: execution.FinishedAt?.ToString("O"),
+                error: execution.Error,
+                artifacts: execution.Artifacts,
+                mandatory: execution.FinishedAt.HasValue);
+        }
 
         public static void RegistrarSessaoInicio(string versao, string acadVer, int pid, string runtime)
         {

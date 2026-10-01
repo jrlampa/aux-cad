@@ -19,6 +19,8 @@
 
   <!-- Dependências Comuns -->
   <ItemGroup>
+    <Compile Include="..\mapa_cad_paleta\ProjectScope.cs" Link="ProjectScope.cs" />
+    <Compile Include="..\mapa_cad_paleta\DwgProjectScopeStore.cs" Link="DwgProjectScopeStore.cs" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" Condition="'$(TargetFramework)' == 'net48'" />
   </ItemGroup>
 
