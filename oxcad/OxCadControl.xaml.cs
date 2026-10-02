@@ -599,9 +599,16 @@ namespace OxCad
 
                 if (!projectScope.IsBound)
                 {
-                    _ultimoDwgFullPath = dwgFilename;
-                    ExibirEstadoProjectScope(projectScope, dwgFilename);
-                    return;
+                    if (DwgProjectScopeStore.TryReconcile(document, database, dwgFilename, out ProjectScope reconciledScope))
+                    {
+                        projectScope = reconciledScope;
+                    }
+                    else
+                    {
+                        _ultimoDwgFullPath = dwgFilename;
+                        ExibirEstadoProjectScope(reconciledScope, dwgFilename);
+                        return;
+                    }
                 }
 
                 string correlationId = Guid.NewGuid().ToString("N");

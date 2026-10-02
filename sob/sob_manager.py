@@ -6,10 +6,11 @@ emissão de logs de diagnóstico, tratamento de erros e interface CLI/JSON para 
 """
 
 import os
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 _current_dir = str(Path(__file__).resolve().parent)
 if _current_dir not in sys.path:
@@ -302,6 +303,7 @@ class SobOrchestrator:
         verificador_cancelamento: Optional[Any] = None,
         continuar_sem_gomnet_em_falha: Optional[bool] = None,
         continuar_sem_sharepoint_em_falha: Optional[bool] = None,
+        resultado_json: Optional[Union[str, Path]] = None,
     ) -> Dict[str, Any]:
         """
         Executa o fluxo completo da SOB de acordo com as regras de negócio e validações da Seção 14.
@@ -844,6 +846,9 @@ class SobOrchestrator:
                 resultado["estado"] = "CONCLUÍDO"
                 resultado["etapa"] = "FINALIZADO"
                 resultado["mensagem"] = "Processo concluído com sucesso."
+                resultado["SOB_ROOT"] = str(sob_root_path)
+                resultado["BASE_DWG"] = str(dwg_copiado)
+                resultado["manifesto_path"] = str(sob_root_path / ".sob_state.json")
                 self._notificar_progresso(callback_progresso, "CONCLUIDO", "Projeto preparado com sucesso!", 12, perc=100.0, estado="SUCESSO")
                 self.logger.info("Processo concluído")
 
@@ -897,6 +902,13 @@ class SobOrchestrator:
                     pass
 
         resultado["checklist"] = checklist
+        if resultado_json:
+            try:
+                p_res = Path(resultado_json).resolve()
+                p_res.parent.mkdir(parents=True, exist_ok=True)
+                p_res.write_text(json.dumps(resultado, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception as ex_json:
+                self.logger.warning(f"Não foi possível gravar o arquivo de resultado estruturado em {resultado_json}: {ex_json}")
         return resultado
 
     def _abrir_no_autocad(self, dwg_path: Path):

@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from typing import Optional
+from typing import Optional, Union
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
@@ -31,9 +31,11 @@ except ImportError:
 class SobLauncherDialog:
     """Janela moderna de diálogo para configuração prévia da SOB."""
 
-    def __init__(self, root: Optional[tk.Tk] = None):
+    def __init__(self, root: Optional[tk.Tk] = None, resultado_json: Optional[Path] = None):
         self._proprio_root = root is None
         self.root = tk.Tk() if self._proprio_root else tk.Toplevel(root)
+        self.resultado_json = Path(resultado_json).resolve() if resultado_json else None
+        self.resultado_final: Optional[dict] = None
         self.root.title("AUX CAD — Preparação de Projeto SOB")
         self.root.geometry("540x440")
         self.root.resizable(False, False)
@@ -259,6 +261,7 @@ class SobLauncherDialog:
                 abrir_cad=self.cad_var.get(),
                 callback_progresso=observer,
                 verificador_cancelamento=observer,
+                resultado_json=self.resultado_json,
             )
 
         app_gui = SobProgressGUI(
@@ -266,17 +269,37 @@ class SobLauncherDialog:
             tarefa_executora=_tarefa,
             base_inicial=sigla_base,
         )
-        app_gui.iniciar()
+        res = app_gui.iniciar()
+        self.resultado_final = res
+        if self.resultado_json and isinstance(res, dict):
+            try:
+                import json
+                self.resultado_json.parent.mkdir(parents=True, exist_ok=True)
+                self.resultado_json.write_text(json.dumps(res, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception:
+                pass
 
     def run(self):
         self.root.mainloop()
 
 
-def lancar_dialogo_sob(parent: Optional[tk.Tk] = None):
-    dialog = SobLauncherDialog(parent)
+def lancar_dialogo_sob(
+    parent: Optional[tk.Tk] = None,
+    resultado_json: Optional[Path] = None,
+) -> Optional[dict]:
+    if resultado_json is not None:
+        dialog = SobLauncherDialog(parent, resultado_json=resultado_json)
+    else:
+        dialog = SobLauncherDialog(parent)
     if parent is None:
         dialog.run()
+    return getattr(dialog, "resultado_final", None)
 
 
 if __name__ == "__main__":
-    lancar_dialogo_sob()
+    import argparse
+    parser = argparse.ArgumentParser(description="AUX CAD — Preparação de Projeto SOB")
+    parser.add_argument("--resultado-json", "--result-file", dest="resultado_json", default=None, help="Caminho para salvar o resultado estruturado da execução")
+    args, _ = parser.parse_known_args()
+    res_path = Path(args.resultado_json).resolve() if args.resultado_json else None
+    lancar_dialogo_sob(resultado_json=res_path)

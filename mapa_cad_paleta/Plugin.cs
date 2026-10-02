@@ -112,36 +112,15 @@ namespace MapaCadPaleta
 
         private static void ValidateCompletedSobManifest(string baseDwgPath, string expectedSobId)
         {
-            string sobRoot = Path.GetDirectoryName(baseDwgPath)
-                ?? throw new InvalidOperationException("Não foi possível localizar a raiz da SOB.");
-            string manifestPath = Path.Combine(sobRoot, ".sob_state.json");
-            if (!File.Exists(manifestPath))
-                throw new FileNotFoundException("Manifesto .sob_state.json da SOB não encontrado.", manifestPath);
-
-            using JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
-            JsonElement root = manifest.RootElement;
-            if (!root.TryGetProperty("status", out JsonElement status) ||
-                status.ValueKind != JsonValueKind.String ||
-                !string.Equals(status.GetString(), "CONCLUÍDO", StringComparison.Ordinal))
-                throw new InvalidOperationException("O manifesto da SOB não confirma uma preparação concluída.");
-
-            if (!root.TryGetProperty("sob_id", out JsonElement sobId) ||
-                sobId.ValueKind != JsonValueKind.String ||
-                !ProjectScopeContract.TryNormalizeSobId(sobId.GetString(), out string manifestSobId) ||
-                !string.Equals(manifestSobId, expectedSobId, StringComparison.Ordinal))
+            ProjectScope scope = ProjectScopeContract.ReconcileCompletedManifest(baseDwgPath);
+            if (!scope.IsBound)
+            {
+                throw new InvalidOperationException($"Não foi possível validar a preparação da SOB: {scope.Detail ?? scope.Status.ToString()}");
+            }
+            if (!string.Equals(scope.SobId, expectedSobId, StringComparison.Ordinal))
+            {
                 throw new InvalidOperationException("O SOB_ID informado não corresponde ao manifesto da SOB.");
-
-            if (!root.TryGetProperty("base_dwg", out JsonElement baseDwg) ||
-                baseDwg.ValueKind != JsonValueKind.String ||
-                string.IsNullOrWhiteSpace(baseDwg.GetString()))
-                throw new InvalidOperationException("O manifesto da SOB não contém BASE_DWG válido.");
-
-            string manifestDwgPath = baseDwg.GetString()!;
-            if (!Path.IsPathRooted(manifestDwgPath))
-                manifestDwgPath = Path.Combine(sobRoot, manifestDwgPath);
-            manifestDwgPath = Path.GetFullPath(manifestDwgPath);
-            if (!string.Equals(manifestDwgPath, baseDwgPath, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("O BASE_DWG informado não corresponde ao manifesto da SOB.");
+            }
         }
     }
 }

@@ -1026,3 +1026,37 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
      - Precedência determinística: (1) Pasta com nome canônico da SOB; (2) Arquivo de croqui da SOB; (3) Demais artefatos da mesma SOB. Conflito reservado estritamente para SOBs distintas ou pastas de trabalho concorrentes.
    - **Validação Física do Download e Rollback Preservado**:
      - Confirmação física de arquivos descompactados e integridade de tamanho em disco antes de atestar sucesso da etapa. Falhas preservam reversão atômica (`rollback`) sem afetar arquivos de execuções anteriores.
+
+13. **Correção Controlada — Fechamento da Cadeia PREPARAR SOB -> DWG -> Contexto OXCAD (2026-10-01)**:
+    - **Reconciliação Segura e Determinística no AutoCAD Host**:
+      - `ProjectScopeContract.ReconcileCompletedManifest`: Valida `.sob_state.json` com status `CONCLUÍDO`, compara canonicamente `base_dwg` com o caminho ativo do DWG e recusa identidades conflitantes na pasta.
+      - `DwgProjectScopeStore.TryReconcile`: Aplica o binding com `document.LockDocument()`, persiste no `NamedObjectsDictionary` e executa salvamento controlado.
+      - `OxCadControl.xaml.cs`: `AtualizarContextoAsync` tenta reconciliação determinística antes de rejeitar escopos não vinculados, tanto no carregamento/ativação quanto no clique manual de `🔄 Atualizar Contexto`, garantindo a habilitação de todos os botões de engenharia (`_projectScopeResolved == true`).
+    - **Eliminação de Falso `ARTIFACT_NOT_VERIFIED` para a Ação `sob`**:
+      - `workspace_context_cli.py`: Implementado `_artefato_sob_gerado`, garantindo que processos concluídos com sucesso (código 0) e evidências físicas válidas (manifesto `CONCLUÍDO`, `base_dwg` íntegro) sejam reconhecidos como sucesso sem erros espúrios de auditoria.
+    - **Status**: **CORREÇÃO CONSOLIDADA E VALIDADA; P2 PERMANECE SUSPENSA**.
+
+17. **Decisão Arquitetural — Resolução Determinística e Atestação de Artefato da Ação SOB (`workspace_context_cli.py` & `sob/`) (2026-10-01)**:
+    - **Problema Operacional Identificado**:
+      - Na ação `PREPARAR SOB`, mesmo com `exit_code=0` e o DWG sendo criado e aberto corretamente, o monitoramento de auditoria da ação registrava `ARTIFACT_NOT_VERIFIED`.
+      - A função `_artefato_sob_gerado` tentava importar `sob.sob_config` (módulo inexistente) e, após engolir o `ImportError`, buscava o manifesto `.sob_state.json` com fallback para `p_root` (apontando para o DWG aberto antes da ação, tipicamente `models/prancha.dwg`).
+    - **Regra Arquitetural Obrigatória (Zero Varredura Aleatória)**:
+      - Proibida categoricamente qualquer busca aleatória ou varredura de diretórios históricos em `G:\Meu Drive` ou árvore de arquivos para localizar manifestos `.sob_state.json`. Uma varredura arbitrária arrisca atestar falsamente um manifesto antigo ou de outra obra.
+    - **Solução Determinística Baseada em Fluxo de Dados**:
+      - `SobOrchestrator.executar`: Aceita o parâmetro opcional `resultado_json`. Ao finalizar com sucesso, registra `manifesto_path`, `SOB_ROOT`, `BASE_DWG`, `SOB_ID` e `sucesso`, gravando o resultado estruturado em disco de forma atômica.
+      - `SobLauncherDialog` e CLI (`sob_launcher_gui.py`): Aceitam `--resultado-json` / `--result-file` e propagam ao orquestrador.
+      - `workspace_actions.py` (`montar_comando_sob`, `executar_sob`): Envia a flag de resultado estruturado para o lançador da GUI.
+      - `workspace_context_cli.py`: Cria arquivo de resultado temporário por execução, despacha no comando da SOB e repassa o resultado estruturado para `_artefato_sob_gerado()`.
+      - `_artefato_sob_gerado`: Valida fisicamente o caminho explícito retornado:
+        1. Pasta existe e manifesto `.sob_state.json` existe com tamanho > 0;
+        2. JSON íntegro e parseável;
+        3. `status == CONCLUÍDO`;
+        4. `sob_id` válido e coerente;
+        5. `base_dwg` existe fisicamente, possui tamanho > 0 bytes e localiza-se dentro da pasta da SOB criada;
+        6. Ausência de caminho explícito ou falha em qualquer critério físico resulta em recusa imediata e diagnosticável.
+    - **Qualidade e Cobertura**:
+      - Suíte dedicada `tests/test_sob_artifact_verification.py` com 7 cenários obrigatórios (A até G) passando 100%.
+      - Suíte completa de 739 testes do repositório executada com 100% de aprovação (737 pass, 2 skip).
+      - Build .NET do OXCAD sem erros (0 Erros).
+      - Harness C# `OxCadContextGateHarness` 100% aprovado.
+    - **Status**: **RESOLVIDO DETERMINISTICAMENTE; P2 PERMANECE SUSPENSA**.

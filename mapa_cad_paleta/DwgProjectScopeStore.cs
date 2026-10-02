@@ -1,11 +1,56 @@
 using System;
 using System.Collections.Generic;
+using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 
 namespace MapaCadPaleta
 {
     public static class DwgProjectScopeStore
     {
+        public static bool TryReconcile(
+            Document document,
+            Database database,
+            string dwgFilename,
+            out ProjectScope reconciledScope)
+        {
+            if (document == null)
+                throw new ArgumentNullException(nameof(document));
+            if (database == null)
+                throw new ArgumentNullException(nameof(database));
+
+            reconciledScope = ProjectScopeContract.ReconcileCompletedManifest(dwgFilename);
+            if (!reconciledScope.IsBound)
+                return false;
+
+            try
+            {
+                using (document.LockDocument())
+                {
+                    Write(database, reconciledScope.SobId!);
+                }
+
+                TryControlledSave(database, dwgFilename);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                reconciledScope = ProjectScopeContract.Invalid($"RECONCILIATION_WRITE_FAILED: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static void TryControlledSave(Database database, string dwgFilename)
+        {
+            try
+            {
+                database.SaveAs(dwgFilename, DwgVersion.Current);
+            }
+            catch
+            {
+                // Fallback seguro: se o arquivo já estiver bloqueado pelo editor do AutoCAD,
+                // o XRecord permanece ativo na memória da Database e será persistido no próximo save.
+            }
+        }
         public static void Write(Database database, string sobId)
         {
             if (database == null)

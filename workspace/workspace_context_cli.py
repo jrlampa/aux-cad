@@ -16,7 +16,8 @@ import os
 from pathlib import Path
 import re
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+import tempfile
+from typing import Any, Dict, List, Optional, Tuple, Union
 import warnings
 from datetime import datetime, timezone
 
@@ -629,6 +630,7 @@ def _executar_acao_operacional_impl(
     acknowledge_issues: bool = False,
     decision_note: Optional[str] = None,
     revocation_reason: Optional[str] = None,
+    caminho_explicito_sob: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
     """
     Executa uma ação do Workspace através do WorkspaceActionDispatcher existente.
@@ -872,6 +874,7 @@ def _executar_acao_operacional_impl(
 
     try:
         proc: Optional[Any] = None
+        resultado_json_path: Optional[Path] = None
 
         if acao_limpa.startswith("entrega_"):
             from workspace.workspace_delivery import approve, generate, revoke, verify
@@ -1216,10 +1219,15 @@ def _executar_acao_operacional_impl(
                 "erro": "ARTIFACT_NOT_VERIFIED" if exit_code == 0 else None,
             }
         elif acao_limpa == "sob":
+            exec_tag = execution_id or uuid.uuid4().hex[:8]
+            resultado_json_path = (
+                Path(tempfile.gettempdir()) / f"oxcad_sob_res_{exec_tag}.json"
+            )
             proc = WorkspaceActionDispatcher.executar_sob(
                 ws,
                 correlation_id=correlation_id,
                 execution_id=execution_id,
+                resultado_json=resultado_json_path,
             )
             nome_modulo = "Preparador de SOB"
         else:
@@ -1235,11 +1243,22 @@ def _executar_acao_operacional_impl(
 
         pid = proc.pid if proc else None
         exit_code = proc.wait() if proc and wait_for_completion else None
+        res_json = resultado_json_path if acao_limpa == "sob" else None
         artefato_gerado = (
             _artefato_tecnico_gerado(acao_limpa, ws, arquivos_antes)
             if exit_code == 0 and acao_limpa in {
                 "cqt", "orcamento", "cpfc", "ambiental"
-            } else exit_code != 0
+            } else (
+                _artefato_sob_gerado(
+                    ws=ws,
+                    p_root=p_root,
+                    sob_id_esperada=sob_id_esperada,
+                    caminho_explicito=caminho_explicito_sob,
+                    resultado_json=res_json,
+                )
+                if exit_code == 0 and acao_limpa == "sob"
+                else exit_code != 0
+            )
         )
         motivo_artefato = (
             "ARTIFACT_NOT_VERIFIED"
@@ -1352,6 +1371,108 @@ def _artefato_tecnico_gerado(
     return False
 
 
+def _artefato_sob_gerado(
+    ws: Optional[ProjectWorkspace] = None,
+    p_root: Optional[Path] = None,
+    sob_id_esperada: Optional[str] = None,
+    caminho_explicito: Optional[Union[str, Path]] = None,
+    resultado_json: Optional[Union[str, Path]] = None,
+) -> bool:
+    """
+    Verifica evidências reais do contrato da ação 'sob':
+    1. Consome o caminho explícito da pasta/manifesto da SOB criada nesta execução
+       (via caminho_explicito direto ou via arquivo de resultado estruturado da execução).
+    2. Valida fisicamente:
+       - Diretório da SOB existe e é diretório;
+       - Manifesto .sob_state.json existe e é arquivo com tamanho > 0;
+       - JSON é válido e parseável;
+       - status == 'CONCLUÍDO';
+       - sob_id está presente, válido e coincide com o esperado (se informado);
+       - base_dwg existe fisicamente no disco, possui tamanho > 0 e pertence à pasta da SOB.
+    3. Se o caminho explícito não estiver disponível ou for inválido, rejeita determinística
+       e imediatamente (sem varredura aleatória ou busca em diretórios históricos).
+    """
+    caminho_alvo: Optional[Path] = None
+
+    if caminho_explicito:
+        caminho_alvo = Path(caminho_explicito).resolve()
+    elif resultado_json:
+        p_res = Path(resultado_json).resolve()
+        if p_res.is_file() and p_res.stat().st_size > 0:
+            try:
+                dados_res = json.loads(p_res.read_text(encoding="utf-8"))
+                if isinstance(dados_res, dict):
+                    m_path = dados_res.get("manifesto_path")
+                    s_root = dados_res.get("SOB_ROOT") or dados_res.get("sob_root")
+                    if m_path:
+                        caminho_alvo = Path(m_path).resolve()
+                    elif s_root:
+                        caminho_alvo = Path(s_root).resolve()
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                caminho_alvo = None
+
+    if not caminho_alvo:
+        return False
+
+    pasta_sob: Path
+    manifesto_path: Path
+
+    if caminho_alvo.is_file():
+        if caminho_alvo.name == ".sob_state.json":
+            manifesto_path = caminho_alvo
+            pasta_sob = caminho_alvo.parent.resolve()
+        else:
+            return False
+    elif caminho_alvo.is_dir():
+        pasta_sob = caminho_alvo.resolve()
+        manifesto_path = pasta_sob / ".sob_state.json"
+    else:
+        return False
+
+    if not pasta_sob.is_dir():
+        return False
+
+    if not manifesto_path.is_file() or manifesto_path.stat().st_size == 0:
+        return False
+
+    try:
+        dados = json.loads(manifesto_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+
+    if not isinstance(dados, dict):
+        return False
+
+    status_man = str(dados.get("status", "")).strip().upper()
+    if status_man not in {"CONCLUÍDO", "CONCLUIDO"}:
+        return False
+
+    sob_man = _normalizar_project_scope(dados.get("sob_id"))
+    if not sob_man:
+        return False
+
+    id_esperado_norm = _normalizar_project_scope(sob_id_esperada)
+    if id_esperado_norm and sob_man != id_esperado_norm:
+        return False
+
+    base_dwg_str = dados.get("base_dwg")
+    if not isinstance(base_dwg_str, str) or not base_dwg_str.strip():
+        return False
+
+    p_dwg = Path(base_dwg_str)
+    if not p_dwg.is_absolute():
+        p_dwg = pasta_sob / p_dwg
+    p_dwg = p_dwg.resolve()
+
+    if not p_dwg.is_file() or p_dwg.stat().st_size == 0:
+        return False
+
+    if p_dwg.parent.resolve() != pasta_sob.resolve():
+        return False
+
+    return True
+
+
 def _capturar_arquivos_execucao(root_dir: Path) -> Dict[str, Tuple[int, int]]:
     snapshot: Dict[str, Tuple[int, int]] = {}
     if not root_dir.is_dir():
@@ -1444,6 +1565,7 @@ def executar_acao_operacional(
     decision_note: Optional[str] = None,
     revocation_reason: Optional[str] = None,
     host_context: Optional[Dict[str, Any]] = None,
+    caminho_explicito_sob: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
     """Executa uma ação e registra seu ciclo sem duplicar o histórico JSONL."""
     acao_limpa = (acao or "").strip().lower()
@@ -1589,6 +1711,7 @@ def executar_acao_operacional(
             decision_note=decision_note,
             revocation_reason=revocation_reason,
             host_verified=verified is not None,
+            caminho_explicito_sob=caminho_explicito_sob,
         )
     except Exception as ex:
         exception = ex
@@ -1687,6 +1810,7 @@ def main():
     parser.add_argument("--acknowledge-issues", action="store_true")
     parser.add_argument("--decision-note", type=str, default=None)
     parser.add_argument("--revocation-reason", type=str, default=None)
+    parser.add_argument("--caminho-explicito-sob", type=str, default=None, help="Caminho explícito da pasta/manifesto da SOB")
 
     args = parser.parse_args()
     correlation_id = args.correlation_id or uuid.uuid4().hex
@@ -1741,6 +1865,7 @@ def main():
                 decision_note=args.decision_note,
                 revocation_reason=args.revocation_reason,
                 host_context=host_context,
+                caminho_explicito_sob=args.caminho_explicito_sob,
             )
             print(json.dumps(resultado, indent=2, ensure_ascii=False))
             sys.exit(0 if resultado["sucesso"] else 1)

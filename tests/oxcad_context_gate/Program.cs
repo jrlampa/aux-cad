@@ -205,3 +205,117 @@ finally
 {
     Directory.Delete(executionRoot, recursive: true);
 }
+
+// --- Testes de Reconciliação do Manifesto SOB (Requisitos A, B, C, D, E, H) ---
+string testRoot = Path.Combine(Path.GetTempPath(), "oxcad-manifest-gate-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(testRoot);
+try
+{
+    // Cenário A: Manifesto válido + DWG correspondente -> binding/contexto recuperável
+    string dirA = Path.Combine(testRoot, "SOB_A");
+    Directory.CreateDirectory(dirA);
+    string dwgA = Path.Combine(dirA, "A057526153.dwg");
+    File.WriteAllText(dwgA, "mock dwg content");
+    string manifestA = Path.Combine(dirA, ".sob_state.json");
+    File.WriteAllText(manifestA, """
+    {
+        "status": "CONCLUÍDO",
+        "sob_id": "A057526153",
+        "base_dwg": "A057526153.dwg"
+    }
+    """);
+
+    MapaCadPaleta.ProjectScope scopeA = MapaCadPaleta.ProjectScopeContract.ReconcileCompletedManifest(dwgA);
+    Assert(scopeA.IsBound, "Cenário A: Deveria reconciliar e vincular escopo.");
+    Assert(scopeA.SobId == "A057526153", "Cenário A: SOB_ID deveria ser A057526153.");
+
+    // Cenário B: Manifesto válido + DWG diferente -> NÃO vincular
+    string dwgB_diff = Path.Combine(dirA, "OUTRO.dwg");
+    File.WriteAllText(dwgB_diff, "mock dwg outro");
+    MapaCadPaleta.ProjectScope scopeB = MapaCadPaleta.ProjectScopeContract.ReconcileCompletedManifest(dwgB_diff);
+    Assert(!scopeB.IsBound, "Cenário B: DWG diferente não pode ser vinculado.");
+    Assert(scopeB.Status == MapaCadPaleta.ProjectScopeStatus.Invalid, "Cenário B: Status deve ser Invalid.");
+    Assert(scopeB.Detail == "BASE_DWG_MISMATCH", "Cenário B: Detalhe deve ser BASE_DWG_MISMATCH.");
+
+    // Cenário C: Manifesto ausente -> NÃO vincular automaticamente (Unbound)
+    string dirC = Path.Combine(testRoot, "SOB_C");
+    Directory.CreateDirectory(dirC);
+    string dwgC = Path.Combine(dirC, "A057349839.dwg");
+    File.WriteAllText(dwgC, "mock dwg c");
+    MapaCadPaleta.ProjectScope scopeC = MapaCadPaleta.ProjectScopeContract.ReconcileCompletedManifest(dwgC);
+    Assert(!scopeC.IsBound, "Cenário C: Manifesto ausente não deve vincular.");
+    Assert(scopeC.Status == MapaCadPaleta.ProjectScopeStatus.Unbound, "Cenário C: Status deve ser Unbound.");
+
+    // Cenário D: Manifesto não concluído -> NÃO vincular
+    string dirD = Path.Combine(testRoot, "SOB_D");
+    Directory.CreateDirectory(dirD);
+    string dwgD = Path.Combine(dirD, "A057999888.dwg");
+    File.WriteAllText(dwgD, "mock dwg d");
+    string manifestD = Path.Combine(dirD, ".sob_state.json");
+    File.WriteAllText(manifestD, """
+    {
+        "status": "EM_ANDAMENTO",
+        "sob_id": "A057999888",
+        "base_dwg": "A057999888.dwg"
+    }
+    """);
+    MapaCadPaleta.ProjectScope scopeD = MapaCadPaleta.ProjectScopeContract.ReconcileCompletedManifest(dwgD);
+    Assert(!scopeD.IsBound, "Cenário D: Manifesto não concluído não deve vincular.");
+    Assert(scopeD.Status == MapaCadPaleta.ProjectScopeStatus.Invalid, "Cenário D: Status deve ser Invalid.");
+    Assert(scopeD.Detail == "MANIFEST_NOT_COMPLETED", "Cenário D: Detalhe deve ser MANIFEST_NOT_COMPLETED.");
+
+    // Cenário E: Identidades conflitantes -> NÃO vincular e reportar conflito
+    string dirE = Path.Combine(testRoot, "SOB_E");
+    Directory.CreateDirectory(dirE);
+    string dwgE = Path.Combine(dirE, "A057111222.dwg");
+    File.WriteAllText(dwgE, "mock dwg e");
+    string manifestE = Path.Combine(dirE, ".sob_state.json");
+    File.WriteAllText(manifestE, """
+    {
+        "status": "CONCLUÍDO",
+        "sob_id": "A057111222",
+        "base_dwg": "A057111222.dwg"
+    }
+    """);
+    string dwgConflict = Path.Combine(dirE, "PE_A057349839_DESENHO.dwg");
+    File.WriteAllText(dwgConflict, "conflicting dwg");
+    MapaCadPaleta.ProjectScope scopeE = MapaCadPaleta.ProjectScopeContract.ReconcileCompletedManifest(dwgE);
+    Assert(!scopeE.IsBound, "Cenário E: Múltiplas identidades não devem vincular.");
+    Assert(scopeE.Status == MapaCadPaleta.ProjectScopeStatus.Ambiguous, "Cenário E: Status deve ser Ambiguous.");
+    Assert(scopeE.Detail == "CONFLICTING_SOB_IDENTITIES", "Cenário E: Detalhe deve ser CONFLICTING_SOB_IDENTITIES.");
+
+    // Cenário H: Regra de habilitação dos botões de engenharia após contexto válido
+    bool actionRunning = false;
+    bool projectScopeResolved = scopeA.IsBound && scopeA.SobId == "A057526153";
+    bool enabled = !actionRunning;
+    bool habilitadoComProjectScope = enabled && projectScopeResolved;
+    Assert(habilitadoComProjectScope, "Cenário H: Botões de engenharia devem ser habilitáveis quando projectScopeResolved == true.");
+
+    bool scopeUnresolved = scopeC.IsBound;
+    bool habilitadoSemScope = enabled && scopeUnresolved;
+    Assert(!habilitadoSemScope, "Cenário H: Botões de engenharia devem ficar desabilitados quando escopo não está resolvido.");
+
+    Console.WriteLine("ManifestReconciliation: all assertions (A, B, C, D, E, H) passed.");
+
+    string realDwg = @"G:\Meu Drive\1-HBT\05_PROJETOS_HISTORICOS\OUTUBRO\01\SOB_A057526153\RE_A057526153_DESENHO.dwg";
+    if (File.Exists(realDwg))
+    {
+        MapaCadPaleta.ProjectScope scopeReal = MapaCadPaleta.ProjectScopeContract.ReconcileCompletedManifest(realDwg);
+        Assert(scopeReal.IsBound, "Real DWG deve ser reconciliado com sucesso.");
+        Assert(scopeReal.SobId == "A057526153", "Real DWG SOB_ID deve ser A057526153.");
+        Console.WriteLine($"Reconciliação real da SOB A057526153 passou com sucesso: {scopeReal.SobId} (IsBound={scopeReal.IsBound})");
+    }
+
+    string finalDwg = @"G:\Meu Drive\1-HBT\05_PROJETOS_HISTORICOS\OUTUBRO\VALIDACAO_FINAL\SOB_A057526153\CF_A057526153_DESENHO.dwg";
+    if (File.Exists(finalDwg))
+    {
+        MapaCadPaleta.ProjectScope scopeFinal = MapaCadPaleta.ProjectScopeContract.ReconcileCompletedManifest(finalDwg);
+        Assert(scopeFinal.IsBound, "Final DWG deve ser reconciliado com sucesso.");
+        Assert(scopeFinal.SobId == "A057526153", "Final DWG SOB_ID deve ser A057526153.");
+        Console.WriteLine($"Reconciliação operacional VALIDACAO_FINAL passou com sucesso: {scopeFinal.SobId} (IsBound={scopeFinal.IsBound}, Status={scopeFinal.Status})");
+    }
+}
+finally
+{
+    Directory.Delete(testRoot, recursive: true);
+}

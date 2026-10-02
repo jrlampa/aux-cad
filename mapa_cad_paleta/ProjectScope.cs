@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace MapaCadPaleta
 {
@@ -78,6 +80,12 @@ namespace MapaCadPaleta
 
         public static ProjectScope Invalid(string detail)
             => ProjectScope.Create(ProjectScopeStatus.Invalid, detail: detail);
+
+        public static ProjectScope Bound(string sobId)
+            => ProjectScope.Create(ProjectScopeStatus.Bound, sobId: sobId);
+
+        public static ProjectScope Ambiguous(string detail)
+            => ProjectScope.Create(ProjectScopeStatus.Ambiguous, detail: detail);
 
         public static ProjectScope Resolve(
             int version,
@@ -221,6 +229,166 @@ namespace MapaCadPaleta
 
             normalized = candidate;
             return true;
+        }
+
+        public static ProjectScope ReconcileCompletedManifest(string dwgPath)
+        {
+            if (string.IsNullOrWhiteSpace(dwgPath))
+                return Invalid("MISSING_DWG_PATH");
+
+            string fullDwgPath;
+            try
+            {
+                fullDwgPath = Path.GetFullPath(dwgPath);
+            }
+            catch (Exception)
+            {
+                return Invalid("INVALID_DWG_PATH");
+            }
+
+            if (!File.Exists(fullDwgPath))
+                return Invalid("DWG_FILE_NOT_FOUND");
+
+            string? sobRoot = Path.GetDirectoryName(fullDwgPath);
+            if (string.IsNullOrWhiteSpace(sobRoot) || !Directory.Exists(sobRoot))
+                return Invalid("SOB_DIRECTORY_NOT_FOUND");
+
+            string manifestPath = Path.Combine(sobRoot, ".sob_state.json");
+            if (!File.Exists(manifestPath))
+                return Unbound();
+
+            JsonDocument manifest;
+            try
+            {
+                manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            }
+            catch (Exception)
+            {
+                return Invalid("PROJECT_MANIFEST_INVALID");
+            }
+
+            using (manifest)
+            {
+                JsonElement root = manifest.RootElement;
+                if (root.ValueKind != JsonValueKind.Object)
+                    return Invalid("PROJECT_MANIFEST_INVALID");
+
+                if (!root.TryGetProperty("status", out JsonElement statusElem) ||
+                    statusElem.ValueKind != JsonValueKind.String)
+                    return Invalid("MANIFEST_STATUS_INVALID");
+
+                string statusStr = statusElem.GetString()?.Trim().ToUpperInvariant() ?? string.Empty;
+                if (statusStr != "CONCLUÍDO" && statusStr != "CONCLUIDO")
+                    return Invalid("MANIFEST_NOT_COMPLETED");
+
+                if (!root.TryGetProperty("sob_id", out JsonElement sobIdElem) ||
+                    sobIdElem.ValueKind != JsonValueKind.String ||
+                    !TryNormalizeSobId(sobIdElem.GetString(), out string manifestSobId))
+                    return Invalid("MANIFEST_SOB_ID_INVALID");
+
+                if (!root.TryGetProperty("base_dwg", out JsonElement baseDwgElem) ||
+                    baseDwgElem.ValueKind != JsonValueKind.String)
+                    return Invalid("PROJECT_DWG_UNVERIFIABLE");
+
+                string? baseDwgRaw = baseDwgElem.GetString();
+                if (string.IsNullOrWhiteSpace(baseDwgRaw))
+                    return Invalid("PROJECT_DWG_UNVERIFIABLE");
+
+                string manifestDwgCanonical;
+                try
+                {
+                    manifestDwgCanonical = Path.IsPathRooted(baseDwgRaw)
+                        ? Path.GetFullPath(baseDwgRaw)
+                        : Path.GetFullPath(Path.Combine(sobRoot, baseDwgRaw));
+                }
+                catch (Exception)
+                {
+                    return Invalid("PROJECT_DWG_UNVERIFIABLE");
+                }
+
+                if (!string.Equals(manifestDwgCanonical, fullDwgPath, StringComparison.OrdinalIgnoreCase))
+                    return Invalid("BASE_DWG_MISMATCH");
+
+                if (HasConflictingIdentities(sobRoot, fullDwgPath, manifestSobId))
+                    return Ambiguous("CONFLICTING_SOB_IDENTITIES");
+
+                return Bound(manifestSobId);
+            }
+        }
+
+        private static bool HasConflictingIdentities(string sobRoot, string activeDwgPath, string expectedSobId)
+        {
+            try
+            {
+                foreach (string otherDwg in Directory.EnumerateFiles(sobRoot, "*.dwg", SearchOption.TopDirectoryOnly))
+                {
+                    string otherCanonical = Path.GetFullPath(otherDwg);
+                    if (string.Equals(otherCanonical, activeDwgPath, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    string otherFileName = Path.GetFileNameWithoutExtension(otherDwg);
+                    if (TryExtractSobCandidate(otherFileName, out string candidateSobId))
+                    {
+                        if (!string.Equals(candidateSobId, expectedSobId, StringComparison.Ordinal))
+                            return true;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            try
+            {
+                foreach (string subDir in Directory.EnumerateDirectories(sobRoot, "*", SearchOption.TopDirectoryOnly))
+                {
+                    string subManifest = Path.Combine(subDir, ".sob_state.json");
+                    if (File.Exists(subManifest))
+                    {
+                        try
+                        {
+                            using JsonDocument subDoc = JsonDocument.Parse(File.ReadAllText(subManifest));
+                            if (subDoc.RootElement.TryGetProperty("sob_id", out JsonElement subSobElem) &&
+                                subSobElem.ValueKind == JsonValueKind.String &&
+                                TryNormalizeSobId(subSobElem.GetString(), out string subSobId))
+                            {
+                                if (!string.Equals(subSobId, expectedSobId, StringComparison.Ordinal))
+                                    return true;
+                            }
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            return false;
+        }
+
+        public static bool TryExtractSobCandidate(string text, out string candidate)
+        {
+            candidate = string.Empty;
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            var matchDwg = Regex.Match(
+                text, @"^[A-Za-z]{2}_([A-Za-z0-9_\-]+)_DESENHO$", RegexOptions.IgnoreCase);
+            if (matchDwg.Success && TryNormalizeSobId(matchDwg.Groups[1].Value, out candidate))
+                return true;
+
+            var matchAlfa = Regex.Match(
+                text, @"(?:^|[^A-Za-z0-9])([A-Za-z][0-9]{8,12})(?:[^A-Za-z0-9]|$)", RegexOptions.IgnoreCase);
+            if (matchAlfa.Success && TryNormalizeSobId(matchAlfa.Groups[1].Value, out candidate))
+                return true;
+
+            if (TryNormalizeSobId(text, out candidate))
+                return true;
+
+            return false;
         }
     }
 }

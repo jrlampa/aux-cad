@@ -177,3 +177,12 @@ Após a consolidação da baseline P0/P1 (commit `5be84a7`), um teste real opera
 2. **Identidade da SOB vs Artefatos**: Múltiplos arquivos pertencentes à mesma SOB (`{SOB}`, `{SOB}_CROQUI.pdf`, `{SOB}_FOTOS.zip`) eram interpretados erroneamente como conflito de SOBs distintas (`SobConflictError`). Corrigido com a resolução prioritária de artefatos da mesma SOB sem falso conflito.
 
 Essa correção pontual preserva integralmente os contratos de segurança, Local-First e rollback estabelecidos em P0/P1, sem reabertura dos gates ou alteração arquitetural.
+
+### 7. Nota Operacional: Correção de Lacuna no Binding PREPARAR SOB -> DWG e Eliminação de Falso ARTIFACT_NOT_VERIFIED (2026-10-01)
+Após a validação do hotfix SharePoint, um teste manual real no AutoCAD 2026 com o comando `PREPARAR SOB` identificou que o DWG gerado por cópia física de `modelos/prancha.dwg` abria sem o XRecord `AUXCAD_PROJECT_SCOPE`, fazendo com que `AtualizarContextoAsync` abortasse com 'Contexto não identificado' e mantivesse os botões de engenharia desabilitados. Concomitantemente, a ação `sob` no CLI gerava indevidamente `ARTIFACT_NOT_VERIFIED`.
+Foi implementada uma reconciliação controlada e segura no Host AutoCAD (`ProjectScopeContract.ReconcileCompletedManifest` e `DwgProjectScopeStore.TryReconcile`):
+1. **Ponte Explícita e Segura**: Valida a evidência upstream do manifesto `.sob_state.json` (status `CONCLUÍDO`, `sob_id` válido, caminho canônico de `base_dwg` estritamente idêntico ao DWG ativo, DWG existente fisicamente e ausência de identidades concorrentes na pasta).
+2. **Binding Determinístico**: Sob essas condições comprovadas, o Host grava `AUXCAD_PROJECT_SCOPE` com `document.LockDocument()`, persiste no `NamedObjectsDictionary`, consulta o contexto operacional e habilita todos os botões de ação técnica (`_projectScopeResolved == true`).
+3. **Resiliência de Atualizar Contexto**: O botão `🔄 Atualizar Contexto` consegue restabelecer o contexto tanto a partir do binding já persistido quanto via reconciliação inequívoca de manifesto.
+4. **Contrato do CLI de SOB**: `_artefato_sob_gerado` em `workspace_context_cli.py` valida as evidências reais de conclusão da ação `sob`, eliminando o falso erro de auditoria.
+Status: **P2 PERMANECE SUSPENSA**.

@@ -186,6 +186,103 @@ def test_acao_sob_executa_via_dispatcher(mock_sob, tmp_path):
     mock_sob.assert_called_once()
 
 
+@patch("workspace.workspace_actions.WorkspaceActionDispatcher.executar_sob")
+def test_acao_sob_concluida_com_manifesto_valido_nao_gera_artifact_not_verified(mock_sob, tmp_path):
+    """Requisito F: sob com sucesso + manifesto concluído -> não gerar ARTIFACT_NOT_VERIFIED."""
+    from workspace.workspace_context_cli import executar_acao_operacional
+
+    mock_proc = MagicMock()
+    mock_proc.pid = 7777
+    mock_proc.wait.return_value = 0
+
+    pasta_sob = tmp_path / "A057526153"
+    pasta_sob.mkdir()
+    dwg = pasta_sob / "A057526153.dwg"
+    dwg.write_text("dummy dwg content", encoding="utf-8")
+    manifesto = pasta_sob / ".sob_state.json"
+    manifesto.write_text(
+        json.dumps({
+            "status": "CONCLUÍDO",
+            "sob_id": "A057526153",
+            "base_dwg": str(dwg),
+        }),
+        encoding="utf-8",
+    )
+
+    def _fake_executar_sob(*args, **kwargs):
+        res_json = kwargs.get("resultado_json")
+        if res_json:
+            Path(res_json).write_text(json.dumps({
+                "sucesso": True,
+                "status": "CONCLUÍDO",
+                "SOB_ID": "A057526153",
+                "SOB_ROOT": str(pasta_sob),
+                "BASE_DWG": str(dwg),
+                "manifesto_path": str(manifesto),
+            }), encoding="utf-8")
+        return mock_proc
+
+    mock_sob.side_effect = _fake_executar_sob
+
+    res = executar_acao_operacional(
+        "sob",
+        root_dir=str(tmp_path),
+        sob_id_esperada="A057526153",
+        wait_for_completion=True,
+    )
+
+    assert res["sucesso"] is True
+    assert res["estado"] == "Concluído"
+    assert res["exit_code"] == 0
+    assert res["erro"] is None
+    assert "entregável verificado" in res["mensagem"]
+
+
+@patch("workspace.workspace_actions.WorkspaceActionDispatcher.executar_sob")
+def test_acao_sob_exit_code_diferente_de_zero_falha(mock_sob, tmp_path):
+    """Requisito G: sob com exit code diferente de zero -> continuar sendo falha."""
+    from workspace.workspace_context_cli import executar_acao_operacional
+
+    mock_proc = MagicMock()
+    mock_proc.pid = 8888
+    mock_proc.wait.return_value = 1
+    mock_sob.return_value = mock_proc
+
+    res = executar_acao_operacional(
+        "sob",
+        root_dir=str(tmp_path),
+        wait_for_completion=True,
+    )
+
+    assert res["sucesso"] is False
+    assert res["estado"] == "Falhou"
+    assert res["exit_code"] == 1
+    assert "Exit code 1" in (res.get("erro") or "")
+
+
+@patch("workspace.workspace_actions.WorkspaceActionDispatcher.executar_sob")
+def test_acao_sob_exit_zero_sem_manifesto_gera_artifact_not_verified(mock_sob, tmp_path):
+    """Valida que exit code 0 sem evidências válidas resulta em ARTIFACT_NOT_VERIFIED."""
+    from workspace.workspace_context_cli import executar_acao_operacional
+
+    mock_proc = MagicMock()
+    mock_proc.pid = 9999
+    mock_proc.wait.return_value = 0
+    mock_sob.return_value = mock_proc
+
+    res = executar_acao_operacional(
+        "sob",
+        root_dir=str(tmp_path),
+        sob_id_esperada="A057999999",
+        wait_for_completion=True,
+    )
+
+    assert res["sucesso"] is False
+    assert res["estado"] == "Falhou"
+    assert res["exit_code"] == 0
+    assert res["erro"] == "ARTIFACT_NOT_VERIFIED"
+
+
 # ==============================================================================
 # 2. Teste da Ação Unifilar (Interação Necessária no AutoCAD)
 # ==============================================================================

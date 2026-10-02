@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="../../oxcad/ContextRefreshGate.cs" Link="ContextRefreshGate.cs" />
     <Compile Include="../../oxcad/OxCadExecution.cs" Link="OxCadExecution.cs" />
+    <Compile Include="../../mapa_cad_paleta/ProjectScope.cs" Link="ProjectScope.cs" />
   </ItemGroup>
 </Project>

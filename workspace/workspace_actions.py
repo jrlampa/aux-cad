@@ -455,6 +455,7 @@ class WorkspaceActionDispatcher:
         cls,
         workspace: Optional[ProjectWorkspace] = None,
         base_dir: Optional[Path] = None,
+        resultado_json: Optional[Union[str, Path]] = None,
     ) -> List[str]:
         """
         Monta a lista de argumentos de execução do preparador oficial SOB conforme
@@ -465,10 +466,13 @@ class WorkspaceActionDispatcher:
         if not sob_script.exists():
             raise FileNotFoundError(f"Launcher oficial da SOB não encontrado em: {sob_script}")
 
-        return [
+        cmd = [
             sys.executable,
             str(sob_script),
         ]
+        if resultado_json:
+            cmd.extend(["--resultado-json", str(resultado_json)])
+        return cmd
 
     @classmethod
     def executar_sob(
@@ -477,18 +481,26 @@ class WorkspaceActionDispatcher:
         base_dir: Optional[Path] = None,
         correlation_id: Optional[str] = None,
         execution_id: Optional[str] = None,
+        resultado_json: Optional[Union[str, Path]] = None,
     ) -> subprocess.Popen:
         """
         Inicia o diálogo interativo do Preparador de SOB oficial em subprocesso desacoplado,
         sem bloquear a interface do Workspace.
         """
-        cmd = cls.montar_comando_sob(workspace=workspace, base_dir=base_dir)
-        return cls._lancar_processo(
+        cmd = cls.montar_comando_sob(
+            workspace=workspace,
+            base_dir=base_dir,
+            resultado_json=resultado_json,
+        )
+        proc = cls._lancar_processo(
             cmd,
             cwd=base_dir or BASE_DIR,
             correlation_id=correlation_id,
             execution_id=execution_id,
         )
+        if resultado_json:
+            setattr(proc, "resultado_json_path", Path(resultado_json).resolve())
+        return proc
 
     @classmethod
     def montar_comando_ambiental(

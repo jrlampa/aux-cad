@@ -925,3 +925,44 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - **Download Validado Fisicamente**:
   - Validação estrita mantida via `validar_download` e `_aguardar_e_processar_download`: descompactação atômica de ZIPs, nivelamento da estrutura para `CROQUI/`, verificação de integridade física e rejeição de arquivos temporários (`.crdownload`, `.tmp`) ou com 0 bytes.
   - Teste real com SOB `A057526153` e Base `RE`: download concluído e validado fisicamente em disco (`CROQUI/` populado com PDF de 1.6 MB, fotos em ZIP de 3.0 MB e imagens de campo).
+
+### 28. Correção Controlada: Reconciliação do Binding de Contexto PREPARAR SOB e Eliminação do Falso ARTIFACT_NOT_VERIFIED (2026-10-01)
+- **Causa Raiz Diagnosticada**:
+  - `PREPARAR SOB` cria o DWG copiando o template base e abre-o via `os.startfile`, porém o template inicial não continha o XRecord `AUXCAD_PROJECT_SCOPE`.
+  - Ao carregar/ativar o DWG, `AtualizarContextoAsync` lia `Unbound` e abortava imediatamente antes de consultar o contexto operacional Python, mantendo `_projectScopeResolved = false` e desabilitando os botões de engenharia.
+  - Em `workspace_context_cli.py`, a ação `sob` com `exit_code == 0` caía no `else` da verificação de entregáveis técnicos, gerando indevidamente `ARTIFACT_NOT_VERIFIED`.
+- **Ponte Explícita e Segura de Reconciliação Host -> Manifesto**:
+  - Implementada em `ProjectScopeContract.ReconcileCompletedManifest` e `DwgProjectScopeStore.TryReconcile`:
+    - Reconciliação baseada na evidência upstream do manifesto `.sob_state.json` gerado pela preparação;
+    - Validação estrita de status `CONCLUÍDO`, extração e normalização do `sob_id`;
+    - Comparação de caminho canônica estrita entre `base_dwg` e o arquivo DWG ativo;
+    - Detecção e bloqueio de identidades conflitantes na pasta (`Ambiguous`);
+    - Escrita protegida com `document.LockDocument()` e `DwgProjectScopeStore.Write(database, sobId)`;
+    - Salvamento controlado com `TryControlledSave` prevenindo conflitos de concorrência com o editor.
+- **Garantia Operacional de `ATUALIZAR CONTEXTO`**:
+  - Tanto na ativação/abertura do documento quanto no clique manual em `🔄 Atualizar Contexto`, o fluxo reconcilia manifestos válidos ou lê bindings já persistidos, propagando `_projectScopeResolved = true` e habilitando os botões de ação técnica.
+- **Correção da Ação `sob` no CLI**:
+  - Criado `_artefato_sob_gerado` em `workspace_context_cli.py`, validando a integridade do manifesto `.sob_state.json`, status `CONCLUÍDO`, `base_dwg` existente no disco com tamanho > 0 e estrutura de pastas coerente.
+- **Status do Roadmap**: **P2 PERMANECE SUSPENSA**.
+
+### 32. Correção Operacional: Resolução Determinística e Atestação de Artefato da Ação SOB (2026-10-01)
+- **Motivação e Diagnóstico da Causa Raiz**:
+  - Na validação operacional no AutoCAD 2026, a ação `PREPARAR SOB` concluiu com sucesso, abriu o DWG e realizou o binding de contexto perfeitamente.
+  - Entretanto, o monitoramento da ação registrou `ARTIFACT_NOT_VERIFIED` apesar de `exit_code=0`.
+  - Causa raiz: `workspace_context_cli.py::_artefato_sob_gerado()` tentava importar o módulo inexistente `sob.sob_config`. O erro era absorvido em bloco try/except e a rotina realizava fallback para `p_root` (que apontava para o diretório ativo do AutoCAD ou `models/`), buscando manifestos em diretório incorreto ou correndo o risco de atestar manifestos de projetos históricos.
+- **Implementação Realizada**:
+  1. **Propagação do Resultado Estruturado**:
+     - `sob/sob_manager.py` (`SobOrchestrator.executar`): Adicionado parâmetro opcional `resultado_json`. Ao finalizar com sucesso, registra `manifesto_path`, `SOB_ROOT`, `BASE_DWG`, `SOB_ID` e `sucesso` e grava atomicamente o JSON de resultado.
+     - `sob/sob_launcher_gui.py` (`SobLauncherDialog`, `lancar_dialogo_sob` e CLI): Suporte ao argumento `--resultado-json` / `--result-file`, repassando ao orquestrador e persistindo o resultado no disco ao término da execução.
+     - `workspace/workspace_actions.py` (`montar_comando_sob`, `executar_sob`): Aceita `resultado_json` e injeta a flag no CLI de inicialização da GUI.
+     - `workspace/workspace_context_cli.py` (`_executar_acao_operacional_impl`): Gera caminho temporário seguro para `resultado_json`, passa para `executar_sob()` e encaminha para `_artefato_sob_gerado()`. Suporta também parâmetro explícito `--caminho-explicito-sob`.
+  2. **Validação Física Determinística (Zero Varredura Aleatória)**:
+     - `_artefato_sob_gerado()` reescrito de forma estrita:
+       - Elimina completamente qualquer import de `sob.sob_config` ou varredura de subpastas/histórico.
+       - Consome exclusivamente o caminho explícito retornado pela execução corrente (`resultado_json` ou `caminho_explicito`).
+       - Valida fisicamente: diretório existe; `.sob_state.json` existe com tamanho > 0; JSON parseável; `status == CONCLUÍDO`; `sob_id` válido e coerente; `base_dwg` existe, tem tamanho > 0 e localiza-se dentro da pasta da SOB.
+       - Rejeita determinística e imediatamente com `ARTIFACT_NOT_VERIFIED` caso o caminho não seja informado ou qualquer validação física falhe.
+  3. **Cobertura de Testes**:
+     - `tests/test_sob_artifact_verification.py`: Criada suíte com 7 testes dedicados cobrindo os cenários obrigatórios A a G (100% PASS).
+     - Suíte completa de testes do repositório: 737 passaram, 2 skipped (100% de sucesso).
+- **Status do Roadmap**: **P2 PERMANECE SUSPENSA**.
