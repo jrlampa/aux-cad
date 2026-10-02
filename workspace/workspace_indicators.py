@@ -45,6 +45,7 @@ try:
         formatar_segundos_hhmmss,
         processar_deliveries,
         processar_pending,
+        processar_reviews,
         processar_sob_state,
         processar_time,
         processar_versoes,
@@ -68,6 +69,7 @@ except ImportError:
         formatar_segundos_hhmmss,
         processar_deliveries,
         processar_pending,
+        processar_reviews,
         processar_sob_state,
         processar_time,
         processar_versoes,
@@ -232,19 +234,20 @@ class IndicadoresAnalyzer:
             dados_time = processar_time(self.project_root, sob_resolvida, self.collector)
             dados_versoes = processar_versoes(self.project_root, self.collector)
             dados_sob_state = processar_sob_state(self.project_root, sob_resolvida, self.collector)
+            dados_reviews = processar_reviews(self.project_root, sob_resolvida, self.collector)
 
             if sob_resolvida:
                 projetos_observados.append(sob_resolvida)
 
-            blocos_status = [
+            blocos_status_base = [
                 dados_pending.get("status"),
                 dados_deliveries.get("status"),
                 dados_time.get("status"),
                 dados_versoes.get("status"),
                 dados_sob_state.get("status"),
             ]
-            tem_fontes_duraveis_ok = any(st == "OK" for st in blocos_status)
-            tem_fontes_duraveis_ausentes = any(st == "NÃO DISPONÍVEL" for st in blocos_status)
+            tem_fontes_duraveis_ok = any(st == "OK" for st in blocos_status_base) or dados_reviews.get("status") == "OK"
+            tem_fontes_duraveis_ausentes = any(st == "NÃO DISPONÍVEL" for st in blocos_status_base)
 
         elif self.workspace_root:
             (
@@ -255,6 +258,7 @@ class IndicadoresAnalyzer:
                 dados_sob_state,
                 projetos_observados,
             ) = processar_workspace_consolidado(self.workspace_root, self.collector)
+            dados_reviews = bloco_nao_disponivel("CONSOLIDACAO_NAO_SUPORTADA", {"total_revisoes": None, "iniciadas": None, "aprovadas": None, "alteracoes_solicitadas": None, "rejeitadas": None, "canceladas": None, "substituidas": None, "findings_total": None, "findings_por_severidade": None, "entregas_vinculadas": None}, proveniencia=PROVENIENCIA_FONTES.get("revisoes", ".oxcad/reviews.json"))
 
             tem_fontes_duraveis_ok = len(projetos_observados) > 0
             tem_fontes_duraveis_ausentes = len(projetos_observados) == 0
@@ -265,6 +269,7 @@ class IndicadoresAnalyzer:
             dados_time = bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {"estado": None, "tempo_acumulado_segundos": None, "tempo_acumulado_formatado": None, "total_sessoes": None}, proveniencia=PROVENIENCIA_FONTES["tempo_operacional"])
             dados_versoes = bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {"total_snapshots": None}, proveniencia=PROVENIENCIA_FONTES["versoes"])
             dados_sob_state = bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {"sob_id": None, "estado_preparacao": None, "duracao_segundos": None, "data_inicio": None, "data_fim": None}, proveniencia=PROVENIENCIA_FONTES["sob_manifesto"])
+            dados_reviews = bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {"total_revisoes": None, "iniciadas": None, "aprovadas": None, "alteracoes_solicitadas": None, "rejeitadas": None, "canceladas": None, "substituidas": None, "findings_total": None, "findings_por_severidade": None, "entregas_vinculadas": None}, proveniencia=PROVENIENCIA_FONTES.get("revisoes", ".oxcad/reviews.json"))
 
         if self.log_file:
             self.collector.registrar_limitacao(
@@ -307,6 +312,7 @@ class IndicadoresAnalyzer:
             "tempo_operacional": dados_time,
             "versoes": dados_versoes,
             "sob_manifesto": dados_sob_state,
+            "revisoes": dados_reviews,
             "qualidade_dados": {
                 "cobertura": cobertura,
                 "inicio_observado": periodo_obs.get("inicio"),

@@ -34,6 +34,7 @@ PROVENIENCIA_FONTES: Dict[str, str] = {
     "entregas": ".oxcad/deliveries/",
     "tempo_operacional": ".oxcad/time.json",
     "versoes": ".auxcad_versions/",
+    "revisoes": ".oxcad/reviews.json",
 }
 
 

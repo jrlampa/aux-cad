@@ -945,6 +945,52 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Criado `_artefato_sob_gerado` em `workspace_context_cli.py`, validando a integridade do manifesto `.sob_state.json`, status `CONCLUÍDO`, `base_dwg` existente no disco com tamanho > 0 e estrutura de pastas coerente.
 - **Status do Roadmap**: **P2 PERMANECE SUSPENSA**.
 
+### 29. Correção Operacional: Resolução Resiliente de Template do Módulo CQT (2026-10-01)
+- **Causa Raiz Diagnosticada**:
+  - `cqt/cqt_cad_extractor.lsp` nos comandos `CQTCAD` e `CQTUI`, bem como `cqt/cqt_excel_io.py`, continham caminho quebrado com pasta duplicada: `G:\Meu Drive\1-HBT\HBT\SETEMBRO\CQT TRECHO.xlsm`.
+  - Ao invocar `CQTCAD`, o script LISP passava esse caminho como primeiro argumento (`sys.argv[1]`) para `cqt/cqt_excel_manager.py`.
+  - `cqt_excel_manager.py` recebia o argumento sem validar sua existência física, sobrescrevendo o template padrão por um caminho inválido.
+  - Ao clicar no botão de gravação da planilha, `update_cqt_excel` disparava `FileNotFoundError: Template não encontrado: G:\Meu Drive\1-HBT\HBT\SETEMBRO\CQT TRECHO.xlsm`, interrompendo o fluxo com modal de erro.
+- **Correções Implementadas**:
+  - `cqt/cqt_cad_extractor.lsp`: busca em cascata de modelos iniciada estritamente por `modelos\cqt_modelo.xlsm` (oficial local do repositório) e fallbacks válidos no drive (`04_MODELOS` e `05_PROJETOS_HISTORICOS`), eliminando a referência quebrada. Se nenhum for encontrado no AutoLISP, passa string vazia para resolução interna no Python.
+  - `cqt/cqt_excel_io.py`: remoção do caminho inválido de `candidate_paths` em `get_default_template_path()`.
+  - `cqt/cqt_excel_manager.py`: fallback automático, defensivo e transparente para `DEFAULT_TEMPLATE_PATH` (`modelos/cqt_modelo.xlsm`) tanto no parser de `__main__` (preservando o template oficial caso o argumento aponte para arquivo inexistente), quanto no construtor `CQTManagerGUI` e no momento da gravação em `_on_gravar()`.
+- **Status do Roadmap**: **P2 PERMANECE SUSPENSA**.
+
+### 30. Otimização Operacional: Varredura de Artefatos em Subpastas do Projeto (2026-10-01)
+- **Motivação e Causa Raiz**:
+  - Em projetos reais de engenharia, artefatos como checklist e memorial ambiental (`CHECKLIST_{SOB}.xlsx`), orçamento (`ORCAMENTO_{SOB}.xlsx`), estudos elétricos e documentos são frequentemente organizados em subpastas departamentais (`LIC.AMB/`, `ORCAMENTO/`, `DOCUMENTOS/`, `ANEXOS/`, `FINANCEIRO/CPFC`, etc.).
+  - O `WorkspaceScanner.detectar_arquivo_por_padroes` utilizava exclusivamente `root_dir.glob(...)`, varrendo apenas o diretório raiz da SOB. Consequentemente, arquivos existentes em subpastas eram ignorados e exibidos como ausentes na paleta OXCAD.
+- **Implementação Otimizada**:
+  - `WorkspaceScanner._listar_pastas_busca`: Varredura em profundidade controlada (`max_depth = 3`) que lista a raiz e subpastas válidas, excluindo pastas ocultas e de infraestrutura (`.oxcad`, `.git`, `.venv`, `__pycache__`, etc.). A lista é computada uma única vez por varredura `scan()`.
+  - `detectar_arquivo_por_padroes`: Prioriza arquivos na raiz e, caso não localizados, estende a busca determinística às subpastas para o mesmo padrão (preservando precedência da SOB exata sobre padrões genéricos e ordenando por `st_mtime` mais recente).
+  - `detectar_dwg_principal`, `detectar_croqui` e `detectar_documentos`: Adaptados para inspecionar subpastas de forma resiliente.
+  - `workspace_context_cli._capturar_arquivos_execucao`: Atualizado para utilizar `_listar_pastas_busca`, garantindo coerência no snapshot pré/pós execução.
+- **Cobertura de Testes**:
+  - `tests/test_workspace.py::TestWorkspaceScanner::test_deteccao_artefatos_em_subpastas`: Cobertura completa de localização em subpastas aninhadas (100% PASS).
+- **Status do Roadmap**: **P2 PERMANECE SUSPENSA**.
+
+### 31. Correção Operacional: Resolução de Template e Subpasta Canônica LIC.AMB no Módulo Ambiental (2026-10-01)
+- **Motivação e Diagnóstico da Causa Raiz**:
+  - Usuário reportou que o Memorial Ambiental chamado pelo OXCAD não estava sendo salvo na pasta esperada ou não era gerado.
+  - Análise dos logs (`logs/errors.jsonl`) e do histórico de execução da ação `ambiental` revelou quatro causas fundamentais:
+    1. **Template DOCX Inacessível**: Caminho configurado no código (`G:\Meu Drive\1-HBT\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx`) não existia. O caminho real no drive era `G:\Meu Drive\1-HBT\04_MODELOS\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx`. O gerador exibia aviso de modelo não localizado e abortava a criação do `.docx`.
+    2. **Pasta de Destino Sem Segmentação**: O OXCAD direcionava `out_dir` para a raiz da SOB, salvando o checklist na raiz em vez da subpasta canônica departamental (`LIC.AMB`), padrão histórico de todas as obras da HBT/Enel.
+    3. **Supressão Automática do Memorial Sem Restrições**: Quando o KMZ não acusava restrições cartográficas, o gerador dispensava incondicionalmente o Memorial Descritivo sem fornecer controle visual ao projetista.
+    4. **Auditoria Monotemática**: `_artefato_tecnico_gerado` inspecionava apenas `checklist_ambiental`, ignorando o Memorial Descritivo na verificação de entregáveis válidos.
+- **Implementação Realizada**:
+  - `workspace_actions.montar_comando_ambiental`:
+    - Resolução em cascata de templates Word (`04_MODELOS`, `SETEMBRO`, `ambiental/modelos/` e raiz do drive).
+    - Detecção automática de subpastas ambientais (`LIC.AMB`, `Licen.Ambiental`, `LICEN.AMBIENTAL`) ou criação de `LIC.AMB` quando o diretório for uma SOB (presença de `.sob_state.json` ou DWGs).
+  - `memorial_ambiental_generator.py`:
+    - `determinar_pasta_saida`: Prioriza subpastas ambientais existentes ou cria e adota `LIC.AMB` para projetos de engenharia.
+    - `MemorialGUI.__init__` e `_on_gerar`: Resolução resiliente de template com fallbacks determinísticos.
+    - `_build_interface`: Adicionado checkbox interativo `Gerar também o Memorial Descritivo (.docx)` no card informativo de áreas sem restrição, permitindo emissão opcional conforme a necessidade do projeto.
+  - `workspace_context_cli._artefato_tecnico_gerado`:
+    - Atualizado `campos["ambiental"]` para aceitar `("checklist_ambiental", "memorial_ambiental")`.
+  - Cópia oficial do template adicionada em `ambiental/modelos/MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx` (120 KB) garantindo operação Local-First mesmo offline.
+- **Status do Roadmap**: **P2 PERMANECE SUSPENSA**.
+
 ### 32. Correção Operacional: Resolução Determinística e Atestação de Artefato da Ação SOB (2026-10-01)
 - **Motivação e Diagnóstico da Causa Raiz**:
   - Na validação operacional no AutoCAD 2026, a ação `PREPARAR SOB` concluiu com sucesso, abriu o DWG e realizou o binding de contexto perfeitamente.
@@ -1023,7 +1069,7 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Recusa com `status = "NAO_DETERMINADA"` caso haja divergência de identidade, escopos incompatíveis, fontes indisponíveis ou truncamento por rotação de log.
 - **Cobertura de Testes**:
   - `tests/test_oxcad_indicators_quality.py`: 20 cenários contratuais cobrindo todos os requisitos funcionais do P2.3 (100% PASS).
-  - Suíte completa do repositório: 794 passaram, 3 skipped (100% de sucesso).
+  - Suíte completa do repositório: 795 passaram, 2 skipped (100% de sucesso).
 - **Status do Roadmap**: **P2.3 CONCLUÍDO**.
 
 ### 36. Decisão Arquitetural e Implementação: P2.4 — Plataforma de Integração e Extensibilidade (2026-10-02)
@@ -1063,7 +1109,6 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Suíte completa do repositório: 834 passaram, 3 skipped (100% de sucesso).
 - **Status do Roadmap**: **P2.4 CONCLUÍDO**.
 
-
 ### 37. Decisão Arquitetural e Implementação: P2.5 — Validação de Campo e Operação Resiliente/Offline (2026-10-02)
 - **Motivação e Diretrizes**:
   - Habilitação da operação contínua e resiliente do OXCAD em condições de conectividade inexistente (`OFFLINE`) ou parcial (`DEGRADED`), preservando estritamente a autoridade do AutoCAD sobre o DWG (`FingerprintGuid`, `AUXCAD_PROJECT_SCOPE`, `SOB_ID`), o histórico, as evidências e o rastreamento técnico.
@@ -1089,4 +1134,36 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - **Cobertura de Testes**:
   - `tests/test_oxcad_field_offline.py`: 30 cenários contratuais cobrindo todas as 30 exigências da especificação P2.5 (100% PASS).
   - Suíte completa do repositório: 864 passaram, 3 skipped (100% de sucesso).
-- **Status do Roadmap**: **P2.5 CONCLUÍDO; P2.6 AINDA NÃO INICIADO**.
+- **Status do Roadmap**: **P2.5 CONCLUÍDO**.
+
+### 38. Decisão Arquitetural e Implementação: P2.6 — Revisão Técnica, Governança de Entrega e Rastreabilidade Operacional (2026-10-02)
+- **Motivação e Diretrizes**:
+  - Fechamento do ciclo ponta a ponta: `Projeto → Execução → Validação → Evidências → Pendências → Revisão → Aprovação → Entrega`.
+  - Separação explícita e determinística de cinco conceitos fundamentais:
+    1. `REVISION`: Qual versão/revisão técnica do projeto está sob análise (`RevisionId`, `SourceSnapshotId`, hash de snapshot).
+    2. `REVIEW`: Processo formal de análise técnica (`ReviewId`, achados, referências a evidências e pendências, histórico auditável).
+    3. `APPROVAL`: Decisão formal sobre a revisão (`ApprovalId`, operador, parecer, revogabilidade, integridade da versão analisada).
+    4. `DELIVERY`: Pacote físico formalmente preparado para entrega (`PackageId`, manifesto, checksums).
+    5. `REVOCATION`: Invalidação posterior auditável de uma aprovação ou entrega sem expurgo de histórico.
+  - Princípio de não-equivalência estrita: `REVIEW != APPROVAL != DELIVERY != SYNC`.
+- **Implementação Realizada**:
+  - `workspace/workspace_review.py`:
+    - Contratos e enums: `ReviewStatus` (`DRAFT`, `IN_REVIEW`, `CHANGES_REQUIRED`, `APPROVED`, `REJECTED`, `SUPERSEDED`, `CANCELLED`), `FindingSeverity` (`INFO`, `MINOR`, `MAJOR`, `CRITICAL`), `FindingStatus` (`OPEN`, `RESOLVED`, `WAIVED`), `GateEligibilityStatus` (`ELIGIBLE`, `NOT_ELIGIBLE`).
+    - Matriz determinística de transições de estado (`REVIEW_TRANSITIONS`). Transições arbitrárias ou retorno direto de `APPROVED` para `DRAFT` estritamente bloqueadas.
+    - Persistência atômica com file lock (`reviews.lock`) em `.oxcad/reviews.json`.
+    - Gestão de Achados Técnicos (`ReviewFinding`): não duplica pendências; quando o achado demanda trabalho operacional, associa-se a pendência existente ou cria pendência autoritativa via `workspace_pending.create` (`.oxcad/pending.json`).
+    - Gate de Aprovação (`evaluate_approval_gate`): verificação determinística e sem heurísticas de 10 dimensões de integridade (identidade SOB/DWG/Fingerprint, existência do DWG, snapshot válido, evidências referenciadas íntegras com hash SHA-256, inexistência de findings CRITICAL/MAJOR abertos, inexistência de pendências bloqueantes, pacote de entrega compatível). Retorno estruturado com razões impeditivas.
+    - Fluxo de Aprovação e Revogação: reutilização de contratos P1.4 (`workspace_delivery.generate`), vinculação estrita à revisão exata, preservação imutável de histórico de eventos.
+    - Rastreabilidade ponta a ponta (`build_traceability_chain`): cadeia verificável `SOB_ID` → `DWG/Fingerprint` → `Revision` → `Snapshot` → `Review` → `Finding` → `Pending` → `Approval` → `Delivery`.
+    - Operação 100% offline e local-first: zero dependências de rede externa, zero credenciais ou tokens.
+  - `oxcad/governance/ReviewContracts.cs`:
+    - Modelos de dados e contratos C# em `.NET` para a paleta OXCAD e integração de governança.
+  - `oxcad/OxCadControl.RevisaoTecnica.cs` & `oxcad/OxCadControl.xaml`:
+    - Seção "REVISÃO TÉCNICA" na paleta WPF do AutoCAD exibindo metadados de identidade e revisão, badges de status, contadores de achados por severidade, pendências impeditivas, resultado do Gate de Aprovação e ações operacionais (`INICIAR REVISÃO`, `REGISTRAR ACHADO`, `SOLICITAR ALTERAÇÕES`, `APROVAR`, `REJEITAR`, `CANCELAR`).
+    - Ação `APROVAR` bloqueada via binding quando `GateEligible != true` ou estado diferente de `IN_REVIEW`.
+  - `workspace/workspace_indicator_stores.py`, `workspace/workspace_indicators.py`, `workspace/workspace_indicator_quality.py`:
+    - Função `processar_reviews` integrando métricas puramente derivadas (revisões iniciadas, aprovadas, alterações solicitadas, rejeitadas, canceladas, achados por severidade, entregas vinculadas) sem contadores paralelos e preservando integridade das métricas históricas de P2.1–P2.3.
+- **Cobertura de Testes**:
+  - `tests/test_oxcad_review_governance.py`: 35 testes contratuais específicos cobrindo todos os requisitos obrigatórios do P2.6 (100% PASS).
+  - `tests/oxcad_context_gate/Program.cs`: Validação de contratos C# e cadeia de rastreabilidade no harness (100% PASS).
+- **Status do Roadmap**: **P2.6 CONCLUÍDO; P2.7 AINDA NÃO INICIADO**.

@@ -45,37 +45,15 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Seletor Visual de Destino no Módulo Ambiental**: Campo editável e botão "Procurar..." (`filedialog.askdirectory`) no formulário do Memorial Descritivo/Checklist Ambiental, permitindo ao projetista definir a pasta de saída dos documentos técnicos com um clique.
 - **Proteção de Escrita e Rejeição de Diretórios do Sistema**: Mecanismo `is_safe_writable_dir` e `determinar_pasta_saida` que rejeita gravação em `C:\Windows\System32`, `C:\Windows`, `C:\Program Files` e raiz de disco, redirecionando automaticamente para a pasta do DWG, Desktop ou Temp.
 - **Resiliência a Concorrência de Arquivo (File Lock)**: Tratamento de `PermissionError` ao exportar `.xlsx` ou `.docx` abertos no Excel/Word, gerando cópia segura com sufixo de timestamp (`CHECKLIST_{SOB}_{HHMMSS}.xlsx`) sem travamento.
-- **Módulos Funcionais Consolidados**:
-  - `sob/`: Orquestrador de SOBs com busca no SharePoint, integração com GOMNET e fallback manual.
-  - `ambiental/`: Análise espacial de restrições via KMZ, desenho de caixas de alerta no AutoCAD, gerador de croqui de satélite, Checklist (.xlsx) e Memorial Descritivo (.docx).
-  - `mapa_cad_paleta/`: Paleta cartográfica OSM nativa via C# .NET/WPF/WebView2 com sincronização bidirecional ModelSpace $\leftrightarrow$ Leaflet.
-  - `cqt/`: Dimensionamento elétrico de condutores e quadros de carga com integração bidirecional Excel.
-  - `unifilar/`: Extração de árvore de proteção elétrica (SGT / SQLite local) e geração de diagrama unifilar vetorial.
-  - `orcamento/`: Extração quantitativa de materiais, kits de estruturas e mão de obra contratual com exportação `.xlsx` (sisORÇA).
-  - `dados_tecnicos/`: Tabelas normativas de esforços mecânicos BT/MT (SQLite3/JSON/AutoLISP) e cálculo de resultantes.
-  - `topografia/` e `prancha/`: Ferramentas topográficas e montagem automatizada de pranchas com carimbo.
-  - `cpfc/`: Motor de cálculo analítico e formulário da REN 1.059 ANEEL.
-
-### Changed
-- **AutoLISP `KMZCHECK`**: Normalização do caminho do desenho ativo via `(getvar "DWGPREFIX")` com remoção de barra invertida terminal (`vl-string-right-trim`), invocando o subprocesso via `cd /d "<dwg_dir>"` e repassando o diretório como argumento explícito.
-
-### Fixed
-- **SharePoint Modern & Resolução de Identidade da SOB**:
-  - `sob/sob_sharepoint.py`: Atualização do método `baixar_pasta_por_url` para compatibilidade com SharePoint Modern (Fluent UI), empregando seletores semânticos (`input[data-automationid='selection-checkbox']`, `input[aria-label*='Selecionar todas']`) e acionamento via JavaScript para ativar o botão 'Baixar' na barra de comandos.
-  - `sob/sob_sharepoint.py`: Resolução determinística de artefatos da SOB via `_resolver_itens_sob`, evitando falso `SobConflictError` quando a busca retorna pasta e arquivos (`.pdf`, `.zip`, imagens) da mesma SOB, priorizando a pasta canônica e croquis.
-  - Validação física de download comprovada em execução real com SOB `A057526153` (Base `RE`), com descompactação e nivelamento em `CROQUI/` sem falhas.
-- **Reconciliação do Binding de Contexto PREPARAR SOB & Eliminação do Falso ARTIFACT_NOT_VERIFIED**:
-  - `mapa_cad_paleta/ProjectScope.cs` & `mapa_cad_paleta/DwgProjectScopeStore.cs`: Adicionada ponte explícita `ReconcileCompletedManifest` e `TryReconcile` para vincular deterministamente o DWG aberto pelo `PREPARAR SOB` baseado na evidência upstream do `.sob_state.json` (status `CONCLUÍDO`, `base_dwg` canônico idêntico ao ativo, ausência de identidades concorrentes), gravando `AUXCAD_PROJECT_SCOPE` e propagando `_projectScopeResolved = true`.
-  - `oxcad/OxCadControl.xaml.cs`: `AtualizarContextoAsync` tenta reconciliação determinística antes de rejeitar escopos, habilitando os botões de ação e assegurando reconstrução íntegra no clique de `🔄 Atualizar Contexto`.
-  - `workspace/workspace_context_cli.py`: Adicionado `_artefato_sob_gerado`, corrigindo o contrato de verificação da ação `sob` para reconhecer processos concluídos com manifesto íntegro e eliminar falso `ARTIFACT_NOT_VERIFIED`.
-- **Deduplicação de Consultas no Traçado Cartográfico**: Eliminação da chamada redundante de contexto urbano em `tracado.js`, centralizando a aquisição de vias em `app.js` (raio unificado de 140m) e preservando a cobertura do vão.
-- **Crash STATUS_STACK_OVERFLOW no OXCAD (0xc00000fd)**: Eliminação definitiva de recursão infinita na paleta C# WPF através de controle de concorrência com `ContextRefreshGate.cs` e despacho assíncrono via `BeginInvoke` em `PaletteHost.cs`.
-- **Permissão Negada no Checklist Ambiental**: Correção do erro `[Errno 13] Permission denied: 'C:\Windows\System32\CHECKLIST_*.xlsx'` que ocorria quando o modelo Word não estava acessível e o processo AutoCAD iniciava o subprocesso sem diretório de trabalho definido.
-- **Prevenção de Falso Sucesso em Execuções Técnicas**: Subprocessos com `exit_code == 0` que não geram artefato físico não-vazio válido são marcados como falha (`ARTIFACT_NOT_VERIFIED`).
-- **Resiliência de Auditoria Síncrona**: `emitir_obrigatorio` e `registrar_evento_obrigatorio` com `os.fsync` forçado em `common/logging_config.py`.
-- **Persistência de Manifesto SOB**: Validação obrigatória do retorno de `gravar_manifesto_execucao` em `sob/sob_manager.py`.
-
-### Added (Baseline P0/P1)
+- **Revisão Técnica, Governança de Entrega e Rastreabilidade Operacional (P2.6)**:
+  - Separação explícita de cinco conceitos fundamentais: REVISION (versão técnica analisada), REVIEW (processo de análise técnica), APPROVAL (decisão formal), DELIVERY (pacote preparado) e REVOCATION (invalidação posterior auditável), respeitando a regra REVIEW != APPROVAL != DELIVERY != SYNC.
+  - Contrato formal de revisão técnica (TechnicalReview, ReviewContracts.cs, workspace/workspace_review.py) atrelado à autoridade estrita do AutoCAD (FingerprintGuid + AUXCAD_PROJECT_SCOPE + SOB_ID), com persistência atômica e lock em .oxcad/reviews.json.
+  - Matriz determinística de transições de estado (DRAFT, IN_REVIEW, CHANGES_REQUIRED, APPROVED, REJECTED, SUPERSEDED, CANCELLED) com bloqueio de transições arbitrárias.
+  - Gestão de achados técnicos (ReviewFinding) com severidades (INFO, MINOR, MAJOR, CRITICAL) e integração ao store autoritativo de pendências (.oxcad/pending.json) sem duplicação de dados.
+  - Gate determinístico de aprovação (valuate_approval_gate / ApprovalGateResult) validando integridade de identidade, snapshot, evidências com hash SHA-256, findings impeditivos e pendências ativas.
+  - Conexão do fluxo Review → Approval → Delivery reutilizando contratos de entrega P1.4 (workspace_delivery.generate), garantindo rastreabilidade ponta a ponta e auditabilidade de revogação.
+  - Painel visual 'REVISÃO TÉCNICA' na paleta WPF do AutoCAD (OxCadControl.xaml, OxCadControl.RevisaoTecnica.cs) com exibição de metadados, contadores, resultado do Gate e ações de governança.
+  - Suíte dedicada com 35 testes em 	ests/test_oxcad_review_governance.py (100% PASS) e validação no harness C#.
 - **Validação de Campo e Operação Resiliente/Offline (P2.5)**:
   - Arquitetura de resiliência e operação contínua com 4 dimensões explícitas de estado (`CoreStatus`, `ConnectivityMode`, `IntegrationAvailability`, `OperationalMode`).
   - Distinção rigorosa entre `OFFLINE` (núcleo local ativo, sincronização remota pendente) e `BLOCKED` (dependência estrita de integração externa indisponível ou núcleo inoperante).
@@ -92,13 +70,12 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Autenticação declarativa segura (`AuthenticationDescriptor`) sem armazenamento de segredos, senhas ou tokens.
   - Seção visual compacta "INTEGRAÇÕES" na paleta WPF do AutoCAD (`OxCadControl.xaml`, `OxCadControl.Integracoes.cs`) atualizada dinamicamente a partir do registry.
   - Suíte com 40 testes contratuais em `tests/test_oxcad_integrations.py` e asserções integradas no Harness C#.
-- **Qualidade, Histórico e Comparabilidade de Indicadores (P2.3)**:
-  - Módulo `workspace/workspace_indicator_quality.py` para classificação rigorosa de cobertura histórica (`COMPLETA`, `PARCIAL`, `LIMITADA_POR_ROTACAO`, `SEM_DADOS`, `IDENTIDADE_NAO_VERIFICAVEL`, `FONTE_INDISPONIVEL`).
-  - Módulo `workspace/workspace_indicator_stores.py` para leitura defensiva de fontes duráveis, modularizando o motor analítico para 731 linhas (respeitando o limite estrito de 750 linhas).
-  - Rastreamento estrito de proveniência de métricas (`proveniencia`) em cada bloco e auditoria granular de registros descartados por motivo.
-  - Avaliação metodológica de comparabilidade entre períodos sem banco de dados, calculando deltas observados descritivos e recusando comparações inválidas (`NAO_DETERMINADA`).
-  - Apresentação compacta na paleta WPF do AutoCAD (`OxCadControl.xaml`, `WorkspaceService.cs`) com metadados de qualidade, período, fontes e timestamp da consulta.
-  - Suíte de 20 testes dedicados em `tests/test_oxcad_indicators_quality.py` (100% PASS).
+- **Qualidade, Histórico e Interpretação Operacional dos Indicadores (P2.3)**:
+  - Classificação canônica de cobertura histórica (`COMPLETA`, `PARCIAL`, `LIMITADA_POR_ROTACAO`, `SEM_DADOS`, `IDENTIDADE_NAO_VERIFICAVEL`, `FONTE_INDISPONIVEL`).
+  - Mapeamento explícito de proveniência por bloco de dados e auditoria detalhada de registros descartados por filtros e integridade.
+  - Mecanismo descritivo de comparabilidade metodológica entre períodos sem banco de dados, reportando deltas observados ou `status: NAO_DETERMINADA` com motivo auditável em caso de restrições de cobertura ou identidade.
+  - Evolução do CLI com flags `--compare-start` e `--compare-end` e cards visuais compactos de cobertura na paleta WPF.
+  - Suíte de 20 testes dedicados em `tests/test_oxcad_indicators_quality.py`.
 - **Indicadores Operacionais e Visão Consolidada de Processo (P2.2)**:
   - Camada de consulta e apresentação de indicadores de processo (`workspace/workspace_indicators_cli.py`) suportando saídas em JSON estruturado e resumos amigáveis em console.
   - Integração assíncrona com a paleta WPF do AutoCAD (`OxCadControl.xaml`, `WorkspaceService.cs`) com cards de métricas de execução, duração P95, pendências, entregas e limitações de log rotativo, totalmente isolada de `OxCadExecution` e `OxCadExecutionRegistry`.

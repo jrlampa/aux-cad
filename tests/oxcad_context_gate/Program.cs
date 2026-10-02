@@ -314,6 +314,110 @@ try
         Assert(scopeFinal.SobId == "A057526153", "Final DWG SOB_ID deve ser A057526153.");
         Console.WriteLine($"Reconciliação operacional VALIDACAO_FINAL passou com sucesso: {scopeFinal.SobId} (IsBound={scopeFinal.IsBound}, Status={scopeFinal.Status})");
     }
+
+    // =========================================================================
+    // P2.6 GOVERNANÇA, REVISÃO TÉCNICA E RASTREABILIDADE
+    // =========================================================================
+    var rev = new OxCad.Governance.TechnicalReview(
+        reviewId: Guid.NewGuid().ToString("N"),
+        sobId: "A057526153",
+        projectRoot: testRoot,
+        dwgPath: Path.Combine(testRoot, "PE_A057526153_DESENHO.dwg"),
+        databaseFingerprint: "{A5D3E8B2-1111-2222-3333-444455556666}",
+        revisionId: "REV-01",
+        sourceSnapshotId: null,
+        createdAt: DateTime.UtcNow,
+        op: "revisor_teste");
+
+    Assert(rev.Status == OxCad.Governance.ReviewStatus.Draft, "P2.6: Revisão deve iniciar em Draft.");
+    Assert(rev.History.Count == 1, "P2.6: Histórico deve conter evento inicial de Draft.");
+
+    // Transição DRAFT -> IN_REVIEW
+    rev.TransitionTo(OxCad.Governance.ReviewStatus.InReview, "Iniciando análise técnica", "revisor_teste");
+    Assert(rev.Status == OxCad.Governance.ReviewStatus.InReview, "P2.6: Status deve ser InReview.");
+    Assert(rev.History.Count == 2, "P2.6: Histórico deve registrar transição para InReview.");
+
+    // Transição Inválida: IN_REVIEW -> DRAFT direta é proibida
+    bool invalidTransitionThrown = false;
+    try
+    {
+        rev.TransitionTo(OxCad.Governance.ReviewStatus.Draft, "Tentativa inválida", "revisor_teste");
+    }
+    catch (InvalidOperationException)
+    {
+        invalidTransitionThrown = true;
+    }
+    Assert(invalidTransitionThrown, "P2.6: Transição direta InReview -> Draft deve ser proibida.");
+
+    // Finding
+    var finding = new OxCad.Governance.ReviewFinding(
+        findingId: Guid.NewGuid().ToString("N"),
+        reviewId: rev.ReviewId,
+        severity: OxCad.Governance.FindingSeverity.Major,
+        category: "Cabo",
+        description: "Condutor em trecho 2 diverge do padrão normativo",
+        status: OxCad.Governance.FindingStatus.Open,
+        evidenceReferences: new[] { "DOC/memorial.pdf" },
+        pendingReference: "PEND-01",
+        createdAt: DateTime.UtcNow);
+
+    rev.Findings.Add(finding);
+    Assert(rev.Findings.Count == 1, "P2.6: Finding deve ser registrado.");
+    Assert(finding.Status == OxCad.Governance.FindingStatus.Open, "P2.6: Finding inicia Open.");
+
+    finding.Resolve("Ajustado condutor no DWG conforme norma.");
+    Assert(finding.Status == OxCad.Governance.FindingStatus.Resolved, "P2.6: Finding deve estar Resolved.");
+
+    // Approval Gate
+    var gateBlocked = OxCad.Governance.ApprovalGateResult.NotEligible(
+        rev.ReviewId,
+        new[] { "OPEN_CRITICAL_FINDINGS" });
+    Assert(!gateBlocked.IsEligible, "P2.6: Gate bloqueado não deve ser elegível.");
+
+    var gateOk = OxCad.Governance.ApprovalGateResult.Eligible(rev.ReviewId);
+    Assert(gateOk.IsEligible, "P2.6: Gate ok deve ser elegível.");
+
+    // Transição IN_REVIEW -> APPROVED
+    rev.TransitionTo(OxCad.Governance.ReviewStatus.Approved, "Aprovado tecnicamente", "revisor_chefe");
+    Assert(rev.Status == OxCad.Governance.ReviewStatus.Approved, "P2.6: Revisão deve estar Approved.");
+
+    var approval = new OxCad.Governance.ReviewApproval(
+        reviewId: rev.ReviewId,
+        revision: rev.RevisionId,
+        state: "APROVADO",
+        approvedAt: DateTime.UtcNow,
+        sobId: rev.SobId,
+        dwgPath: rev.DwgPath,
+        databaseFingerprint: rev.DatabaseFingerprint,
+        sourceSnapshotId: rev.SourceSnapshotId,
+        op: "revisor_chefe",
+        findingsConsidered: new[] { finding.FindingId },
+        decisionNote: "Projeto em conformidade total.");
+
+    rev.SetApproval(approval);
+    Assert(rev.Approval != null && rev.Approval.State == "APROVADO", "P2.6: Approval deve estar ativo.");
+
+    // Revogação
+    approval.Revoke("Identificada inconformidade posterior em campo");
+    Assert(approval.State == "REVOGADO", "P2.6: Approval deve estar revogado de forma auditável.");
+
+    // Rastreabilidade
+    var chain = new OxCad.Governance.TraceabilityChain(
+        sobId: rev.SobId,
+        dwgPath: rev.DwgPath,
+        databaseFingerprint: rev.DatabaseFingerprint,
+        revisionId: rev.RevisionId,
+        snapshotId: rev.SourceSnapshotId,
+        reviewId: rev.ReviewId,
+        reviewStatus: rev.Status,
+        totalFindings: rev.Findings.Count,
+        openFindings: 0,
+        pendingReferences: rev.PendingReferences,
+        approvalState: approval.State,
+        deliveryPackageId: null);
+
+    Assert(chain.SobId == "A057526153", "P2.6: Cadeia de rastreabilidade deve preservar SOB.");
+    Console.WriteLine("P2.6 Governance & TechnicalReview: all C# assertions passed.");
 }
 finally
 {

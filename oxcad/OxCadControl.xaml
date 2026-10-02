@@ -590,6 +590,148 @@
                     </StackPanel>
                 </Border>
 
+                <!-- SEÇÃO REVISÃO TÉCNICA E GOVERNANÇA (P2.6) -->
+                <TextBlock Text="REVISÃO TÉCNICA" FontSize="10" FontWeight="SemiBold" Foreground="#7E7E94" Margin="0,4,0,6" />
+
+                <Border Background="#20202A" CornerRadius="6" Padding="10" BorderBrush="#353548" BorderThickness="1" Margin="0,0,0,10">
+                    <StackPanel>
+                        <!-- Cabeçalho da Revisão com Badge -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Revisão Ativa:" FontSize="9" Foreground="#85859B"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="TxtRevisaoId" Text="REV-01" FontSize="11" FontWeight="Bold" Foreground="#E2E2EC" Margin="0,0,6,0"/>
+                                    <TextBlock x:Name="TxtRevisaoStatus" Text="DRAFT" FontSize="9" FontWeight="SemiBold" Foreground="#A0A0B4" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <Border Grid.Column="1" x:Name="BadgeRevisaoStatus" Background="#2C2C3E" CornerRadius="3" Padding="6,2" VerticalAlignment="Center">
+                                <TextBlock x:Name="TxtBadgeRevisaoStatus" Text="RASCUNHO" FontSize="9" FontWeight="SemiBold" Foreground="#A0A0B4"/>
+                            </Border>
+                        </Grid>
+
+                        <!-- Identidade e Snapshot -->
+                        <Border Background="#181822" CornerRadius="4" Padding="6,4" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,1">
+                                    <TextBlock Text="SOB:" FontSize="8" Foreground="#656578"/>
+                                    <TextBlock x:Name="TxtRevisaoSob" Text="-" FontSize="9" FontWeight="SemiBold" Foreground="#C5C5D2"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,1">
+                                    <TextBlock Text="DWG:" FontSize="8" Foreground="#656578"/>
+                                    <TextBlock x:Name="TxtRevisaoDwg" Text="CONFIRMADO" FontSize="9" FontWeight="SemiBold" Foreground="#52B788"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,3,0,1">
+                                    <TextBlock Text="Fingerprint:" FontSize="8" Foreground="#656578"/>
+                                    <TextBlock x:Name="TxtRevisaoFingerprint" Text="CONFIRMADO" FontSize="9" FontWeight="SemiBold" Foreground="#52B788"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,3,0,1">
+                                    <TextBlock Text="Snapshot:" FontSize="8" Foreground="#656578"/>
+                                    <TextBlock x:Name="TxtRevisaoSnapshot" Text="NENHUM" FontSize="9" FontWeight="SemiBold" Foreground="#82AAFF"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Findings e Auditoria -->
+                        <Border Background="#181822" CornerRadius="4" Padding="6,4" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                    <TextBlock Text="ACHADOS" FontSize="8" FontWeight="SemiBold" Foreground="#A0A0B4" HorizontalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtRevisaoFindingsTotal" Text="0" FontSize="11" FontWeight="Bold" Foreground="#E2E2EC" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                    <TextBlock Text="CRÍTICOS" FontSize="8" FontWeight="SemiBold" Foreground="#E63946" HorizontalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtRevisaoFindingsCriticos" Text="0" FontSize="11" FontWeight="Bold" Foreground="#E2E2EC" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                    <TextBlock Text="PENDÊNCIAS" FontSize="8" FontWeight="SemiBold" Foreground="#E0A96D" HorizontalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtRevisaoPendenciasBloq" Text="0" FontSize="11" FontWeight="Bold" Foreground="#E2E2EC" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                    <TextBlock Text="EVIDÊNCIAS" FontSize="8" FontWeight="SemiBold" Foreground="#52B788" HorizontalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtRevisaoEvidencias" Text="0" FontSize="11" FontWeight="Bold" Foreground="#E2E2EC" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Gate de Aprovação -->
+                        <Border Background="#181822" CornerRadius="4" Padding="6,4" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Gate de Aprovação:" FontSize="8" Foreground="#656578"/>
+                                    <TextBlock Text="Avaliação determinística" FontSize="8" Foreground="#85859B"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" x:Name="BadgeRevisaoGate" Background="#2C2C3E" CornerRadius="3" Padding="6,2" VerticalAlignment="Center">
+                                    <TextBlock x:Name="TxtRevisaoGateStatus" Text="NOT_ELIGIBLE" FontSize="8.5" FontWeight="Bold" Foreground="#E63946"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <!-- Aprovação e Entrega -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="APROVAÇÃO:" FontSize="8" Foreground="#656578"/>
+                                <TextBlock x:Name="TxtRevisaoApproval" Text="NÃO APROVADO" FontSize="9" FontWeight="SemiBold" Foreground="#C5C5D2"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="ENTREGA:" FontSize="8" Foreground="#656578"/>
+                                <TextBlock x:Name="TxtRevisaoDelivery" Text="NÃO GERADO" FontSize="9" FontWeight="SemiBold" Foreground="#C5C5D2"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Ações da Revisão -->
+                        <Grid Margin="0,2,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Button x:Name="BtnIniciarRevisao" Grid.Row="0" Grid.Column="0" Content="INICIAR REVISÃO" Margin="0,0,2,3" Height="24" FontSize="9" FontWeight="SemiBold" Background="#2A3B4C" Foreground="#82AAFF" BorderThickness="0" Cursor="Hand" Click="BtnIniciarRevisao_Click"/>
+                            <Button x:Name="BtnRegistrarAchado" Grid.Row="0" Grid.Column="1" Content="REGISTRAR ACHADO" Margin="2,0,0,3" Height="24" FontSize="9" FontWeight="SemiBold" Background="#2E2E3E" Foreground="#C5C5D2" BorderThickness="0" Cursor="Hand" Click="BtnRegistrarAchado_Click"/>
+
+                            <Button x:Name="BtnSolicitarAlteracoes" Grid.Row="1" Grid.Column="0" Content="SOLICITAR ALT." Margin="0,0,2,3" Height="24" FontSize="9" FontWeight="SemiBold" Background="#3D2E20" Foreground="#E0A96D" BorderThickness="0" Cursor="Hand" Click="BtnSolicitarAlteracoes_Click"/>
+                            <Button x:Name="BtnAprovarRevisao" Grid.Row="1" Grid.Column="1" Content="APROVAR" Margin="2,0,0,3" Height="24" FontSize="9" FontWeight="Bold" Background="#1D3E2E" Foreground="#52B788" BorderThickness="0" Cursor="Hand" Click="BtnAprovarRevisao_Click" IsEnabled="False" Opacity="0.45"/>
+
+                            <Button x:Name="BtnRejeitarRevisao" Grid.Row="2" Grid.Column="0" Content="REJEITAR" Margin="0,0,2,0" Height="22" FontSize="8.5" FontWeight="SemiBold" Background="#3E2024" Foreground="#E63946" BorderThickness="0" Cursor="Hand" Click="BtnRejeitarRevisao_Click"/>
+                            <Button x:Name="BtnCancelarRevisao" Grid.Row="2" Grid.Column="1" Content="CANCELAR" Margin="2,0,0,0" Height="22" FontSize="8.5" FontWeight="SemiBold" Background="#282834" Foreground="#85859B" BorderThickness="0" Cursor="Hand" Click="BtnCancelarRevisao_Click"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
 

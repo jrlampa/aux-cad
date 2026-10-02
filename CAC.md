@@ -1036,6 +1036,47 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
       - `workspace_context_cli.py`: Implementado `_artefato_sob_gerado`, garantindo que processos concluídos com sucesso (código 0) e evidências físicas válidas (manifesto `CONCLUÍDO`, `base_dwg` íntegro) sejam reconhecidos como sucesso sem erros espúrios de auditoria.
     - **Status**: **CORREÇÃO CONSOLIDADA E VALIDADA; P2 PERMANECE SUSPENSA**.
 
+14. **Correção Operacional — Resolução Resiliente de Template CQT (2026-10-01)**:
+    - **Causa Raiz**:
+      - `cqt/cqt_cad_extractor.lsp` nos comandos `CQTCAD` e `CQTUI`, além de `cqt/cqt_excel_io.py`, continham o caminho inexistente `G:\Meu Drive\1-HBT\HBT\SETEMBRO\CQT TRECHO.xlsm` com diretório duplicado (`1-HBT\HBT`).
+      - Ao chamar `CQTCAD`, o caminho inexistente era passado ao `cqt/cqt_excel_manager.py` sobrescrevendo o template padrão por um arquivo inexistente, gerando `FileNotFoundError` ao gravar a planilha via `update_cqt_excel`.
+    - **Solução Defensiva e Resiliente**:
+      - `cqt_cad_extractor.lsp`: busca em cascata no AutoLISP priorizando o template oficial `modelos\cqt_modelo.xlsm` e diretórios válidos do drive, eliminando a referência com erro de digitação.
+      - `cqt_excel_io.py`: remoção do caminho inválido de `candidate_paths`.
+      - `cqt_excel_manager.py`: fallback defensivo imediato para `DEFAULT_TEMPLATE_PATH` no CLI, em `CQTManagerGUI.__init__` e na rotina `_on_gravar`, impedindo falha se caminhos quebrados forem fornecidos.
+      - `tests/test_cqt_gui.py`: cobertura de testes unitários assegurando recuperação de template inválido.
+    - **Status**: **CORREÇÃO CONSOLIDADA; P2 PERMANECE SUSPENSA**.
+
+15. **Otimização do Escaneamento Recursivo de Artefatos em Subpastas do Projeto (`workspace/workspace_scanner.py`)**:
+    - **Contexto Operacional Real**: Na estrutura de pastas de projetos de engenharia reais (ex: `SOB_A057526153`), artefatos técnicos frequentemente residem organizados em subpastas funcionais (`LIC.AMB/`, `ORCAMENTO/`, `DOCUMENTOS/`, `ANEXOS/`, `FINANCEIRO/CPFC/`, `ESTUDOS/`, `UNIFILAR/`). Anteriormente, o `WorkspaceScanner` realizava buscas apenas no primeiro nível (`root_dir`), reportando itens como `CHECKLIST_A057526153.xlsx` em `LIC.AMB/` como `○` (não existe).
+    - **Varredura Otimizada e Controlada (`_listar_pastas_busca`)**:
+      - Coleta `root_dir` e subdiretórios válidos até profundidade 3 (`max_depth = 3`).
+      - Ignora rigorosamente diretórios ocultos e de sistema (`.oxcad`, `.git`, `.venv`, `.vs`, `.vscode`, `__pycache__`, etc.).
+      - A lista de pastas é calculada uma única vez por ciclo de `scan()`, preservando o tempo total de resposta abaixo de 5ms.
+    - **Precedência Estrita de Padrões sobre Profundidade**:
+      - Em `detectar_arquivo_por_padroes`, a busca avalia os padrões na ordem de especificidade definida (padrões específicos da SOB avaliados antes dos genéricos). Para cada padrão, verifica-se a raiz antes das subpastas, ordenando múltiplos arquivos pelo mais recente (`st_mtime`).
+      - Subpastas de croquis (`CROQUI`, `CROQUIS`, `LEVANTAMENTO`), documentos (`DOCUMENTOS`, `ANEXOS`, `GOMNET`, etc.) e DWGs principais também são localizadas em profundidade.
+    - **Rastreabilidade de Ações CLI**:
+      - `workspace/workspace_context_cli.py`: `_capturar_arquivos_execucao` agora também emprega `WorkspaceScanner._listar_pastas_busca(root_dir)`, garantindo que snapshots antes/depois da execução de ações capturem arquivos gerados dentro de subpastas.
+    - **Testes e Qualidade**:
+      - Novo teste unitário `test_deteccao_artefatos_em_subpastas` em `tests/test_workspace.py` cobrindo cenários com artefatos distribuídos em subpastas profundas.
+      - 730 testes unitários passando com 100% de sucesso.
+    - **Status**: **HOMOLOGADO EM SUÍTE DE TESTES; P2 PERMANECE SUSPENSA**.
+
+16. **Correção Operacional — Resolução de Template e Subpasta Canônica LIC.AMB no Módulo Ambiental (2026-10-01)**:
+    - **Diagnóstico da Causa Raiz**:
+      - `memorial_ambiental_generator.py` e `workspace_actions.py` continham o caminho de modelo `G:\Meu Drive\1-HBT\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx` (inexistente; o arquivo oficial reside em `04_MODELOS\`). Sem o arquivo DOCX, o gerador exibia aviso em modal e abortava silenciosamente a emissão do Memorial Descritivo.
+      - O OXCAD enviava o diretório raiz da SOB (`root_path`), gravando o Checklist na raiz em vez de direcionar os entregáveis para a subpasta padrão de licenciamento ambiental (`LIC.AMB`), conforme o padrão corporativo da HBT/Enel.
+      - Quando a análise KMZ indicava ausência de restrições ambientais, o Memorial Descritivo era dispensado sem permitir ao projetista forçar a geração.
+      - O auditor `_artefato_tecnico_gerado` inspecionava apenas `checklist_ambiental`, emitindo `ARTIFACT_NOT_VERIFIED` espúrio.
+    - **Solução Implementada**:
+      - Resolução em cascata de templates Word (`04_MODELOS`, `SETEMBRO`, `ambiental/modelos/` e raiz do drive) em `workspace_actions.py` e `memorial_ambiental_generator.py`.
+      - Cópia Local-First do template oficial congelada em `ambiental/modelos/MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx` (120 KB), garantindo geração offline resiliente.
+      - Encaminhamento automático e determinístico da pasta de saída para a subpasta ambiental existente (`LIC.AMB`, `Licen.Ambiental`, `LICEN.AMBIENTAL`) ou criação de `LIC.AMB` dentro da SOB.
+      - Adição de checkbox no card informativo de áreas sem restrição (`Gerar também o Memorial Descritivo (.docx)`), conferindo flexibilidade operacional ao projetista.
+      - `_artefato_tecnico_gerado` atualizado para validar entregáveis de `checklist_ambiental` e `memorial_ambiental`.
+    - **Status**: **HOMOLOGADO EM SUÍTE DE TESTES; P2 PERMANECE SUSPENSA**.
+
 17. **Decisão Arquitetural — Resolução Determinística e Atestação de Artefato da Ação SOB (`workspace_context_cli.py` & `sob/`) (2026-10-01)**:
     - **Problema Operacional Identificado**:
       - Na ação `PREPARAR SOB`, mesmo com `exit_code=0` e o DWG sendo criado e aberto corretamente, o monitoramento de auditoria da ação registrava `ARTIFACT_NOT_VERIFIED`.
@@ -1096,32 +1137,19 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
       - Compilação .NET da paleta e harness C# sem erros (0 erros).
     - **Status**: **IMPLEMENTADO E TESTADO (P2.2 CONCLUÍDO)**.
 
-20. **Decisão Arquitetural — P2.3: Qualidade, Histórico e Comparabilidade de Indicadores (`workspace_indicator_quality.py`, `workspace_indicator_stores.py`, `workspace_indicators.py` & `OxCadControl.xaml`) (2026-10-02)**:
+20. **Decisão Arquitetural — P2.3: Qualidade, Histórico e Interpretação Operacional dos Indicadores (2026-10-02)**:
     - **Princípio e Escopo**:
-      - Enriquecimento analítico dos indicadores de gestão com foco na explicitação da qualidade da cobertura histórica, proveniência estrita de cada bloco de dados, auditoria de descarte de registros e avaliação metodológica de comparabilidade entre períodos.
-      - Totalmente read-only, determinístico e auditável; sem banco de dados, sem cache persistente e sem serviços residentes.
-      - Zero rankings de colaboradores, scores de desempenho ou métricas de produtividade individual; zero julgamento subjetivo de valor ('melhorou', 'piorou').
-    - **Classificação Estrita de Cobertura Histórica**:
-      - `COMPLETA`: todas as fontes duráveis esperadas presentes e log cobrindo o período sem rotação ou descarte por corrupção.
-      - `PARCIAL`: fontes duráveis parcialmente ausentes, linhas corrompidas no log ou dados incompletos.
-      - `LIMITADA_POR_ROTACAO`: log rotativo ativo (5 MB) ou período solicitado anterior ao primeiro registro disponível no arquivo.
-      - `SEM_DADOS`: fontes acessadas sem falha, mas nenhum registro/evento encontrado para os critérios.
-      - `IDENTIDADE_NAO_VERIFICAVEL`: divergência entre SOB informada e manifesto do projeto (`SOB_ID_MISMATCH`).
-      - `FONTE_INDISPONIVEL`: fontes necessárias inexistentes ou com erro de E/S.
-    - **Proveniência e Auditoria de Descarte**:
-      - Cada bloco do contrato Schema 1 expõe o campo `proveniencia` rastreando o artefato de origem (`logs/application.jsonl`, `.sob_state.json`, `.oxcad/pending.json`, `.oxcad/deliveries/`, `.oxcad/time.json`, `.auxcad_versions/`).
-      - Contabilização explícita de `registros_considerados`, `registros_descartados` e `descartes_por_motivo` (`FILTRO_PERIODO`, `FILTRO_SOB`, `FILTRO_ACAO`, `FILTRO_ESTADO`, `LINHA_CORROMPIDA`, `SEM_EXECUTION_ID`).
-    - **Comparabilidade Metodológica entre Períodos**:
-      - Comparação temporal (`--compare-start`, `--compare-end`) sem banco de dados, calculando deltas absolutos e percentuais apenas quando metodologicamente válida (`comparavel = True`, `status = "VALIDA"`).
-      - Recusa descritiva (`status = "NAO_DETERMINADA"`) com motivo auditável em caso de incompatibilidade (`IDENTIDADE_INVERIFICAVEL`, `ESCOPO_OU_IDENTIDADE_DIVERGENTE`, `LIMITADA_POR_ROTACAO`, `FONTE_INDISPONIVEL`, `FONTES_DIVERGENTES`).
-    - **Modularização e Limites de Código**:
-      - Modularização arquitetural em `workspace_indicator_quality.py` (278 linhas) e `workspace_indicator_stores.py` (388 linhas), mantendo `workspace_indicators.py` com 731 linhas (respeitando o limite de 750 linhas).
-    - **Apresentação na Paleta WPF**:
-      - Atualização da paleta (`OxCadControl.xaml` / `OxCadControl.xaml.cs`) exibindo badge de cobertura colorida, período observado, fontes utilizadas, limitações e timestamp de atualização, sem travar a thread UI.
+      - Elevação dos indicadores para uma camada de qualidade, rastreamento de proveniência e comparabilidade histórica metodológica entre períodos, sem transformar o sistema em banco de dados, servidor residente ou mecanismo avaliativo de pessoas.
+    - **Classificação de Cobertura e Proveniência**:
+      - Classificação canônica derivada de fontes físicas: `COMPLETA`, `PARCIAL`, `LIMITADA_POR_ROTACAO`, `SEM_DADOS`, `IDENTIDADE_NAO_VERIFICAVEL`, `FONTE_INDISPONIVEL`.
+      - Rastreamento por bloco de dados mapeando a proveniência canônica (`logs/application.jsonl`, `.sob_state.json`, `.oxcad/pending.json`, `.oxcad/deliveries/`, `.oxcad/time.json`, `.auxcad_versions/`).
+      - Auditoria granular de registros descartados por filtros (`FILTRO_PERIODO`, `FILTRO_SOB`, `FILTRO_ACAO`, `FILTRO_ESTADO`, `LINHA_CORROMPIDA`, `SEM_EXECUTION_ID`).
+    - **Comparabilidade sem Banco de Dados**:
+      - Comparação histórica descritiva entre dois períodos utilizando exclusivamente arquivos em disco existentes.
+      - Quando a comparação for metodologicamente válida, calcula deltas absolutos e percentuais. Em caso de truncamento por rotação de log, fontes ausentes ou identidades divergentes, reporta deterministicamente `status = "NAO_DETERMINADA"` com motivo auditável explícito.
     - **Qualidade e Cobertura**:
-      - Suíte dedicada de 20 testes contratuais em `tests/test_oxcad_indicators_quality.py` (100% PASS).
-      - Suíte completa de 797 testes (794 passed, 3 skipped) 100% limpa.
-      - Compilação .NET e harness C# sem erros (0 erros).
+      - Suíte dedicada `tests/test_oxcad_indicators_quality.py` com 20 testes obrigatórios (100% PASS).
+      - Suíte completa do repositório: 795 passaram, 2 skipped (100% de sucesso).
     - **Status**: **IMPLEMENTADO E TESTADO (P2.3 CONCLUÍDO)**.
 
 21. **Decisão Arquitetural — P2.4: Plataforma Interna de Integração e Extensibilidade (`oxcad/integration/`, `workspace/workspace_integrations.py`) (2026-10-02)**:
@@ -1144,7 +1172,6 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
       - Testes no C# Harness (`tests/oxcad_context_gate/Program.cs`) cobrindo registry, capabilities, contexto e descritores (100% PASS).
       - Suíte completa de 837 testes (834 pass, 3 skip).
     - **Status**: **IMPLEMENTADO E TESTADO (P2.4 CONCLUÍDO)**.
-
 
 22. **Decisão Arquitetural — P2.5: Validação de Campo e Operação Resiliente/Offline (`oxcad/offline/`, `workspace/workspace_operational_states.py`, `workspace/workspace_field_validation.py`, `workspace/workspace_sync_queue.py`) (2026-10-02)**:
     - **Princípio e Escopo**:
@@ -1173,4 +1200,49 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
       - Suíte dedicada `tests/test_oxcad_field_offline.py` com 30 testes contratuais (100% PASS).
       - Suíte combinada de indicadores e resiliência (P2.1–P2.5): 128 testes (100% PASS).
       - Suíte completa do repositório: 864 passaram, 3 skipped (100% de sucesso).
-    - **Status**: **IMPLEMENTADO E TESTADO (P2.5 CONCLUÍDO; P2.6 AINDA NÃO INICIADO)**.
+- **Status**: **IMPLEMENTADO E TESTADO (P2.5 CONCLUÍDO)**.
+
+23. **Decisão Arquitetural — P2.6: Revisão Técnica, Governança de Entrega e Rastreabilidade Operacional (oxcad/governance/, workspace/workspace_review.py) (2026-10-02)**:
+    - **Princípio e Escopo**:
+      - Fechamento do ciclo operacional: Projeto → Execução → Validação → Evidências → Pendências → Revisão → Aprovação → Entrega.
+      - Desacoplamento arquitetural obrigatório de cinco conceitos fundamentais:
+        1. REVISION: Identificação e atestação da versão/revisão técnica em análise (RevisionId, SourceSnapshotId, snapshot hash).
+        2. REVIEW: Processo formal de exame técnico (ReviewId, achados técnicos, referências a evidências, pendências e histórico auditável).
+        3. APPROVAL: Decisão formal sobre a revisão (ApprovalId, operador/contexto, parecer, revogabilidade, integridade da versão analisada).
+        4. DELIVERY: Pacote físico de entrega formalmente montado (PackageId, manifesto, checksums).
+        5. REVOCATION: Invalidação posterior auditável de aprovação ou entrega sem alteração destrutiva do histórico.
+      - Não-equivalência estrita: REVIEW != APPROVAL != DELIVERY != SYNC.
+    - **Soberania do DWG e Identidade**:
+      - A identidade técnica permanece sob autoridade estrita do AutoCAD: FingerprintGuid + AUXCAD_PROJECT_SCOPE + SOB_ID.
+      - Uma revisão nunca pode ser aplicada ou transferida silenciosamente a outro DWG ou SOB (IDENTITY_MISMATCH).
+    - **Estados Determinísticos e Matriz de Transições**:
+      - Estados: DRAFT, IN_REVIEW, CHANGES_REQUIRED, APPROVED, REJECTED, SUPERSEDED, CANCELLED.
+      - Transições válidas: DRAFT → IN_REVIEW, IN_REVIEW → APPROVED, IN_REVIEW → CHANGES_REQUIRED, IN_REVIEW → REJECTED, CHANGES_REQUIRED → DRAFT, APPROVED → SUPERSEDED, DRAFT → CANCELLED.
+      - Transições ilegais bloqueadas (ex: retorno direto de APPROVED para DRAFT). Alteração técnica posterior a uma aprovação requer nova revisão / novo snapshot.
+    - **Achados Técnicos (Findings) e Integração com Pendências**:
+      - Contrato ReviewFinding: FindingId, ReviewId, Severity (INFO, MINOR, MAJOR, CRITICAL), Category, Description, Status (OPEN, RESOLVED, WAIVED), EvidenceReferences, PendingReference, timestamps e notas.
+      - Finding não é Pending: achados operacionais associam-se a pendências existentes ou criam novas pendências no cadastro autoritativo (.oxcad/pending.json) via workspace_pending.create sem duplicação de dados ou stores.
+    - **Gate Determinístico de Aprovação (valuate_approval_gate)**:
+      - Verificação determinística e sem heurísticas de elegibilidade:
+        - Identidade válida e coincidente (SOB_ID, DWGPath, DatabaseFingerprint);
+        - Existência física do arquivo DWG;
+        - Snapshot de revisão existente e válido;
+        - Evidências referenciadas existentes e com hash SHA-256 íntegro;
+        - Zero findings CRITICAL ou MAJOR abertos;
+        - Zero pendências bloqueantes ativas;
+        - Pacote de entrega compatível quando pré-existente.
+      - Retorno: ELIGIBLE ou NOT_ELIGIBLE com razões impeditivas detalhadas.
+    - **Governança de Entrega, Revogação e Histórico Imutável**:
+      - Entrega vinculada e permitida estritamente quando a revisão está formalmente aprovada (APPROVED).
+      - Revogação auditável registrando motivo, operador, timestamp e revisão afetada, preservando integralmente o histórico de eventos imutável (vents).
+      - Cadeia de rastreabilidade completa: SOB_ID → DWG/Fingerprint → Revision → Snapshot → Review → Finding → Pending → Approval → Delivery.
+    - **Interface Nativa Paleta WPF**:
+      - Seção 'REVISÃO TÉCNICA' na paleta OXCAD exibindo identidade, revisão, snapshot, achados por severidade, pendências impeditivas, resultado do Gate de Aprovação, status da entrega e ações interativas (INICIAR REVISÃO, REGISTRAR ACHADO, SOLICITAR ALTERAÇÕES, APROVAR, REJEITAR, CANCELAR).
+      - Botão APROVAR condicionado e bloqueado deterministicamente quando o Gate acusa NOT_ELIGIBLE.
+    - **Operação Offline-First**:
+      - Fluxo completo de revisão, registro de achados, avaliação de gate e aprovação local-first sem dependências de rede, sem chamadas externas e sem segredos/credenciais em disco.
+    - **Qualidade e Cobertura**:
+      - Suíte dedicada 	ests/test_oxcad_review_governance.py com 35 testes contratuais (100% PASS).
+      - Testes C# no harness 	ests/oxcad_context_gate/Program.cs validando contratos e rastreabilidade (100% PASS).
+      - Suíte completa: 899 passaram, 3 skipped (100% de sucesso).
+    - **Status**: **IMPLEMENTADO E TESTADO (P2.6 CONCLUÍDO; P2.7 AINDA NÃO INICIADO)**.

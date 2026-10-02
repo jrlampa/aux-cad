@@ -273,6 +273,80 @@ def processar_sob_state(root: Path, sob_resolvida: Optional[str], collector: Qua
         }, proveniencia=PROVENIENCIA_FONTES["sob_manifesto"])
 
 
+def processar_reviews(root: Path, sob_resolvida: Optional[str], collector: QualityMetricsCollector) -> Dict[str, Any]:
+    """Lê defensivamente o store autoritativo de revisões técnicas (.oxcad/reviews.json)."""
+    store_file = root / ".oxcad" / "reviews.json"
+    if not store_file.is_file():
+        return bloco_nao_disponivel("ARQUIVO_REVIEWS_NAO_ENCONTRADO", {
+            "total_revisoes": None, "iniciadas": None, "aprovadas": None,
+            "alteracoes_solicitadas": None, "rejeitadas": None, "canceladas": None, "substituidas": None,
+            "findings_total": None, "findings_por_severidade": None, "entregas_vinculadas": None,
+        }, proveniencia=PROVENIENCIA_FONTES.get("revisoes", ".oxcad/reviews.json"))
+
+    try:
+        data = json.loads(store_file.read_text(encoding="utf-8"))
+        if not isinstance(data, dict) or data.get("schema") != 1 or not isinstance(data.get("reviews"), list):
+            collector.registrar_fonte_invalida(".oxcad/reviews.json")
+            return bloco_nao_disponivel("ARQUIVO_REVIEWS_INVALIDO", {
+                "total_revisoes": None, "iniciadas": None, "aprovadas": None,
+                "alteracoes_solicitadas": None, "rejeitadas": None, "canceladas": None, "substituidas": None,
+                "findings_total": None, "findings_por_severidade": None, "entregas_vinculadas": None,
+            }, proveniencia=PROVENIENCIA_FONTES.get("revisoes", ".oxcad/reviews.json"))
+
+        store_sob = str(data.get("sob_id", "")).strip().upper() if data.get("sob_id") else None
+        if sob_resolvida and store_sob and store_sob != sob_resolvida:
+            return bloco_nao_disponivel("SOB_ID_MISMATCH", {
+                "total_revisoes": None, "iniciadas": None, "aprovadas": None,
+                "alteracoes_solicitadas": None, "rejeitadas": None, "canceladas": None, "substituidas": None,
+                "findings_total": None, "findings_por_severidade": None, "entregas_vinculadas": None,
+            }, proveniencia=PROVENIENCIA_FONTES.get("revisoes", ".oxcad/reviews.json"))
+
+        reviews = data["reviews"]
+        collector.registrar_fonte_utilizada(".oxcad/reviews.json")
+
+        iniciadas = sum(1 for r in reviews if r.get("status") in {"DRAFT", "IN_REVIEW"})
+        aprovadas = sum(1 for r in reviews if r.get("status") == "APPROVED")
+        alteracoes = sum(1 for r in reviews if r.get("status") == "CHANGES_REQUIRED")
+        rejeitadas = sum(1 for r in reviews if r.get("status") == "REJECTED")
+        canceladas = sum(1 for r in reviews if r.get("status") == "CANCELLED")
+        substituidas = sum(1 for r in reviews if r.get("status") == "SUPERSEDED")
+
+        findings_count = 0
+        por_severidade = {"info": 0, "minor": 0, "major": 0, "critical": 0}
+        entregas_count = 0
+
+        for r in reviews:
+            if r.get("delivery"):
+                entregas_count += 1
+            for f in r.get("findings", []):
+                findings_count += 1
+                sev = str(f.get("severity", "")).lower()
+                if sev in por_severidade:
+                    por_severidade[sev] += 1
+
+        return {
+            "status": "OK",
+            "proveniencia": PROVENIENCIA_FONTES.get("revisoes", ".oxcad/reviews.json"),
+            "total_revisoes": len(reviews),
+            "iniciadas": iniciadas,
+            "aprovadas": aprovadas,
+            "alteracoes_solicitadas": alteracoes,
+            "rejeitadas": rejeitadas,
+            "canceladas": canceladas,
+            "substituidas": substituidas,
+            "findings_total": findings_count,
+            "findings_por_severidade": por_severidade,
+            "entregas_vinculadas": entregas_count,
+        }
+    except Exception as ex:
+        collector.registrar_fonte_invalida(".oxcad/reviews.json")
+        return bloco_nao_disponivel(f"ERRO_LEITURA_REVIEWS: {ex}", {
+            "total_revisoes": None, "iniciadas": None, "aprovadas": None,
+            "alteracoes_solicitadas": None, "rejeitadas": None, "canceladas": None, "substituidas": None,
+            "findings_total": None, "findings_por_severidade": None, "entregas_vinculadas": None,
+        }, proveniencia=PROVENIENCIA_FONTES.get("revisoes", ".oxcad/reviews.json"))
+
+
 def processar_workspace_consolidado(
     workspace_root: Optional[Path],
     collector: QualityMetricsCollector
