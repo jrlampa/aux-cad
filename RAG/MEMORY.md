@@ -966,3 +966,20 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
      - `tests/test_sob_artifact_verification.py`: Criada suíte com 7 testes dedicados cobrindo os cenários obrigatórios A a G (100% PASS).
      - Suíte completa de testes do repositório: 737 passaram, 2 skipped (100% de sucesso).
 - **Status do Roadmap**: **P2 PERMANECE SUSPENSA**.
+
+### 33. Decisão Arquitetural e Implementação: P2.1 — Indicadores de Gestão (2026-10-02)
+- **Motivação e Diretrizes**:
+  - Implementação do primeiro eixo do P2 (Indicadores de Gestão) como um motor analítico, determinístico, read-only e auditável, sem efeitos colaterais e sem criar nova instrumentação ou bancos de dados pesados.
+  - Consumo direto de dados existentes com separação semântica de autoridade:
+    - *Fontes duráveis*: `.oxcad/pending.json`, `.oxcad/deliveries/`, `.oxcad/time.json`, `.sob_state.json`.
+    - *Fontes observacionais*: `logs/application.jsonl` (janela rotativa de 5 MB).
+- **Contrato `IndicadoresGestao` (Schema 1)**:
+  - Definido e implementado em `workspace/workspace_indicators.py`.
+  - Agregação obrigatória por `execution_id`, evitando a distorção e inflação de taxas causada por eventos de ciclo de vida intermediários (`Iniciado`, `Executando`).
+  - Métrica de duração calculada com média, mediana e P95 determinístico.
+  - Tratamento estrito de ausência de dados: se um arquivo de store não existe, o bloco correspondente reporta `status: "NÃO DISPONÍVEL"` e chaves com `None`, sem transformar ausência em falso zero.
+  - Isolamento estrito por `sob_id`: recusa determinística com `IDENTITY_UNVERIFIABLE` caso a pasta de projeto não corresponda à SOB informada.
+  - Resiliência a logs corrompidos: linhas JSON inválidas são capturadas, ignoradas e contabilizadas no bloco `qualidade_dados`.
+- **Cobertura de Testes**:
+  - `tests/test_oxcad_indicators.py`: 18 cenários contratuais cobrindo logs vazios, múltiplas transições, falhas, cancelamentos, percentis, arquivos ausentes, dados incompletos, isolamento e determinismo (100% PASS).
+- **Status do Roadmap**: **P2.1 CONCLUÍDO; P2.2 AINDA NÃO INICIADO**.

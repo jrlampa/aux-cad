@@ -1060,3 +1060,19 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
       - Build .NET do OXCAD sem erros (0 Erros).
       - Harness C# `OxCadContextGateHarness` 100% aprovado.
     - **Status**: **RESOLVIDO DETERMINISTICAMENTE; P2 PERMANECE SUSPENSA**.
+
+18. **Decisão Arquitetural — P2.1: Motor Analítico de Indicadores de Gestão (`workspace/workspace_indicators.py`) (2026-10-02)**:
+    - **Princípio e Escopo**:
+      - Motor puramente read-only, funcional e determinístico. Nenhuma escrita em disco, nenhuma alteração de estado de projeto e zero infraestrutura externa (sem banco de dados relacional/NoSQL, sem serviços residentes).
+      - Não se integra como ação operacional de execução do `workspace_context_cli.py`, operando como módulo de consulta analítica independente para não interferir no ciclo de vida de `OxCadExecution`.
+    - **Hierarquia de Autoridade das Fontes**:
+      1. *Fontes Duráveis de Projeto*: `.oxcad/pending.json` (cadastro autoritativo de pendências), `.oxcad/deliveries/` (pacotes e aprovações), `.oxcad/time.json` (sessões e tempo de apontamento) e `.sob_state.json` (manifesto de preparação da SOB) representam a verdade persistente.
+      2. *Fontes Observacionais Rotativas*: `logs/application.jsonl` e `logs/errors.jsonl` representam uma janela temporal limitada (~5 MB por arquivo com rotação).
+    - **Regras Analíticas Contratuais**:
+      - *Reconstrução por `execution_id`*: Agrupa todos os eventos pertencentes à mesma execução para determinar o estado final (`Concluido`, `Falhou`, `Cancelado`), calculando duração e atribuindo falhas uma única vez por ciclo.
+      - *Identidade Estrita*: Consultas por SOB filtram rigorosamente por `sob_id`. Se houver divergência entre o manifesto do diretório e a SOB informada, a agregação é recusada deterministamente com `IDENTITY_UNVERIFIABLE`.
+      - *Integridade da Ausência*: Ausência de dados não é convertida em zero quando produzir distorção de interpretação (ex.: taxas de pendências e duração são reportadas como `None` sob status `NÃO DISPONÍVEL`).
+      - *Tolerância a Falhas e Auditoria*: Leitura resiliente de logs linha a linha; linhas corrompidas ou truncadas são ignoradas sem interromper o processamento e registradas em `qualidade_dados.linhas_invalidas_log`.
+    - **Qualidade e Cobertura**:
+      - Suíte dedicada `tests/test_oxcad_indicators.py` com 18 testes obrigatórios (100% PASS).
+    - **Status**: **IMPLEMENTADO E TESTADO (P2.1 CONCLUÍDO)**.

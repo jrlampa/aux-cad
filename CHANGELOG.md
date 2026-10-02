@@ -76,6 +76,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Persistência de Manifesto SOB**: Validação obrigatória do retorno de `gravar_manifesto_execucao` em `sob/sob_manager.py`.
 
 ### Added (Baseline P0/P1)
+- **Módulo Analítico de Indicadores de Gestão (P2.1 — workspace/workspace_indicators.py)**:
+  - Implementação do motor analítico determinístico, read-only e auditável sob o contrato IndicadoresGestao (Schema 1).
+  - Reconstrução obrigatória de ciclo de vida por xecution_id, prevenindo a inflação de volume e taxas decorrente de múltiplas transições intermediárias.
+  - Distinção estrita de autoridade: fontes duráveis de projeto (.oxcad/pending.json, .oxcad/deliveries/, .oxcad/time.json, .sob_state.json) vs. observabilidade rotativa de janela limitada (logs/application.jsonl).
+  - Tratamento defensivo de dados: valores ausentes reportados como NÃO DISPONÍVEL sem mascaramento indevido como zero; isolamento estrito por sob_id com recusa IDENTITY_UNVERIFIABLE em caso de divergência.
+  - Leitura resiliente linha a linha de JSON Lines com tolerância a linhas corrompidas e contabilização em qualidade_dados.
+  - Suíte de 18 testes automatizados cobrindo todos os cenários contratuais (	ests/test_oxcad_indicators.py).
 - **Autoridade de Identidade Host -> CLI (Gate 1)**: Transporte via stdin protegido com verificação de processo pai `acad.exe` por Win32 API e pareamento com `AUXCAD_PROJECT_SCOPE` e `Database.FingerprintGuid`.
 - **Registro Imutável de Execuções (P0.3)**: `OxCadExecutionRegistry.cs` e `OxCadExecution.cs` garantindo unicidade de `ExecutionId` e separação estrita de `CorrelationId`.
 - **Contratos P1 de Engenharia**:
