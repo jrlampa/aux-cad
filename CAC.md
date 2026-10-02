@@ -1244,5 +1244,5 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
     - **Qualidade e Cobertura**:
       - Suíte dedicada 	ests/test_oxcad_review_governance.py com 35 testes contratuais (100% PASS).
       - Testes C# no harness 	ests/oxcad_context_gate/Program.cs validando contratos e rastreabilidade (100% PASS).
-      - Suíte completa: 899 passaram, 3 skipped (100% de sucesso).
+      - Suíte completa: 900 passaram, 2 skipped (902 coletados) (100% de sucesso).
     - **Status**: **IMPLEMENTADO E TESTADO (P2.6 CONCLUÍDO; P2.7 AINDA NÃO INICIADO)**.
