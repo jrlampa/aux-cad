@@ -1108,5 +1108,126 @@ namespace OxCad
             ListaArtefatos.ItemsSource = contexto.Artefatos;
             AplicarTempoNaInterface(contexto.Tempo);
         }
+
+        private async void BtnConsultarIndicadores_Click(object sender, RoutedEventArgs e)
+        {
+            if (BtnConsultarIndicadores == null) return;
+            BtnConsultarIndicadores.IsEnabled = false;
+            TxtIndicadoresStatus.Text = "Consultando indicadores analíticos...";
+            TxtIndicadoresStatus.Foreground = new SolidColorBrush(Color.FromRgb(244, 162, 97));
+
+            try
+            {
+                string? sobId = _ultimoSobId != "-" ? _ultimoSobId : null;
+                string? projectRoot = null;
+                if (!string.IsNullOrWhiteSpace(_ultimoDwgFullPath) && File.Exists(_ultimoDwgFullPath))
+                {
+                    try
+                    {
+                        projectRoot = WorkspaceService.ObterDiretorioRaizProjeto(_ultimoDwgFullPath);
+                    }
+                    catch { }
+                }
+
+                // Consulta de indicadores totalmente desacoplada e assíncrona (não gera OxCadExecution)
+                string json = await WorkspaceService.ConsultarIndicadoresJsonAsync(
+                    projectRoot: projectRoot,
+                    sobId: sobId);
+
+                using (var doc = System.Text.Json.JsonDocument.Parse(json))
+                {
+                    var root = doc.RootElement;
+                    string statusGeral = root.TryGetProperty("escopo", out var escopoProp) && escopoProp.TryGetProperty("status_identidade", out var idProp)
+                        ? idProp.GetString() ?? "VALIDA"
+                        : "VALIDA";
+
+                    if (statusGeral == "IDENTITY_UNVERIFIABLE")
+                    {
+                        TxtIndicadoresStatus.Text = "Identidade inverificável (SOB divergente ou ausente).";
+                        TxtIndicadoresStatus.Foreground = new SolidColorBrush(Color.FromRgb(231, 111, 81));
+                        PainelIndicadoresMetricas.Visibility = Visibility.Collapsed;
+                        return;
+                    }
+
+                    if (root.TryGetProperty("execucoes", out var execProp))
+                    {
+                        string stExec = execProp.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                        if (stExec == "OK" || stExec == "SEM_DADOS")
+                        {
+                            int total = execProp.TryGetProperty("total_execucoes", out var t) && t.ValueKind == System.Text.Json.JsonValueKind.Number ? t.GetInt32() : 0;
+                            int conc = execProp.TryGetProperty("concluidas", out var c) && c.ValueKind == System.Text.Json.JsonValueKind.Number ? c.GetInt32() : 0;
+                            int falhas = execProp.TryGetProperty("falhas", out var f) && f.ValueKind == System.Text.Json.JsonValueKind.Number ? f.GetInt32() : 0;
+
+                            TxtIndTotalExec.Text = total.ToString();
+                            TxtIndConcluidas.Text = conc.ToString();
+                            TxtIndFalhas.Text = falhas.ToString();
+
+                            if (execProp.TryGetProperty("taxa_conclusao_pct", out var tx) && tx.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            {
+                                TxtIndTaxaConclusao.Text = $"Taxa de sucesso: {tx.GetDouble():F1}%";
+                            }
+                            else
+                            {
+                                TxtIndTaxaConclusao.Text = "Taxa de sucesso: N/D";
+                            }
+
+                            if (execProp.TryGetProperty("duracao_ms", out var durProp) && durProp.TryGetProperty("p95_ms", out var p95) && p95.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            {
+                                TxtIndDuracaoP95.Text = $"P95: {p95.GetDouble() / 1000.0:F2}s";
+                            }
+                            else
+                            {
+                                TxtIndDuracaoP95.Text = "P95: N/D";
+                            }
+                        }
+                    }
+
+                    // Pendências
+                    if (root.TryGetProperty("pendencias", out var pendProp))
+                    {
+                        string stPend = pendProp.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                        if (stPend == "OK")
+                        {
+                            int totP = pendProp.TryGetProperty("total", out var tp) && tp.ValueKind == System.Text.Json.JsonValueKind.Number ? tp.GetInt32() : 0;
+                            int abP = pendProp.TryGetProperty("abertas", out var ap) && ap.ValueKind == System.Text.Json.JsonValueKind.Number ? ap.GetInt32() : 0;
+                            TxtIndPendencias.Text = $"{abP} abertas / {totP} total";
+                        }
+                        else
+                        {
+                            TxtIndPendencias.Text = "NÃO DISPONÍVEL";
+                        }
+                    }
+
+                    // Entregas
+                    if (root.TryGetProperty("entregas", out var delivProp))
+                    {
+                        string stDel = delivProp.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                        if (stDel == "OK")
+                        {
+                            int totD = delivProp.TryGetProperty("total_pacotes", out var td) && td.ValueKind == System.Text.Json.JsonValueKind.Number ? td.GetInt32() : 0;
+                            int aprD = delivProp.TryGetProperty("aprovados", out var ad) && ad.ValueKind == System.Text.Json.JsonValueKind.Number ? ad.GetInt32() : 0;
+                            TxtIndEntregas.Text = $"{aprD} aprovados / {totD} total";
+                        }
+                        else
+                        {
+                            TxtIndEntregas.Text = "NÃO DISPONÍVEL";
+                        }
+                    }
+
+                    TxtIndicadoresStatus.Text = "Indicadores atualizados com sucesso.";
+                    TxtIndicadoresStatus.Foreground = new SolidColorBrush(Color.FromRgb(82, 183, 136));
+                    PainelIndicadoresMetricas.Visibility = Visibility.Visible;
+                }
+            }
+            catch (Exception ex)
+            {
+                TxtIndicadoresStatus.Text = $"Erro na consulta de indicadores: {ex.Message}";
+                TxtIndicadoresStatus.Foreground = new SolidColorBrush(Color.FromRgb(231, 111, 81));
+            }
+            finally
+            {
+                BtnConsultarIndicadores.IsEnabled = true;
+            }
+        }
     }
 }

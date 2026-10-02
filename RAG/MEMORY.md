@@ -982,4 +982,25 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Resiliência a logs corrompidos: linhas JSON inválidas são capturadas, ignoradas e contabilizadas no bloco `qualidade_dados`.
 - **Cobertura de Testes**:
   - `tests/test_oxcad_indicators.py`: 18 cenários contratuais cobrindo logs vazios, múltiplas transições, falhas, cancelamentos, percentis, arquivos ausentes, dados incompletos, isolamento e determinismo (100% PASS).
-- **Status do Roadmap**: **P2.1 CONCLUÍDO; P2.2 AINDA NÃO INICIADO**.
+- **Status do Roadmap**: **P2.1 CONCLUÍDO**.
+
+### 34. Decisão Arquitetural e Implementação: P2.2 — Indicadores Operacionais e Visão Consolidada de Processo (2026-10-02)
+- **Motivação e Diretrizes**:
+  - Evolução do núcleo analítico do P2.1 para permitir a utilização operacional dos indicadores no OXCAD e na Palette WPF, sem transformar consultas em execuções operacionais (`OxCadExecution`) e sem contaminar o `OxCadExecutionRegistry`.
+  - Separação estrita de responsabilidades:
+    - `workspace/workspace_indicators.py`: Motor analítico determinístico sob o contrato Schema 1 com suporte a filtros de ação, estado final, período temporal e consolidação de múltiplos projetos.
+    - `workspace/workspace_indicators_cli.py`: Camada de consulta e apresentação CLI com modos JSON estruturado e resumo textual amigável de console.
+    - `oxcad/WorkspaceService.cs` (`ConsultarIndicadoresJsonAsync`): Execução assíncrona em background via `Task.Run` sem registro no registry de execuções.
+    - `oxcad/OxCadControl.xaml` / `OxCadControl.xaml.cs`: Apresentação na paleta com cards de status, execuções, falhas, taxa de conclusão, percentil P95, pendências, entregas e limitações de cobertura do log rotativo.
+- **Filtros e Consolidação**:
+  - Filtro por SOB: validação autoritativa contra `.sob_state.json` com rejeição imediata (`IDENTITY_UNVERIFIABLE`).
+  - Filtro por período: intervalo de datas ISO aplicado deterministamente aos timestamps observados.
+  - Filtro por ação: filtragem case-insensitive (`cqt`, `orcamento`, `sob`, etc.).
+  - Filtro por estado: filtragem pelo estado final reconstruído (`Concluido`, `Falhou`, `Cancelado`).
+  - Consolidação de workspace: varredura defensiva de subpastas do workspace agregando stores duráveis (.pending, .deliveries, .time, .auxcad_versions), com suporte explícito a workspace vazio (`SEM_DADOS`).
+- **Governança de Dados**:
+  - Proibição absoluta de métricas individuais: zero ranking de colaboradores, zero mensuração de produtividade pessoal. Foco exclusivo no processo e na integridade dos artefatos de engenharia.
+- **Cobertura de Testes**:
+  - `tests/test_oxcad_indicators_operational.py`: 20 cenários cobrindo consultas válidas, ausências, divergências, múltiplos projetos, filtros, logs corrompidos, determinismo, ausência de efeitos colaterais e segurança de threading (100% PASS).
+  - Suíte completa de 777 testes (774 passed, 3 skipped).
+- **Status do Roadmap**: **P2.2 CONCLUÍDO; P2.3 AINDA NÃO INICIADO**.

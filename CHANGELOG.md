@@ -76,6 +76,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Persistência de Manifesto SOB**: Validação obrigatória do retorno de `gravar_manifesto_execucao` em `sob/sob_manager.py`.
 
 ### Added (Baseline P0/P1)
+- **Indicadores Operacionais e Visão Consolidada de Processo (P2.2)**:
+  - Camada de consulta e apresentação de indicadores de processo (`workspace/workspace_indicators_cli.py`) suportando saídas em JSON estruturado e resumos amigáveis em console.
+  - Integração assíncrona com a paleta WPF do AutoCAD (`OxCadControl.xaml`, `WorkspaceService.cs`) com cards de métricas de execução, duração P95, pendências, entregas e limitações de log rotativo, totalmente isolada de `OxCadExecution` e `OxCadExecutionRegistry`.
+  - Suporte a filtros analíticos refinados: por SOB, por período temporal (datas ISO), por tipo de ação (`cqt`, `orcamento`, `sob`, etc.) e por estado final (`Concluido`, `Falhou`, `Cancelado`).
+  - Consolidação defensiva de múltiplos projetos sob uma raiz de workspace com suporte explícito a workspace vazio (`SEM_DADOS`).
+  - Governança estrita sem métricas de produtividade individual ou rankings de pessoas.
+  - Suíte de 20 testes contratuais em `tests/test_oxcad_indicators_operational.py` (100% PASS).
 - **Módulo Analítico de Indicadores de Gestão (P2.1 — workspace/workspace_indicators.py)**:
   - Implementação do motor analítico determinístico, read-only e auditável sob o contrato IndicadoresGestao (Schema 1).
   - Reconstrução obrigatória de ciclo de vida por xecution_id, prevenindo a inflação de volume e taxas decorrente de múltiplas transições intermediárias.

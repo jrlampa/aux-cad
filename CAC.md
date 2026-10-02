@@ -1076,3 +1076,22 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
     - **Qualidade e Cobertura**:
       - Suíte dedicada `tests/test_oxcad_indicators.py` com 18 testes obrigatórios (100% PASS).
     - **Status**: **IMPLEMENTADO E TESTADO (P2.1 CONCLUÍDO)**.
+
+19. **Decisão Arquitetural — P2.2: Visão Operacional de Indicadores e Consolidação de Processo (`workspace_indicators_cli.py`, `WorkspaceService.cs` & `OxCadControl.xaml`) (2026-10-02)**:
+    - **Princípio e Escopo**:
+      - Camada de consulta e apresentação operacional dos indicadores de processo desacoplada do ciclo de execução `OxCadExecution` e de `OxCadExecutionRegistry`. A consulta de indicadores é estritamente analítica e não gera novas execuções operacionais nem escreve em disco.
+      - Apresentação multifacetada: JSON estruturado sob o Schema 1 para integração sistêmica e resumo amigável de console/terminal via `workspace/workspace_indicators_cli.py`.
+      - Integração com a paleta WPF do AutoCAD (`OxCadControl.xaml` / `WorkspaceService.cs`) de forma assíncrona (`Task.Run` e sem bloqueio da thread UI do AutoCAD), permitindo consulta de indicadores da SOB ativa ou consolidação de workspace.
+    - **Filtros e Capacidades Analíticas**:
+      - Filtro por SOB com checagem autoritativa de identidade (`.sob_state.json`) e rejeição com `IDENTITY_UNVERIFIABLE` em caso de divergência.
+      - Filtro por período temporal (`periodo_inicio`, `periodo_fim` em formato ISO).
+      - Filtro por tipo de ação (`cqt`, `orcamento`, `sob`, `ambiental`, `prancha`, `validar`).
+      - Filtro por estado final da execução (`Concluido`, `Falhou`, `Cancelado`, `Executando`).
+      - Consolidação de workspace: agregação defensiva de múltiplos projetos sob uma pasta raiz (`workspace_root`), somando pendências, entregas, tempo operacional e snapshots com explicitação de projetos observados. Suporte a workspace vazio reportando `SEM_DADOS` com limitações explícitas.
+    - **Diretrizes Éticas e de Governança**:
+      - Ausência rigorosa de métricas individuais: zero ranking de pessoas, zero produtividade individual e zero avaliação de desempenho pessoal. Todos os indicadores permanecem estritamente descritivos e vinculados a projetos e processos de engenharia.
+    - **Qualidade e Cobertura**:
+      - Suíte dedicada de 20 testes contratuais em `tests/test_oxcad_indicators_operational.py` (100% PASS).
+      - Suíte completa de 777 testes (774 passed, 3 skipped) 100% limpa.
+      - Compilação .NET da paleta e harness C# sem erros (0 erros).
+    - **Status**: **IMPLEMENTADO E TESTADO (P2.2 CONCLUÍDO)**.

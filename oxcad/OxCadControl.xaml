@@ -340,6 +340,88 @@
                     </ItemsControl>
                 </Border>
 
+                <!-- SEÇÃO INDICADORES DE PROCESSO (P2.2) -->
+                <TextBlock Text="INDICADORES DE PROCESSO" FontSize="10" FontWeight="SemiBold" Foreground="#7E7E94" Margin="0,4,0,6" />
+
+                <Border Background="#20202A" CornerRadius="6" Padding="10" BorderBrush="#353548" BorderThickness="1" Margin="0,0,0,10">
+                    <StackPanel>
+                        <!-- Header com botão consultar e seletor de escopo -->
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="ESCOPO:" FontSize="9" FontWeight="SemiBold" Foreground="#8A8A9E" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock x:Name="TxtIndicadoresEscopo" Text="SOB Atual" FontSize="10" FontWeight="Bold" Foreground="#4EA8DE" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Button x:Name="BtnConsultarIndicadores" Grid.Column="1" Content="📊 Consultar" Height="24" Padding="8,2"
+                                    Background="#2A3B4C" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="10" BorderThickness="0"
+                                    Cursor="Hand" Click="BtnConsultarIndicadores_Click" />
+                        </Grid>
+
+                        <!-- Indicador de Carregamento -->
+                        <TextBlock x:Name="TxtIndicadoresStatus" Text="Indicadores não consultados." FontSize="10" Foreground="#8A8A9E" Margin="0,2,0,4"/>
+
+                        <!-- Painel de Métricas -->
+                        <StackPanel x:Name="PainelIndicadoresMetricas" Visibility="Collapsed">
+                            <!-- Grid Execuções -->
+                            <Border Background="#16161E" CornerRadius="4" Padding="6,4" Margin="0,2,0,4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="EXECUÇÕES" FontSize="8" FontWeight="SemiBold" Foreground="#7A7A8E"/>
+                                        <TextBlock x:Name="TxtIndTotalExec" Text="0" FontSize="13" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,1,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="CONCLUÍDAS" FontSize="8" FontWeight="SemiBold" Foreground="#7A7A8E"/>
+                                        <TextBlock x:Name="TxtIndConcluidas" Text="0" FontSize="13" FontWeight="Bold" Foreground="#52B788" Margin="0,1,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="FALHAS" FontSize="8" FontWeight="SemiBold" Foreground="#7A7A8E"/>
+                                        <TextBlock x:Name="TxtIndFalhas" Text="0" FontSize="13" FontWeight="Bold" Foreground="#E76F51" Margin="0,1,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Taxa e Duração -->
+                            <Grid Margin="0,2,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="TxtIndTaxaConclusao" Text="Taxa de sucesso: -" FontSize="9" Foreground="#C5C5D2"/>
+                                <TextBlock x:Name="TxtIndDuracaoP95" Grid.Column="1" Text="P95: -" FontSize="9" Foreground="#C5C5D2" HorizontalAlignment="Right"/>
+                            </Grid>
+
+                            <!-- Resumo Pendências & Entregas -->
+                            <Border Background="#252532" CornerRadius="4" Padding="6,4" Margin="0,2,0,4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="PENDÊNCIAS" FontSize="8" FontWeight="SemiBold" Foreground="#7A7A8E"/>
+                                        <TextBlock x:Name="TxtIndPendencias" Text="-" FontSize="10" Foreground="#E2E2EC" Margin="0,1,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="ENTREGAS" FontSize="8" FontWeight="SemiBold" Foreground="#7A7A8E"/>
+                                        <TextBlock x:Name="TxtIndEntregas" Text="-" FontSize="10" Foreground="#E2E2EC" Margin="0,1,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Limitações / Observações -->
+                            <TextBlock x:Name="TxtIndObservacoes" Text="Log rotativo ativo (janela observada limitada)." FontSize="8" Foreground="#707085" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
 

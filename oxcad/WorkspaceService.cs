@@ -958,6 +958,111 @@ namespace OxCad
                 executionManagedByHost: executionManagedByHost,
                 verifiedContext: verifiedContext);
         }
+
+        /// <summary>
+        /// P2.2: Consulta analítica e operacional de indicadores de processo e gestão (SOB / Workspace).
+        /// Totalmente read-only, não entra no ciclo OxCadExecutionRegistry e não cria execuções operacionais.
+        /// </summary>
+        public static async Task<string> ConsultarIndicadoresJsonAsync(
+            string? projectRoot = null,
+            string? sobId = null,
+            string? workspaceRoot = null,
+            string? acao = null,
+            string? estado = null,
+            string? logFile = null)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    string rootDir = ObterDiretorioRaizProjeto(projectRoot ?? workspaceRoot);
+                    string scriptPath = Path.Combine(rootDir, "workspace", "workspace_indicators_cli.py");
+                    if (!File.Exists(scriptPath))
+                    {
+                        scriptPath = Path.Combine(rootDir, "workspace", "workspace_indicators.py");
+                    }
+
+                    if (!File.Exists(scriptPath))
+                    {
+                        return "{\"status\": \"NÃO DISPONÍVEL\", \"erro\": \"Script de indicadores não localizado.\"}";
+                    }
+
+                    string pythonExe = ObterExecutavelPython();
+                    int timeout = ObterTimeoutMilissegundos();
+
+                    var sbArgs = new StringBuilder();
+                    sbArgs.Append($"\"{scriptPath}\"");
+
+                    if (!string.IsNullOrWhiteSpace(projectRoot) && Directory.Exists(projectRoot))
+                    {
+                        sbArgs.Append($" --project-root \"{projectRoot}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(sobId))
+                    {
+                        sbArgs.Append($" --sob \"{sobId}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(workspaceRoot) && Directory.Exists(workspaceRoot))
+                    {
+                        sbArgs.Append($" --workspace-root \"{workspaceRoot}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(acao))
+                    {
+                        sbArgs.Append($" --action \"{acao}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(estado))
+                    {
+                        sbArgs.Append($" --state \"{estado}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(logFile) && File.Exists(logFile))
+                    {
+                        sbArgs.Append($" --log-file \"{logFile}\"");
+                    }
+
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = pythonExe,
+                        Arguments = sbArgs.ToString(),
+                        WorkingDirectory = rootDir,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        StandardOutputEncoding = Encoding.UTF8,
+                        StandardErrorEncoding = Encoding.UTF8
+                    };
+
+                    using var proc = new Process { StartInfo = psi };
+                    var outputBuilder = new StringBuilder();
+                    var errorBuilder = new StringBuilder();
+
+                    proc.OutputDataReceived += (s, e) => { if (e.Data != null) outputBuilder.AppendLine(e.Data); };
+                    proc.ErrorDataReceived += (s, e) => { if (e.Data != null) errorBuilder.AppendLine(e.Data); };
+
+                    proc.Start();
+                    proc.BeginOutputReadLine();
+                    proc.BeginErrorReadLine();
+
+                    bool finished = proc.WaitForExit(timeout);
+                    if (!finished)
+                    {
+                        EncerrarProcessoETodosOsFilhos(proc);
+                        return "{\"status\": \"NÃO DISPONÍVEL\", \"erro\": \"Tempo limite excedido na consulta de indicadores.\"}";
+                    }
+
+                    string saidaLimpa = ExtrairJsonValido(outputBuilder.ToString());
+                    if (string.IsNullOrWhiteSpace(saidaLimpa))
+                    {
+                        return "{\"status\": \"NÃO DISPONÍVEL\", \"erro\": \"Falha ao obter payload JSON válido de indicadores.\"}";
+                    }
+
+                    return saidaLimpa;
+                }
+                catch (Exception ex)
+                {
+                    return $"{{\"status\": \"NÃO DISPONÍVEL\", \"erro\": \"Exceção na consulta de indicadores: {ex.Message.Replace("\"", "'")}\"}}";
+                }
+            });
+        }
     }
 
     /// <summary>
