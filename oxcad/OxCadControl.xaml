@@ -462,6 +462,134 @@
                     </ItemsControl>
                 </Border>
 
+                <!-- SEÇÃO VALIDAÇÃO DE CAMPO (P2.5) -->
+                <TextBlock Text="VALIDAÇÃO DE CAMPO" FontSize="10" FontWeight="SemiBold" Foreground="#7E7E94" Margin="0,4,0,6" />
+
+                <Border Background="#20202A" CornerRadius="6" Padding="10" BorderBrush="#353548" BorderThickness="1" Margin="0,0,0,10">
+                    <StackPanel>
+                        <!-- Cabeçalho de Modos com Badge -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Modo Operacional:" FontSize="9" Foreground="#85859B"/>
+                                <TextBlock x:Name="TxtModoOperacional" Text="OFFLINE" FontSize="11" FontWeight="Bold" Foreground="#E2E2EC"/>
+                            </StackPanel>
+                            <Border Grid.Column="1" x:Name="BadgeModoOperacional" Background="#2C2C3E" CornerRadius="3" Padding="6,2" VerticalAlignment="Center">
+                                <TextBlock x:Name="TxtBadgeModo" Text="LOCAL" FontSize="9" FontWeight="SemiBold" Foreground="#82AAFF"/>
+                            </Border>
+                        </Grid>
+
+                        <TextBlock x:Name="TxtMensagemOperacional" Text="Operação local disponível; sincronização externa pendente." FontSize="8.5" Foreground="#A0A0B4" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                        <!-- 4 Dimensões de Estado -->
+                        <Border Background="#181822" CornerRadius="4" Padding="6,4" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,1">
+                                    <TextBlock Text="Núcleo Local:" FontSize="8" Foreground="#656578"/>
+                                    <TextBlock x:Name="TxtCoreStatus" Text="AVAILABLE" FontSize="9" FontWeight="SemiBold" Foreground="#52B788"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,1">
+                                    <TextBlock Text="Conectividade:" FontSize="8" Foreground="#656578"/>
+                                    <TextBlock x:Name="TxtConnectivityMode" Text="OFFLINE" FontSize="9" FontWeight="SemiBold" Foreground="#DDA15E"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,3,0,1">
+                                    <TextBlock Text="Integrações:" FontSize="8" Foreground="#656578"/>
+                                    <TextBlock x:Name="TxtIntegrationAvailability" Text="NOT_CONFIGURED" FontSize="9" FontWeight="SemiBold" Foreground="#85859B"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,3,0,1">
+                                    <TextBlock Text="Capacidade:" FontSize="8" Foreground="#656578"/>
+                                    <TextBlock x:Name="TxtOperationalCapability" Text="LOCAL_EXEC" FontSize="9" FontWeight="SemiBold" Foreground="#82AAFF"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Identidade e Soberania -->
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="SOB" FontSize="8" Foreground="#656578"/>
+                                <TextBlock x:Name="TxtCampoSOB" Text="-" FontSize="9" FontWeight="SemiBold" Foreground="#C5C5D2"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="DWG" FontSize="8" Foreground="#656578"/>
+                                <TextBlock x:Name="TxtCampoDWG" Text="CONFIRMADO" FontSize="9" FontWeight="SemiBold" Foreground="#52B788"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="FINGERPRINT" FontSize="8" Foreground="#656578"/>
+                                <TextBlock x:Name="TxtCampoFingerprint" Text="CONFIRMADO" FontSize="9" FontWeight="SemiBold" Foreground="#52B788"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Checklist Sumário -->
+                        <Border Background="#181822" CornerRadius="4" Padding="6,4" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                    <TextBlock Text="OK" FontSize="8" FontWeight="SemiBold" Foreground="#52B788" HorizontalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtChecklistOk" Text="0" FontSize="11" FontWeight="Bold" Foreground="#E2E2EC" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                    <TextBlock Text="ALERTA" FontSize="8" FontWeight="SemiBold" Foreground="#E0A96D" HorizontalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtChecklistAlerta" Text="0" FontSize="11" FontWeight="Bold" Foreground="#E2E2EC" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                    <TextBlock Text="ERRO" FontSize="8" FontWeight="SemiBold" Foreground="#E63946" HorizontalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtChecklistErro" Text="0" FontSize="11" FontWeight="Bold" Foreground="#E2E2EC" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                    <TextBlock Text="NÃO VERIF." FontSize="8" FontWeight="SemiBold" Foreground="#85859B" HorizontalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtChecklistNaoVerificado" Text="0" FontSize="11" FontWeight="Bold" Foreground="#E2E2EC" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Métricas Locais -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="EVIDÊNCIAS" FontSize="8" Foreground="#656578"/>
+                                <TextBlock x:Name="TxtCampoEvidencias" Text="0" FontSize="10" FontWeight="SemiBold" Foreground="#C5C5D2"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="PENDÊNCIAS" FontSize="8" Foreground="#656578"/>
+                                <TextBlock x:Name="TxtCampoPendencias" Text="0" FontSize="10" FontWeight="SemiBold" Foreground="#C5C5D2"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="SYNC PENDENTE" FontSize="8" Foreground="#656578"/>
+                                <TextBlock x:Name="TxtCampoSincronizacoes" Text="0" FontSize="10" FontWeight="SemiBold" Foreground="#C5C5D2"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
 

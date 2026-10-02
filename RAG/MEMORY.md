@@ -1061,4 +1061,32 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - `tests/test_oxcad_integrations.py`: 40 cenários contratuais cobrindo registro, unicidade, busca, capacidades, resultados, contexto soberano, descritores, contratos, ausência de rede, ausência de secrets e regressão P2.1/P2.2/P2.3 (100% PASS).
   - Harness C# (`tests/oxcad_context_gate/Program.cs`): Asserções completas em C# para registry, capabilities, contexto e descritores (100% PASS).
   - Suíte completa do repositório: 834 passaram, 3 skipped (100% de sucesso).
-- **Status do Roadmap**: **P2.4 CONCLUÍDO; P2.5 AINDA NÃO INICIADO**.
+- **Status do Roadmap**: **P2.4 CONCLUÍDO**.
+
+
+### 37. Decisão Arquitetural e Implementação: P2.5 — Validação de Campo e Operação Resiliente/Offline (2026-10-02)
+- **Motivação e Diretrizes**:
+  - Habilitação da operação contínua e resiliente do OXCAD em condições de conectividade inexistente (`OFFLINE`) ou parcial (`DEGRADED`), preservando estritamente a autoridade do AutoCAD sobre o DWG (`FingerprintGuid`, `AUXCAD_PROJECT_SCOPE`, `SOB_ID`), o histórico, as evidências e o rastreamento técnico.
+  - Regra de ouro da disponibilidade: a ausência de internet ou a indisponibilidade de SharePoint/SAP/CRM nunca pode invalidar o projeto local, apagar evidências ou corromper a identidade do desenho.
+- **Quatro Dimensões Independentes de Estado**:
+  - `CORE_STATUS`: `AVAILABLE`, `UNAVAILABLE` (o núcleo local do OXCAD/AutoCAD está operacional).
+  - `CONNECTIVITY_MODE`: `ONLINE`, `OFFLINE`, `UNKNOWN` (existe conectividade de rede externa).
+  - `INTEGRATION_AVAILABILITY`: `AVAILABLE`, `PARTIAL`, `UNAVAILABLE`, `NOT_CONFIGURED` (adaptadores de integração estão disponíveis).
+  - `OPERATIONAL_MODE`: `NORMAL`, `DEGRADED`, `OFFLINE`, `BLOCKED` (capacidade efetiva da ação solicitada).
+  - Derivação determinística: `OFFLINE` significa operação local disponível com sincronização remota pendente; `BLOCKED` significa que a operação exige estritamente um serviço externo inoperante/não configurado ou núcleo indisponível.
+- **Validação de Campo e Evidências Técnicas**:
+  - `workspace/workspace_field_validation.py` & `oxcad/offline/FieldValidationContracts.cs`: Contrato estruturado `FieldValidationItem` com proteção contra sequestro de contexto (`IDENTITY_MISMATCH`).
+  - Status contratuais: `OK`, `ALERTA`, `ERRO`, `NAO_VERIFICADO`, `NAO_APLICAVEL`, `NAO_DISPONIVEL`.
+  - `FieldEvidenceReference`: Referência segura a arquivos locais (fotos, PDFs, DWGs, KMZs, CSVs, relatórios) com integridade verificável via hash SHA-256 (`VALID`, `MISSING`, `CHANGED`, `CORRUPT`).
+- **Integração com Pendências Existentes (.oxcad/pending.json)**:
+  - Divergências de campo em `ERRO` ou `ALERTA` são direcionadas ao cadastro autoritativo existente de pendências via `workspace_pending.create`, sem duplicações.
+- **Fila de Sincronização Futura (SyncQueue)**:
+  - `workspace/workspace_sync_queue.py` & `oxcad/offline/SyncQueueContracts.cs`: Persistência de intenções operacionais em `.oxcad/sync_queue.json` com deduplicação rigorosa por `IdempotencyKey`.
+  - Operações externas enquanto offline registram status explícito `PENDING` (ou `PENDING_EXTERNAL_SYNC`), sem jamais simular falso sucesso (`SUCCEEDED`).
+  - Zero background workers, zero schedulers, zero chamadas automáticas de rede.
+- **Apresentação na Paleta WPF (`OxCadControl.xaml`, `OxCadControl.ValidacaoCampo.cs`)**:
+  - Painel visual "VALIDAÇÃO DE CAMPO" com exibição das 4 dimensões de estado, modo operacional em badges temáticos, mensagens contextuais, confirmação de identidade do DWG/SOB e métricas do checklist.
+- **Cobertura de Testes**:
+  - `tests/test_oxcad_field_offline.py`: 30 cenários contratuais cobrindo todas as 30 exigências da especificação P2.5 (100% PASS).
+  - Suíte completa do repositório: 864 passaram, 3 skipped (100% de sucesso).
+- **Status do Roadmap**: **P2.5 CONCLUÍDO; P2.6 AINDA NÃO INICIADO**.

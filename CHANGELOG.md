@@ -76,6 +76,14 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Persistência de Manifesto SOB**: Validação obrigatória do retorno de `gravar_manifesto_execucao` em `sob/sob_manager.py`.
 
 ### Added (Baseline P0/P1)
+- **Validação de Campo e Operação Resiliente/Offline (P2.5)**:
+  - Arquitetura de resiliência e operação contínua com 4 dimensões explícitas de estado (`CoreStatus`, `ConnectivityMode`, `IntegrationAvailability`, `OperationalMode`).
+  - Distinção rigorosa entre `OFFLINE` (núcleo local ativo, sincronização remota pendente) e `BLOCKED` (dependência estrita de integração externa indisponível ou núcleo inoperante).
+  - Contrato persistível de validação de campo (`FieldValidationItem`) e evidências técnicas (`FieldEvidenceReference`) com integridade binária SHA-256 e proteção absoluta contra `IDENTITY_MISMATCH`.
+  - Integração com o cadastro autoritativo existente de pendências (`.oxcad/pending.json`) para divergências em `ERRO` ou `ALERTA` sem duplicação.
+  - Fila declarativa de intenção futura de sincronização (`SyncQueue`) persistida em `.oxcad/sync_queue.json` com deduplicação por `IdempotencyKey` e zero workers ou chamadas de rede em background.
+  - Painel visual "VALIDAÇÃO DE CAMPO" na paleta WPF do AutoCAD exibindo modo operacional, status das 4 dimensões, soberania SOB/DWG/Fingerprint, checklist e métricas locais.
+  - Suíte dedicada com 30 testes em `tests/test_oxcad_field_offline.py` (100% PASS).
 - **Plataforma de Integração e Extensibilidade (P2.4)**:
   - Arquitetura de Gateway e desacoplamento do Core: o núcleo conhece apenas contratos de domínio sem conhecer URLs, endpoints, SDKs externos, tokens ou credenciais.
   - Soberania garantida da autoridade DWG e AutoCAD através de `IntegrationContext`: rejeição imediata (`IDENTITY_MISMATCH`) de qualquer tentativa de alteração de SOB, desvio de caminho DWG ou substituição de FingerprintGuid.

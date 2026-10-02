@@ -1143,4 +1143,34 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
       - Suíte dedicada `tests/test_oxcad_integrations.py` com 40 testes contratuais (100% PASS).
       - Testes no C# Harness (`tests/oxcad_context_gate/Program.cs`) cobrindo registry, capabilities, contexto e descritores (100% PASS).
       - Suíte completa de 837 testes (834 pass, 3 skip).
-    - **Status**: **IMPLEMENTADO E TESTADO (P2.4 CONCLUÍDO; P2.5 AINDA NÃO INICIADO)**.
+    - **Status**: **IMPLEMENTADO E TESTADO (P2.4 CONCLUÍDO)**.
+
+
+22. **Decisão Arquitetural — P2.5: Validação de Campo e Operação Resiliente/Offline (`oxcad/offline/`, `workspace/workspace_operational_states.py`, `workspace/workspace_field_validation.py`, `workspace/workspace_sync_queue.py`) (2026-10-02)**:
+    - **Princípio e Escopo**:
+      - Capacitação do OXCAD para operar continuamente em campo e em condições de conectividade instável ou nula (`OFFLINE` / `DEGRADED`), mantendo integridade, rastreabilidade técnica e autoridade absoluta do AutoCAD sobre o DWG (`FingerprintGuid`, `AUXCAD_PROJECT_SCOPE`, `SOB_ID`).
+      - Nenhuma perda de conectividade invalida o projeto local, apaga evidências ou gera dados falsos.
+    - **Quatro Dimensões Independentes de Estado**:
+      - `CORE_STATUS`: `AVAILABLE`, `UNAVAILABLE` (núcleo local operacional).
+      - `CONNECTIVITY_MODE`: `ONLINE`, `OFFLINE`, `UNKNOWN` (conectividade externa).
+      - `INTEGRATION_AVAILABILITY`: `AVAILABLE`, `PARTIAL`, `UNAVAILABLE`, `NOT_CONFIGURED` (disponibilidade dos adaptadores externos).
+      - `OPERATIONAL_MODE`: `NORMAL`, `DEGRADED`, `OFFLINE`, `BLOCKED` (capacidade efetiva da ação solicitada).
+      - Derivação determinística de regras: `OFFLINE` representa operação local resiliente com sincronização externa pendente; `BLOCKED` indica dependência estrita de integração externa indisponível ou núcleo inoperante.
+    - **Validação de Campo e Evidências Técnicas**:
+      - Contrato estruturado `FieldValidationItem` (`ValidationId`, `SOB_ID`, `ProjectRoot`, `DWGPath`, `DatabaseFingerprint`, `Timestamp`, `OperatorContext`, `Category`, `Question`, `Expected`, `Observed`, `Status`, `EvidenceReferences`, `Notes`).
+      - Status: `OK`, `ALERTA`, `ERRO`, `NAO_VERIFICADO`, `NAO_APLICAVEL`, `NAO_DISPONIVEL`.
+      - Proteção ativa contra sequestro de contexto: qualquer divergência de `SOB_ID`, `DWGPath` ou `DatabaseFingerprint` resulta deterministicamente em `IDENTITY_MISMATCH`.
+      - Referências de evidências `FieldEvidenceReference` com integridade binária SHA-256 (`VALID`, `MISSING`, `CHANGED`, `CORRUPT`, `IDENTITY_MISMATCH`) sem duplicação arbitrária de arquivos em disco.
+    - **Integração com Pendências Existentes (.oxcad/pending.json)**:
+      - Divergências de campo em `ERRO` ou `ALERTA` são integradas diretamente ao store autoritativo de pendências através de `workspace_pending.create`, com controle rigoroso de não-duplicação.
+    - **Fila de Sincronização Futura (SyncQueue)**:
+      - Persistência de intenções operacionais em `.oxcad/sync_queue.json` (`SyncId`, `OperationId`, `IdempotencyKey`, `CorrelationId`, `Operation`, `ProviderId`, `SOB_ID`, `Artifact`, `CreatedAt`, `Status`).
+      - Status: `PENDING`, `READY`, `SUCCEEDED`, `FAILED`, `BLOCKED`.
+      - Zero workers, schedulers, retries ou conexões externas automáticas em background. Uploads offline registram status explícito `PENDING` (ou `PENDING_EXTERNAL_SYNC`), nunca simulando falsamente `SUCCEEDED`.
+    - **Apresentação Visual na Paleta WPF**:
+      - Seção "VALIDAÇÃO DE CAMPO" com visualização clara de Modo Operacional, mensagens de orientação, status do Core, Conectividade, Integrações, contadores de checklist (OK, Alerta, Erro, Não Verificado) e métricas locais.
+    - **Qualidade e Cobertura**:
+      - Suíte dedicada `tests/test_oxcad_field_offline.py` com 30 testes contratuais (100% PASS).
+      - Suíte combinada de indicadores e resiliência (P2.1–P2.5): 128 testes (100% PASS).
+      - Suíte completa do repositório: 864 passaram, 3 skipped (100% de sucesso).
+    - **Status**: **IMPLEMENTADO E TESTADO (P2.5 CONCLUÍDO; P2.6 AINDA NÃO INICIADO)**.

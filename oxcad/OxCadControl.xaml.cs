@@ -41,6 +41,7 @@ namespace OxCad
             CarregarIconeHeader();
             ConfigurarTimerVisual();
             InicializarSecaoIntegracoes();
+            InicializarSecaoValidacaoCampo();
             Loaded += OxCadControl_Loaded;
             Unloaded += OxCadControl_Unloaded;
         }
