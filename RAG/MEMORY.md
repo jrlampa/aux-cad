@@ -1024,4 +1024,41 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - **Cobertura de Testes**:
   - `tests/test_oxcad_indicators_quality.py`: 20 cenários contratuais cobrindo todos os requisitos funcionais do P2.3 (100% PASS).
   - Suíte completa do repositório: 794 passaram, 3 skipped (100% de sucesso).
-- **Status do Roadmap**: **P2.3 CONCLUÍDO; P2.4 AINDA NÃO INICIADO**.
+- **Status do Roadmap**: **P2.3 CONCLUÍDO**.
+
+### 36. Decisão Arquitetural e Implementação: P2.4 — Plataforma de Integração e Extensibilidade (2026-10-02)
+- **Motivação e Diretrizes**:
+  - Evolução do OXCAD de um sistema com adapters pontuais para uma plataforma interna unificada de integração e extensibilidade.
+  - Princípio de desacoplamento do Core: o núcleo conhece somente contratos de domínio independentes de fornecedor, sem conhecer URLs, endpoints, SDKs externos, tokens, cookies ou credenciais.
+  - Soberania e autoridade estrita do DWG e AutoCAD: nenhuma integração externa pode alterar `DatabaseFingerprint`, `SOB_ID`, `AUXCAD_PROJECT_SCOPE` ou declarar outro DWG como autoridade.
+  - Segurança em primeiro lugar: zero armazenamento de senhas, tokens ou segredos; autenticação puramente declarativa; zero chamadas externas de rede nesta fase; zero criação de ciclos `OxCadExecution`.
+- **Contratos de Domínio & Extensibilidade**:
+  - `IIntegrationProvider`: Contrato unificado base com checagem assíncrona de disponibilidade e descoberta de capabilities.
+  - `IIdentityProvider`: Provedor de identidade e contas de usuário corporativas (preparado para Entra ID, OAuth/OIDC).
+  - `IDocumentRepository`: Repositório de documentos corporativos (preparado para SharePoint, OneDrive, GED).
+  - `IArtifactRepository`: Rastreamento de entregáveis e versionamento (.auxcad_versions, pendências).
+  - `IWorkOrderProvider`: Ordens de serviço e despachos de engenharia (preparado para SAP, ERPs).
+  - `IBusinessSystemProvider`: Entidades e dados corporativos (preparado para SAP S/4HANA, SAP BTP).
+  - `ICustomerProvider`: Informações e histórico de clientes (preparado para Salesforce CRM).
+  - `INotificationProvider`: Notificações corporativas e alertas operacionais.
+  - `IEventProvider`: Publicação e assinatura de eventos assíncronos / webhooks.
+  - `IRestProvider` & `ISoapProvider`: Gateways declarativos padronizados para protocolos corporativos.
+- **Catálogo de Provedores Padrão (`IntegrationRegistry.CreateDefault()`)**:
+  - `local`: Repositório local de artefatos/documentos (Disponível, None).
+  - `microsoft.graph`: Microsoft Graph (Indisponível, Não configurado, OAuth2).
+  - `microsoft.entra`: Microsoft Entra ID (Indisponível, Não configurado, OpenIdConnect).
+  - `sharepoint`: SharePoint (Indisponível, Não configurado, OAuth2).
+  - `onedrive`: OneDrive (Indisponível, Não configurado, OAuth2).
+  - `sap`: SAP ERP (Indisponível, Não configurado, ClientCredentials).
+  - `sap.s4hana`: SAP S/4HANA (Indisponível, Não configurado, ClientCredentials).
+  - `sap.btp`: SAP BTP (Indisponível, Não configurado, ClientCredentials).
+  - `salesforce`: Salesforce CRM (Indisponível, Não configurado, OAuth2).
+  - `rest`: Gateway REST corporativo (Disponível declarativamente, ApiKey).
+  - `soap`: Gateway SOAP corporativo (Disponível declarativamente, BasicAuth).
+- **Apresentação na Paleta WPF**:
+  - Seção visual compacta "INTEGRAÇÕES" derivada dinamicamente do registry sem bloquear a UI.
+- **Cobertura de Testes**:
+  - `tests/test_oxcad_integrations.py`: 40 cenários contratuais cobrindo registro, unicidade, busca, capacidades, resultados, contexto soberano, descritores, contratos, ausência de rede, ausência de secrets e regressão P2.1/P2.2/P2.3 (100% PASS).
+  - Harness C# (`tests/oxcad_context_gate/Program.cs`): Asserções completas em C# para registry, capabilities, contexto e descritores (100% PASS).
+  - Suíte completa do repositório: 834 passaram, 3 skipped (100% de sucesso).
+- **Status do Roadmap**: **P2.4 CONCLUÍDO; P2.5 AINDA NÃO INICIADO**.

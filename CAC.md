@@ -1123,3 +1123,24 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
       - Suíte completa de 797 testes (794 passed, 3 skipped) 100% limpa.
       - Compilação .NET e harness C# sem erros (0 erros).
     - **Status**: **IMPLEMENTADO E TESTADO (P2.3 CONCLUÍDO)**.
+
+21. **Decisão Arquitetural — P2.4: Plataforma Interna de Integração e Extensibilidade (`oxcad/integration/`, `workspace/workspace_integrations.py`) (2026-10-02)**:
+    - **Princípio e Escopo**:
+      - O Core do OXCAD conhece exclusivamente contratos de domínio independentes de fornecedor, nunca URLs, endpoints específicos, tokens, cookies, credenciais ou SDKs externos.
+      - Nenhuma conexão de rede externa é estabelecida nesta fase: todos os adaptadores externos iniciam como não configurados (`NotConfigured`), operando de forma 100% segura, determinística e offline.
+    - **Soberania do DWG e do AutoCAD**:
+      - O AutoCAD é a única autoridade da identidade real do DWG (`FingerprintGuid`) e de `SOB_ID`.
+      - O `IntegrationContext` protege ativamente a identidade: nenhum provider pode alterar `SOB_ID`, substituir `DatabaseFingerprint`, desviar o caminho do DWG ou sequestrar a autoridade do desenho. Tentativas de desvio resultam deterministicamente em `IDENTITY_MISMATCH`.
+    - **Contratos de Domínio & Capacidades**:
+      - Contratos: `IIntegrationProvider`, `IIdentityProvider`, `IDocumentRepository`, `IArtifactRepository`, `IWorkOrderProvider`, `IBusinessSystemProvider`, `ICustomerProvider`, `INotificationProvider`, `IEventProvider`, `IRestProvider`, `ISoapProvider`.
+      - Capabilities: `DocumentRead`, `DocumentWrite`, `ArtifactRead`, `ArtifactWrite`, `WorkOrderRead`, `WorkOrderWrite`, `BusinessDataRead`, `BusinessDataWrite`, `CustomerRead`, `CustomerWrite`, `IdentityRead`, `UserRead`, `EventSubscribe`, `EventPublish`, `RestCall`, `SoapCall`.
+    - **Autenticação Puramente Declarativa**:
+      - `AuthenticationDescriptor`: registra apenas requisitos de autenticação (`OAuth2`, `OpenIdConnect`, `ClientCredentials`, `ApiKey`, `BasicAuth`, etc.), sem armazenar ou persistir segredos, chaves de API, senhas ou tokens.
+    - **Catálogo Padronizado (`IntegrationRegistry`)**:
+      - Provedores arquiteturais preparados: `local`, `microsoft.graph`, `microsoft.entra`, `sharepoint`, `onedrive`, `sap`, `sap.s4hana`, `sap.btp`, `salesforce`, `rest`, `soap`.
+      - Seção "INTEGRAÇÕES" na paleta WPF do AutoCAD atualizada dinamicamente a partir do registry de forma leve e sem bloquear a UI.
+    - **Qualidade e Cobertura**:
+      - Suíte dedicada `tests/test_oxcad_integrations.py` com 40 testes contratuais (100% PASS).
+      - Testes no C# Harness (`tests/oxcad_context_gate/Program.cs`) cobrindo registry, capabilities, contexto e descritores (100% PASS).
+      - Suíte completa de 837 testes (834 pass, 3 skip).
+    - **Status**: **IMPLEMENTADO E TESTADO (P2.4 CONCLUÍDO; P2.5 AINDA NÃO INICIADO)**.

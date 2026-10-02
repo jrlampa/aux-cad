@@ -440,6 +440,28 @@
                     </StackPanel>
                 </Border>
 
+                <!-- SEÇÃO INTEGRAÇÕES (P2.4) -->
+                <TextBlock Text="INTEGRAÇÕES" FontSize="10" FontWeight="SemiBold" Foreground="#7E7E94" Margin="0,4,0,6" />
+
+                <Border Background="#20202A" CornerRadius="6" Padding="10" BorderBrush="#353548" BorderThickness="1" Margin="0,0,0,10">
+                    <ItemsControl x:Name="ListaIntegracoes">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding DisplayName}" FontSize="10" Foreground="#C5C5D2" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="1" Background="{Binding StatusBackground}" CornerRadius="3" Padding="6,2">
+                                        <TextBlock Text="{Binding StatusText}" FontSize="9" FontWeight="SemiBold" Foreground="{Binding StatusForeground}"/>
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
 

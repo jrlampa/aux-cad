@@ -76,6 +76,14 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Persistência de Manifesto SOB**: Validação obrigatória do retorno de `gravar_manifesto_execucao` em `sob/sob_manager.py`.
 
 ### Added (Baseline P0/P1)
+- **Plataforma de Integração e Extensibilidade (P2.4)**:
+  - Arquitetura de Gateway e desacoplamento do Core: o núcleo conhece apenas contratos de domínio sem conhecer URLs, endpoints, SDKs externos, tokens ou credenciais.
+  - Soberania garantida da autoridade DWG e AutoCAD através de `IntegrationContext`: rejeição imediata (`IDENTITY_MISMATCH`) de qualquer tentativa de alteração de SOB, desvio de caminho DWG ou substituição de FingerprintGuid.
+  - Contratos de domínio independentes de fornecedor: `IIntegrationProvider`, `IIdentityProvider`, `IDocumentRepository`, `IArtifactRepository`, `IWorkOrderProvider`, `IBusinessSystemProvider`, `ICustomerProvider`, `INotificationProvider`, `IEventProvider`, `IRestProvider`, `ISoapProvider`.
+  - Catálogo declarativo padronizado (`IntegrationRegistry`): adaptadores preparados para Microsoft Graph, Microsoft Entra ID, SharePoint, OneDrive, SAP, SAP S/4HANA, SAP BTP, Salesforce CRM, REST e SOAP (todos com status inicial `NotConfigured` e zero chamadas externas de rede).
+  - Autenticação declarativa segura (`AuthenticationDescriptor`) sem armazenamento de segredos, senhas ou tokens.
+  - Seção visual compacta "INTEGRAÇÕES" na paleta WPF do AutoCAD (`OxCadControl.xaml`, `OxCadControl.Integracoes.cs`) atualizada dinamicamente a partir do registry.
+  - Suíte com 40 testes contratuais em `tests/test_oxcad_integrations.py` e asserções integradas no Harness C#.
 - **Qualidade, Histórico e Comparabilidade de Indicadores (P2.3)**:
   - Módulo `workspace/workspace_indicator_quality.py` para classificação rigorosa de cobertura histórica (`COMPLETA`, `PARCIAL`, `LIMITADA_POR_ROTACAO`, `SEM_DADOS`, `IDENTIDADE_NAO_VERIFICAVEL`, `FONTE_INDISPONIVEL`).
   - Módulo `workspace/workspace_indicator_stores.py` para leitura defensiva de fontes duráveis, modularizando o motor analítico para 731 linhas (respeitando o limite estrito de 750 linhas).
