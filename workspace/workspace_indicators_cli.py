@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-AUX CAD / OXCAD — Camada de Consulta e Apresentação de Indicadores (P2.2).
+AUX CAD / OXCAD — Camada de Consulta e Apresentação de Indicadores (P2.2 / P2.3).
 Responsabilidade única: Interface CLI e formatador de apresentação para consulta
-operacional de indicadores de processo e gestão (SOB / Workspace).
+operacional de indicadores de processo e gestão (SOB / Workspace), com auditoria de qualidade,
+proveniência e comparação metodológica entre períodos.
 
 Diretrizes:
 - Totalmente read-only, desacoplado do ciclo de execução operacional OxCadExecution;
 - Suporte a saídas JSON estruturado (consumo por APIs/WPF) e resumo textual legível;
-- Explicitação de limitações temporais e observabilidade dos logs rotativos;
+- Explicitação de limitações temporais, proveniência e observabilidade dos logs rotativos;
+- Apresentação de deltas puramente descritivos quando a comparação for válida;
 - Zero ranking individual, zero avaliação de desempenho pessoal.
 """
 
@@ -18,7 +20,6 @@ from pathlib import Path
 import sys
 from typing import Any, Dict, Optional
 
-# Import defensivo do motor analítico
 try:
     from workspace.workspace_indicators import consultar_indicadores
 except ImportError:
@@ -33,10 +34,14 @@ def formatar_resumo_terminal(dados: Dict[str, Any]) -> str:
     sob_id = escopo.get("sob_id") or "-"
     status_id = escopo.get("status_identidade", "NÃO VERIFICADO")
 
-    linhas.append("=" * 64)
-    linhas.append(f" OXCAD — INDICADORES DE PROCESSO E GESTÃO (P2.2)")
-    linhas.append("=" * 64)
+    qualidade = dados.get("qualidade_dados", {})
+    cobertura = qualidade.get("cobertura", "N/D")
+
+    linhas.append("=" * 68)
+    linhas.append(" OXCAD — INDICADORES DE PROCESSO E GESTÃO (P2.3)")
+    linhas.append("=" * 68)
     linhas.append(f" Escopo: {tipo} | SOB: {sob_id} | Identidade: {status_id}")
+    linhas.append(f" Cobertura Histórica: {cobertura}")
 
     if escopo.get("total_projetos_observados", 0) > 1:
         linhas.append(f" Projetos no Workspace: {escopo.get('total_projetos_observados')}")
@@ -45,7 +50,7 @@ def formatar_resumo_terminal(dados: Dict[str, Any]) -> str:
     p_ini = periodo.get("inicio") or "N/D"
     p_fim = periodo.get("fim") or "N/D"
     linhas.append(f" Período Observado: {p_ini} até {p_fim}")
-    linhas.append("-" * 64)
+    linhas.append("-" * 68)
 
     # Execuções
     execs = dados.get("execucoes", {})
@@ -64,7 +69,7 @@ def formatar_resumo_terminal(dados: Dict[str, Any]) -> str:
         med_str = f"{med / 1000.0:.2f}s" if med is not None else "N/D"
 
         linhas.append(f" Execuções Totais: {tot} | Concluídas: {conc} ({taxa_str})")
-        linhas.append(f" Falhas: {falhas} | Canceladas: {canc} | Duração Mediana: {med_str} | P95: {p95_str}")
+        linhas.append(f" Falhas: {falhas} | Canceladas: {canc} | Mediana: {med_str} | P95: {p95_str}")
         dist = execs.get("distribuicao_por_acao") or {}
         if dist:
             dist_str = ", ".join([f"{k}: {v}" for k, v in dist.items()])
@@ -74,7 +79,7 @@ def formatar_resumo_terminal(dados: Dict[str, Any]) -> str:
     else:
         linhas.append(f" Execuções: NÃO DISPONÍVEL ({execs.get('motivo', 'Desconhecido')})")
 
-    linhas.append("-" * 64)
+    linhas.append("-" * 68)
 
     # Pendências
     pends = dados.get("pendencias", {})
@@ -113,29 +118,59 @@ def formatar_resumo_terminal(dados: Dict[str, Any]) -> str:
         sess = tempo.get("total_sessoes", 0)
         linhas.append(f" Tempo Operacional: {fmt} acumulado ({sess} sessões)")
 
-    linhas.append("-" * 64)
+    linhas.append("-" * 68)
 
-    # Qualidade e Limitações
-    qualidade = dados.get("qualidade_dados", {})
+    # Proveniência e Auditoria de Qualidade
+    fontes = qualidade.get("fontes_utilizadas", [])
+    if fontes:
+        linhas.append(f" Fontes Observadas: {', '.join(fontes)}")
+    desc_tot = qualidade.get("registros_descartados", 0)
+    if desc_tot > 0:
+        det_desc = ", ".join([f"{k}: {v}" for k, v in (qualidade.get("descartes_por_motivo") or {}).items() if v > 0])
+        linhas.append(f" Auditoria de Descarte: {desc_tot} registros ignorados ({det_desc})")
+
     limitacoes = qualidade.get("limitacoes_cobertura", [])
     if limitacoes:
-        linhas.append(" Limitações de Cobertura Observadas:")
+        linhas.append(" Limitações Observadas:")
         for lim in limitacoes:
             linhas.append(f"  • {lim}")
 
-    linhas.append("=" * 64)
+    # Comparação (P2.3)
+    comp = dados.get("comparacao")
+    if comp:
+        linhas.append("-" * 68)
+        st_comp = comp.get("status", "N/D")
+        linhas.append(f" Comparação Histórica: {st_comp}")
+        if comp.get("comparavel") is True:
+            deltas = comp.get("deltas", {})
+            linhas.append(" Diferenças Observadas (Base vs Comparado):")
+            for metrica, val in deltas.items():
+                if isinstance(val, dict):
+                    d_abs = val.get("delta_absoluto")
+                    d_pct = val.get("delta_pct")
+                    pct_str = f" ({d_pct:+.1f}%)" if d_pct is not None else ""
+                    abs_str = f"{d_abs:+}" if d_abs is not None else "N/D"
+                    linhas.append(f"  • {metrica}: {abs_str}{pct_str}")
+        else:
+            motivo = comp.get("motivo", "INCOMPATIVEL")
+            detalhe = comp.get("detalhe", "")
+            linhas.append(f"  Comparação não determinada: {motivo} ({detalhe})")
+
+    linhas.append("=" * 68)
     return "\n".join(linhas)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="OXCAD — Camada de Apresentação e Consulta de Indicadores (P2.2)")
+    parser = argparse.ArgumentParser(description="OXCAD — Camada de Apresentação e Consulta de Indicadores (P2.2 / P2.3)")
     parser.add_argument("--project-root", type=str, default=None, help="Caminho raiz da SOB/projeto")
     parser.add_argument("--sob", type=str, default=None, help="Identificador oficial da SOB")
     parser.add_argument("--workspace-root", type=str, default=None, help="Caminho raiz do workspace para consolidação")
     parser.add_argument("--action", type=str, default=None, help="Filtro por ação (ex: cqt, orcamento, sob)")
     parser.add_argument("--state", type=str, default=None, help="Filtro por estado final (ex: Concluido, Falhou)")
-    parser.add_argument("--start-date", type=str, default=None, help="Data/hora inicial ISO (ex: 2026-10-01T00:00:00Z)")
-    parser.add_argument("--end-date", type=str, default=None, help="Data/hora final ISO (ex: 2026-10-02T23:59:59Z)")
+    parser.add_argument("--start-date", "--inicio", type=str, default=None, help="Data/hora inicial ISO (ex: 2026-10-01T00:00:00Z)")
+    parser.add_argument("--end-date", "--fim", type=str, default=None, help="Data/hora final ISO (ex: 2026-10-02T23:59:59Z)")
+    parser.add_argument("--compare-start", "--comparar-inicio", type=str, default=None, help="Data inicial ISO para comparação")
+    parser.add_argument("--compare-end", "--comparar-fim", type=str, default=None, help="Data final ISO para comparação")
     parser.add_argument("--log-file", type=str, default=None, help="Caminho do log application.jsonl")
     parser.add_argument("--format", choices=["json", "text", "summary"], default="json", help="Formato de saída")
     parser.add_argument("--pretty", action="store_true", help="Formatar JSON com indentação")
@@ -156,6 +191,8 @@ def main():
         estado=args.state,
         periodo_inicio=args.start_date,
         periodo_fim=args.end_date,
+        comparar_inicio=args.compare_start,
+        comparar_fim=args.compare_end,
         log_file=log_path,
     )
 

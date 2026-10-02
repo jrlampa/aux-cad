@@ -1214,6 +1214,74 @@ namespace OxCad
                         }
                     }
 
+                    // Qualidade e Cobertura (P2.3)
+                    if (root.TryGetProperty("qualidade_dados", out var qualProp))
+                    {
+                        string cob = qualProp.TryGetProperty("cobertura", out var cb) ? cb.GetString() ?? "PARCIAL" : "PARCIAL";
+                        TxtIndCobertura.Text = $"COBERTURA: {cob}";
+                        switch (cob)
+                        {
+                            case "COMPLETA":
+                                TxtIndCobertura.Foreground = new SolidColorBrush(Color.FromRgb(82, 183, 136));
+                                break;
+                            case "PARCIAL":
+                                TxtIndCobertura.Foreground = new SolidColorBrush(Color.FromRgb(233, 196, 106));
+                                break;
+                            case "LIMITADA_POR_ROTACAO":
+                                TxtIndCobertura.Foreground = new SolidColorBrush(Color.FromRgb(244, 162, 97));
+                                break;
+                            case "SEM_DADOS":
+                                TxtIndCobertura.Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 176));
+                                break;
+                            default:
+                                TxtIndCobertura.Foreground = new SolidColorBrush(Color.FromRgb(231, 111, 81));
+                                break;
+                        }
+
+                        if (qualProp.TryGetProperty("fontes_utilizadas", out var fProp) && fProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            var listaFontes = new List<string>();
+                            foreach (var item in fProp.EnumerateArray())
+                            {
+                                string? fStr = item.GetString();
+                                if (!string.IsNullOrWhiteSpace(fStr)) listaFontes.Add(fStr!);
+                            }
+                            TxtIndFontes.Text = listaFontes.Count > 0 ? $"Fontes: {string.Join(", ", listaFontes)}" : "Fontes: Nenhuma";
+                        }
+
+                        if (qualProp.TryGetProperty("limitacoes_cobertura", out var limProp) && limProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            var listaLim = new List<string>();
+                            foreach (var lim in limProp.EnumerateArray())
+                            {
+                                string? lStr = lim.GetString();
+                                if (!string.IsNullOrWhiteSpace(lStr)) listaLim.Add(lStr!);
+                            }
+                            if (listaLim.Count > 0)
+                            {
+                                TxtIndObservacoes.Text = string.Join(" | ", listaLim);
+                            }
+                        }
+                    }
+
+                    // Período Observado
+                    if (root.TryGetProperty("periodo_observado", out var perProp))
+                    {
+                        string pIni = perProp.TryGetProperty("inicio", out var pi) ? pi.GetString() ?? "" : "";
+                        string pFim = perProp.TryGetProperty("fim", out var pf) ? pf.GetString() ?? "" : "";
+                        if (!string.IsNullOrWhiteSpace(pIni))
+                        {
+                            string iniData = pIni.Contains("T") ? pIni.Split('T')[0] : pIni;
+                            string fimData = !string.IsNullOrWhiteSpace(pFim) && pFim.Contains("T") ? pFim.Split('T')[0] : (string.IsNullOrWhiteSpace(pFim) ? "atual" : pFim);
+                            TxtIndPeriodo.Text = $"{iniData} .. {fimData}";
+                        }
+                        else
+                        {
+                            TxtIndPeriodo.Text = "Período: N/D";
+                        }
+                    }
+
+                    TxtIndAtualizadoEm.Text = DateTime.Now.ToString("HH:mm:ss");
                     TxtIndicadoresStatus.Text = "Indicadores atualizados com sucesso.";
                     TxtIndicadoresStatus.Foreground = new SolidColorBrush(Color.FromRgb(82, 183, 136));
                     PainelIndicadoresMetricas.Visibility = Visibility.Visible;

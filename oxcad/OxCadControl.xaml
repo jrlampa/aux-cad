@@ -360,11 +360,28 @@
                                     Cursor="Hand" Click="BtnConsultarIndicadores_Click" />
                         </Grid>
 
-                        <!-- Indicador de Carregamento -->
-                        <TextBlock x:Name="TxtIndicadoresStatus" Text="Indicadores não consultados." FontSize="10" Foreground="#8A8A9E" Margin="0,2,0,4"/>
+                        <!-- Indicador de Carregamento e Atualização -->
+                        <Grid Margin="0,2,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="TxtIndicadoresStatus" Text="Indicadores não consultados." FontSize="10" Foreground="#8A8A9E"/>
+                            <TextBlock x:Name="TxtIndAtualizadoEm" Grid.Column="1" Text="" FontSize="9" Foreground="#6E6E82"/>
+                        </Grid>
 
                         <!-- Painel de Métricas -->
                         <StackPanel x:Name="PainelIndicadoresMetricas" Visibility="Collapsed">
+                            <!-- Metadados de Qualidade e Cobertura (P2.3) -->
+                            <Grid Margin="0,1,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="TxtIndCobertura" Text="COBERTURA: COMPLETA" FontSize="9" FontWeight="Bold" Foreground="#52B788"/>
+                                <TextBlock x:Name="TxtIndPeriodo" Grid.Column="1" Text="Período: N/D" FontSize="8" Foreground="#8A8A9E"/>
+                            </Grid>
+
                             <!-- Grid Execuções -->
                             <Border Background="#16161E" CornerRadius="4" Padding="6,4" Margin="0,2,0,4">
                                 <Grid>
@@ -416,8 +433,9 @@
                                 </Grid>
                             </Border>
 
-                            <!-- Limitações / Observações -->
-                            <TextBlock x:Name="TxtIndObservacoes" Text="Log rotativo ativo (janela observada limitada)." FontSize="8" Foreground="#707085" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            <!-- Fontes e Limitações / Observações (P2.3) -->
+                            <TextBlock x:Name="TxtIndFontes" Text="Fontes: N/D" FontSize="8" Foreground="#85859B" TextTrimming="CharacterEllipsis" Margin="0,2,0,1"/>
+                            <TextBlock x:Name="TxtIndObservacoes" Text="Log rotativo ativo (janela observada limitada)." FontSize="8" Foreground="#707085" TextWrapping="Wrap" Margin="0,1,0,0"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>

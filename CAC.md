@@ -1095,3 +1095,31 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
       - Suíte completa de 777 testes (774 passed, 3 skipped) 100% limpa.
       - Compilação .NET da paleta e harness C# sem erros (0 erros).
     - **Status**: **IMPLEMENTADO E TESTADO (P2.2 CONCLUÍDO)**.
+
+20. **Decisão Arquitetural — P2.3: Qualidade, Histórico e Comparabilidade de Indicadores (`workspace_indicator_quality.py`, `workspace_indicator_stores.py`, `workspace_indicators.py` & `OxCadControl.xaml`) (2026-10-02)**:
+    - **Princípio e Escopo**:
+      - Enriquecimento analítico dos indicadores de gestão com foco na explicitação da qualidade da cobertura histórica, proveniência estrita de cada bloco de dados, auditoria de descarte de registros e avaliação metodológica de comparabilidade entre períodos.
+      - Totalmente read-only, determinístico e auditável; sem banco de dados, sem cache persistente e sem serviços residentes.
+      - Zero rankings de colaboradores, scores de desempenho ou métricas de produtividade individual; zero julgamento subjetivo de valor ('melhorou', 'piorou').
+    - **Classificação Estrita de Cobertura Histórica**:
+      - `COMPLETA`: todas as fontes duráveis esperadas presentes e log cobrindo o período sem rotação ou descarte por corrupção.
+      - `PARCIAL`: fontes duráveis parcialmente ausentes, linhas corrompidas no log ou dados incompletos.
+      - `LIMITADA_POR_ROTACAO`: log rotativo ativo (5 MB) ou período solicitado anterior ao primeiro registro disponível no arquivo.
+      - `SEM_DADOS`: fontes acessadas sem falha, mas nenhum registro/evento encontrado para os critérios.
+      - `IDENTIDADE_NAO_VERIFICAVEL`: divergência entre SOB informada e manifesto do projeto (`SOB_ID_MISMATCH`).
+      - `FONTE_INDISPONIVEL`: fontes necessárias inexistentes ou com erro de E/S.
+    - **Proveniência e Auditoria de Descarte**:
+      - Cada bloco do contrato Schema 1 expõe o campo `proveniencia` rastreando o artefato de origem (`logs/application.jsonl`, `.sob_state.json`, `.oxcad/pending.json`, `.oxcad/deliveries/`, `.oxcad/time.json`, `.auxcad_versions/`).
+      - Contabilização explícita de `registros_considerados`, `registros_descartados` e `descartes_por_motivo` (`FILTRO_PERIODO`, `FILTRO_SOB`, `FILTRO_ACAO`, `FILTRO_ESTADO`, `LINHA_CORROMPIDA`, `SEM_EXECUTION_ID`).
+    - **Comparabilidade Metodológica entre Períodos**:
+      - Comparação temporal (`--compare-start`, `--compare-end`) sem banco de dados, calculando deltas absolutos e percentuais apenas quando metodologicamente válida (`comparavel = True`, `status = "VALIDA"`).
+      - Recusa descritiva (`status = "NAO_DETERMINADA"`) com motivo auditável em caso de incompatibilidade (`IDENTIDADE_INVERIFICAVEL`, `ESCOPO_OU_IDENTIDADE_DIVERGENTE`, `LIMITADA_POR_ROTACAO`, `FONTE_INDISPONIVEL`, `FONTES_DIVERGENTES`).
+    - **Modularização e Limites de Código**:
+      - Modularização arquitetural em `workspace_indicator_quality.py` (278 linhas) e `workspace_indicator_stores.py` (388 linhas), mantendo `workspace_indicators.py` com 731 linhas (respeitando o limite de 750 linhas).
+    - **Apresentação na Paleta WPF**:
+      - Atualização da paleta (`OxCadControl.xaml` / `OxCadControl.xaml.cs`) exibindo badge de cobertura colorida, período observado, fontes utilizadas, limitações e timestamp de atualização, sem travar a thread UI.
+    - **Qualidade e Cobertura**:
+      - Suíte dedicada de 20 testes contratuais em `tests/test_oxcad_indicators_quality.py` (100% PASS).
+      - Suíte completa de 797 testes (794 passed, 3 skipped) 100% limpa.
+      - Compilação .NET e harness C# sem erros (0 erros).
+    - **Status**: **IMPLEMENTADO E TESTADO (P2.3 CONCLUÍDO)**.

@@ -76,6 +76,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Persistência de Manifesto SOB**: Validação obrigatória do retorno de `gravar_manifesto_execucao` em `sob/sob_manager.py`.
 
 ### Added (Baseline P0/P1)
+- **Qualidade, Histórico e Comparabilidade de Indicadores (P2.3)**:
+  - Módulo `workspace/workspace_indicator_quality.py` para classificação rigorosa de cobertura histórica (`COMPLETA`, `PARCIAL`, `LIMITADA_POR_ROTACAO`, `SEM_DADOS`, `IDENTIDADE_NAO_VERIFICAVEL`, `FONTE_INDISPONIVEL`).
+  - Módulo `workspace/workspace_indicator_stores.py` para leitura defensiva de fontes duráveis, modularizando o motor analítico para 731 linhas (respeitando o limite estrito de 750 linhas).
+  - Rastreamento estrito de proveniência de métricas (`proveniencia`) em cada bloco e auditoria granular de registros descartados por motivo.
+  - Avaliação metodológica de comparabilidade entre períodos sem banco de dados, calculando deltas observados descritivos e recusando comparações inválidas (`NAO_DETERMINADA`).
+  - Apresentação compacta na paleta WPF do AutoCAD (`OxCadControl.xaml`, `WorkspaceService.cs`) com metadados de qualidade, período, fontes e timestamp da consulta.
+  - Suíte de 20 testes dedicados em `tests/test_oxcad_indicators_quality.py` (100% PASS).
 - **Indicadores Operacionais e Visão Consolidada de Processo (P2.2)**:
   - Camada de consulta e apresentação de indicadores de processo (`workspace/workspace_indicators_cli.py`) suportando saídas em JSON estruturado e resumos amigáveis em console.
   - Integração assíncrona com a paleta WPF do AutoCAD (`OxCadControl.xaml`, `WorkspaceService.cs`) com cards de métricas de execução, duração P95, pendências, entregas e limitações de log rotativo, totalmente isolada de `OxCadExecution` e `OxCadExecutionRegistry`.

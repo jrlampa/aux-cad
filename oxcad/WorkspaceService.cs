@@ -969,7 +969,9 @@ namespace OxCad
             string? workspaceRoot = null,
             string? acao = null,
             string? estado = null,
-            string? logFile = null)
+            string? logFile = null,
+            string? compareStart = null,
+            string? compareEnd = null)
         {
             return await Task.Run(() =>
             {
@@ -1016,6 +1018,14 @@ namespace OxCad
                     if (!string.IsNullOrWhiteSpace(logFile) && File.Exists(logFile))
                     {
                         sbArgs.Append($" --log-file \"{logFile}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(compareStart))
+                    {
+                        sbArgs.Append($" --compare-start \"{compareStart}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(compareEnd))
+                    {
+                        sbArgs.Append($" --compare-end \"{compareEnd}\"");
                     }
 
                     var psi = new ProcessStartInfo

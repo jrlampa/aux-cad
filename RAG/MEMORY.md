@@ -1003,4 +1003,25 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - **Cobertura de Testes**:
   - `tests/test_oxcad_indicators_operational.py`: 20 cenários cobrindo consultas válidas, ausências, divergências, múltiplos projetos, filtros, logs corrompidos, determinismo, ausência de efeitos colaterais e segurança de threading (100% PASS).
   - Suíte completa de 777 testes (774 passed, 3 skipped).
-- **Status do Roadmap**: **P2.2 CONCLUÍDO; P2.3 AINDA NÃO INICIADO**.
+- **Status do Roadmap**: **P2.2 CONCLUÍDO**.
+
+### 35. Decisão Arquitetural e Implementação: P2.3 — Qualidade, Histórico e Comparabilidade dos Indicadores (2026-10-02)
+- **Motivação e Diretrizes**:
+  - Evolução do ecossistema analítico dos indicadores para fornecer interpretação operacional rigorosa sem transformar o sistema em banco de dados, servidor residente ou mecanismo avaliativo de produtividade individual.
+  - Separação estrita de responsabilidades:
+    - `workspace/workspace_indicators.py`: Coordenação analítica geral (731 linhas, abaixo do limite de 750).
+    - `workspace/workspace_indicator_quality.py`: Classificação de cobertura histórica, auditoria de descarte de registros, rastreamento de proveniência e comparabilidade entre períodos.
+    - `workspace/workspace_indicator_stores.py`: Leitura defensiva e resiliente de stores duráveis de projeto (.pending, .deliveries, .time, .auxcad_versions, .sob_state).
+    - `workspace/workspace_indicators_cli.py`: Formatação e apresentação textual e JSON com suporte aos parâmetros `--compare-start` e `--compare-end`.
+    - `oxcad/WorkspaceService.cs` & `oxcad/OxCadControl.xaml`: Exibição visual compacta de cobertura, período, fontes observadas e timestamp da consulta.
+- **Classificação de Cobertura e Proveniência**:
+  - Distinção clara e derivada de fontes reais: `COMPLETA`, `PARCIAL`, `LIMITADA_POR_ROTACAO`, `SEM_DADOS`, `IDENTIDADE_NAO_VERIFICAVEL`, `FONTE_INDISPONIVEL`.
+  - Mapeamento explícito de proveniência por bloco (`logs/application.jsonl`, `.sob_state.json`, etc.).
+  - Auditoria de descarte contabilizando desvios por filtros (`FILTRO_PERIODO`, `FILTRO_SOB`, `FILTRO_ACAO`, `FILTRO_ESTADO`, `LINHA_CORROMPIDA`, `SEM_EXECUTION_ID`).
+- **Comparabilidade Metodológica**:
+  - Comparação histórica puramente descritiva entre dois intervalos de tempo com cálculo de deltas absolutos e percentuais.
+  - Recusa com `status = "NAO_DETERMINADA"` caso haja divergência de identidade, escopos incompatíveis, fontes indisponíveis ou truncamento por rotação de log.
+- **Cobertura de Testes**:
+  - `tests/test_oxcad_indicators_quality.py`: 20 cenários contratuais cobrindo todos os requisitos funcionais do P2.3 (100% PASS).
+  - Suíte completa do repositório: 794 passaram, 3 skipped (100% de sucesso).
+- **Status do Roadmap**: **P2.3 CONCLUÍDO; P2.4 AINDA NÃO INICIADO**.

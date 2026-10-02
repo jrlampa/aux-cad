@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-AUX CAD / OXCAD — Indicadores de Gestão e Processo (P2.1 / P2.2).
+AUX CAD / OXCAD — Indicadores de Gestão e Processo (P2.1 / P2.2 / P2.3).
 Responsabilidade única: Motor analítico, determinístico, read-only e auditável
 para agregação e cálculo de métricas de gestão a partir de dados já persistidos
 (logs de execução, cadastros de pendências, entregas, tempo e manifestos de SOB).
@@ -14,6 +14,8 @@ Diretrizes obrigatórias:
 - Independência de serviços ou bancos de dados externos (apenas biblioteca padrão Python);
 - Filtros analíticos: SOB, período temporal, ação e estado final da execução;
 - Consolidação de workspace com múltiplos projetos ou workspace vazio;
+- Classificação estrita de cobertura histórica e rastreamento de proveniência (P2.3);
+- Comparabilidade metodológica entre períodos sem banco de dados (P2.3);
 - Ausência de ranking de pessoas, produtividade individual ou atribuição individual.
 """
 
@@ -21,10 +23,56 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 import math
-import os
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+try:
+    from workspace.workspace_indicator_quality import (
+        COBERTURA_COMPLETA,
+        COBERTURA_FONTE_INDISPONIVEL,
+        COBERTURA_IDENTIDADE_NAO_VERIFICAVEL,
+        COBERTURA_LIMITADA_POR_ROTACAO,
+        COBERTURA_PARCIAL,
+        COBERTURA_SEM_DADOS,
+        PROVENIENCIA_FONTES,
+        QualityMetricsCollector,
+        classificar_cobertura_historica,
+        comparar_indicadores,
+    )
+    from workspace.workspace_indicator_stores import (
+        bloco_nao_disponivel,
+        formatar_segundos_hhmmss,
+        processar_deliveries,
+        processar_pending,
+        processar_sob_state,
+        processar_time,
+        processar_versoes,
+        processar_workspace_consolidado,
+    )
+except ImportError:
+    from workspace_indicator_quality import (
+        COBERTURA_COMPLETA,
+        COBERTURA_FONTE_INDISPONIVEL,
+        COBERTURA_IDENTIDADE_NAO_VERIFICAVEL,
+        COBERTURA_LIMITADA_POR_ROTACAO,
+        COBERTURA_PARCIAL,
+        COBERTURA_SEM_DADOS,
+        PROVENIENCIA_FONTES,
+        QualityMetricsCollector,
+        classificar_cobertura_historica,
+        comparar_indicadores,
+    )
+    from workspace_indicator_stores import (
+        bloco_nao_disponivel,
+        formatar_segundos_hhmmss,
+        processar_deliveries,
+        processar_pending,
+        processar_sob_state,
+        processar_time,
+        processar_versoes,
+        processar_workspace_consolidado,
+    )
 
 
 # Versão oficial do schema do contrato
@@ -100,19 +148,6 @@ def _calcular_estatisticas_duracao(valores_ms: List[float]) -> Dict[str, Optiona
     }
 
 
-def _formatar_segundos_hhmmss(segundos: Optional[Union[int, float]]) -> Optional[str]:
-    if segundos is None:
-        return None
-    seg = max(0, int(round(segundos)))
-    return f"{seg // 3600:02d}:{(seg % 3600) // 60:02d}:{seg % 60:02d}"
-
-
-def _bloco_nao_disponivel(motivo: str, campos: Dict[str, Any]) -> Dict[str, Any]:
-    res = {"status": "NÃO DISPONÍVEL", "motivo": motivo}
-    res.update(campos)
-    return res
-
-
 @dataclass
 class _ExecutionAggregate:
     execution_id: str
@@ -156,11 +191,27 @@ class IndicadoresAnalyzer:
         self.acao_filtro = acao_filtro.strip().lower() if acao_filtro else None
         self.estado_filtro = estado_filtro.strip().lower() if estado_filtro else None
 
-        self.linhas_totais = 0
-        self.linhas_validas = 0
-        self.linhas_invalidas = 0
-        self.arquivos_ausentes: List[str] = []
-        self.limitacoes_cobertura: List[str] = []
+        self.collector = QualityMetricsCollector()
+
+    @property
+    def linhas_totais(self) -> int:
+        return self.collector.linhas_totais
+
+    @property
+    def linhas_validas(self) -> int:
+        return self.collector.linhas_validas
+
+    @property
+    def linhas_invalidas(self) -> int:
+        return self.collector.linhas_invalidas
+
+    @property
+    def arquivos_ausentes(self) -> List[str]:
+        return self.collector.fontes_ausentes
+
+    @property
+    def limitacoes_cobertura(self) -> List[str]:
+        return self.collector.limitacoes_cobertura
 
     def gerar_relatorio(self) -> Dict[str, Any]:
         """Executa a análise completa e retorna o dicionário estruturado sob o schema 1."""
@@ -171,16 +222,30 @@ class IndicadoresAnalyzer:
 
         execucoes_agg, periodo_obs = self._processar_logs_execucao(sob_resolvida)
 
-        # Escopo do projeto vs workspace consolidado
         projetos_observados: List[str] = []
+        tem_fontes_duraveis_ok = False
+        tem_fontes_duraveis_ausentes = False
+
         if self.project_root:
-            dados_pending = self._processar_pending(self.project_root, sob_resolvida)
-            dados_deliveries = self._processar_deliveries(self.project_root, sob_resolvida)
-            dados_time = self._processar_time(self.project_root, sob_resolvida)
-            dados_versoes = self._processar_versoes(self.project_root)
-            dados_sob_state = self._processar_sob_state(self.project_root, sob_resolvida)
+            dados_pending = processar_pending(self.project_root, sob_resolvida, self.collector)
+            dados_deliveries = processar_deliveries(self.project_root, sob_resolvida, self.collector)
+            dados_time = processar_time(self.project_root, sob_resolvida, self.collector)
+            dados_versoes = processar_versoes(self.project_root, self.collector)
+            dados_sob_state = processar_sob_state(self.project_root, sob_resolvida, self.collector)
+
             if sob_resolvida:
                 projetos_observados.append(sob_resolvida)
+
+            blocos_status = [
+                dados_pending.get("status"),
+                dados_deliveries.get("status"),
+                dados_time.get("status"),
+                dados_versoes.get("status"),
+                dados_sob_state.get("status"),
+            ]
+            tem_fontes_duraveis_ok = any(st == "OK" for st in blocos_status)
+            tem_fontes_duraveis_ausentes = any(st == "NÃO DISPONÍVEL" for st in blocos_status)
+
         elif self.workspace_root:
             (
                 dados_pending,
@@ -189,34 +254,38 @@ class IndicadoresAnalyzer:
                 dados_versoes,
                 dados_sob_state,
                 projetos_observados,
-            ) = self._processar_workspace_consolidado()
-        else:
-            dados_pending = _bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {
-                "total": None, "abertas": None, "em_andamento": None,
-                "resolvidas": None, "descartadas": None, "taxa_resolucao_pct": None, "por_severidade": None,
-            })
-            dados_deliveries = _bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {
-                "total_pacotes": None, "aprovados": None, "revogados": None, "pendentes_aprovacao": None, "integridade": None,
-            })
-            dados_time = _bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {
-                "estado": None, "tempo_acumulado_segundos": None, "tempo_acumulado_formatado": None, "total_sessoes": None,
-            })
-            dados_versoes = _bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {"total_snapshots": None})
-            dados_sob_state = _bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {
-                "sob_id": None, "estado_preparacao": None, "duracao_segundos": None, "data_inicio": None, "data_fim": None,
-            })
+            ) = processar_workspace_consolidado(self.workspace_root, self.collector)
 
-        # Limitações de cobertura estruturais
+            tem_fontes_duraveis_ok = len(projetos_observados) > 0
+            tem_fontes_duraveis_ausentes = len(projetos_observados) == 0
+
+        else:
+            dados_pending = bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {"total": None, "abertas": None, "em_andamento": None, "resolvidas": None, "descartadas": None, "taxa_resolucao_pct": None, "por_severidade": None}, proveniencia=PROVENIENCIA_FONTES["pendencias"])
+            dados_deliveries = bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {"total_pacotes": None, "aprovados": None, "revogados": None, "pendentes_aprovacao": None, "integridade": None}, proveniencia=PROVENIENCIA_FONTES["entregas"])
+            dados_time = bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {"estado": None, "tempo_acumulado_segundos": None, "tempo_acumulado_formatado": None, "total_sessoes": None}, proveniencia=PROVENIENCIA_FONTES["tempo_operacional"])
+            dados_versoes = bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {"total_snapshots": None}, proveniencia=PROVENIENCIA_FONTES["versoes"])
+            dados_sob_state = bloco_nao_disponivel("PROJETO_NAO_INFORMADO", {"sob_id": None, "estado_preparacao": None, "duracao_segundos": None, "data_inicio": None, "data_fim": None}, proveniencia=PROVENIENCIA_FONTES["sob_manifesto"])
+
         if self.log_file:
-            self.limitacoes_cobertura.append(
+            self.collector.registrar_limitacao(
                 "Logs em 'application.jsonl' possuem rotação máxima de 5 MB; execuções anteriores ao log rotativo ativo não constam nesta amostra."
             )
         if not self.project_root and not self.workspace_root:
-            self.limitacoes_cobertura.append(
+            self.collector.registrar_limitacao(
                 "Consulta sem pasta de projeto ('project_root'): pendências, entregas e tempo durável dependem do diretório do projeto."
             )
 
         tipo_escopo = "PROJETO" if (self.project_root or sob_resolvida) else "WORKSPACE"
+        total_exec = execucoes_agg.get("total_execucoes") or 0
+
+        cobertura = classificar_cobertura_historica(
+            status_identidade=status_identidade,
+            collector=self.collector,
+            total_execucoes=total_exec,
+            tem_fontes_duraveis_ok=tem_fontes_duraveis_ok,
+            tem_fontes_duraveis_ausentes=tem_fontes_duraveis_ausentes,
+            log_presente=(self.log_file is not None and self.log_file.is_file()),
+        )
 
         return {
             "schema": SCHEMA_VERSION,
@@ -231,6 +300,7 @@ class IndicadoresAnalyzer:
                 "projetos_observados": projetos_observados,
             },
             "periodo_observado": periodo_obs,
+            "proveniencia": PROVENIENCIA_FONTES,
             "execucoes": execucoes_agg,
             "pendencias": dados_pending,
             "entregas": dados_deliveries,
@@ -238,11 +308,21 @@ class IndicadoresAnalyzer:
             "versoes": dados_versoes,
             "sob_manifesto": dados_sob_state,
             "qualidade_dados": {
-                "linhas_totais_log": self.linhas_totais,
-                "linhas_validas_log": self.linhas_validas,
-                "linhas_invalidas_log": self.linhas_invalidas,
-                "arquivos_ausentes": self.arquivos_ausentes,
-                "limitacoes_cobertura": self.limitacoes_cobertura,
+                "cobertura": cobertura,
+                "inicio_observado": periodo_obs.get("inicio"),
+                "fim_observado": periodo_obs.get("fim"),
+                "fontes_utilizadas": self.collector.fontes_utilizadas,
+                "fontes_ausentes": self.collector.fontes_ausentes,
+                "fontes_invalidas": self.collector.fontes_invalidas,
+                "registros_considerados": self.collector.registros_considerados,
+                "registros_descartados": self.collector.total_descartes,
+                "descartes_por_motivo": self.collector.descartes_por_motivo,
+                "linhas_totais_log": self.collector.linhas_totais,
+                "linhas_validas_log": self.collector.linhas_validas,
+                "linhas_invalidas_log": self.collector.linhas_invalidas,
+                "arquivos_ausentes": self.collector.fontes_ausentes,
+                "limitacoes_cobertura": self.collector.limitacoes_cobertura,
+                "proveniencia": PROVENIENCIA_FONTES,
             },
         }
 
@@ -250,7 +330,7 @@ class IndicadoresAnalyzer:
         """Verifica a coerência da SOB informada contra o project_root e manifesto existente."""
         if self.project_root:
             if not self.project_root.is_dir():
-                self.arquivos_ausentes.append(str(self.project_root))
+                self.collector.registrar_fonte_ausente(str(self.project_root))
                 return "IDENTITY_UNVERIFIABLE", None, "DIRETORIO_PROJETO_NAO_ENCONTRADO"
 
             manifesto = self.project_root / ".sob_state.json"
@@ -262,7 +342,7 @@ class IndicadoresAnalyzer:
                         return "IDENTITY_UNVERIFIABLE", None, "SOB_ID_MISMATCH"
                     return "VALIDA", (self.sob_id_esperada or sob_man), None
                 except Exception:
-                    pass
+                    self.collector.registrar_fonte_invalida(str(manifesto))
 
         if self.sob_id_esperada:
             return "VALIDA", self.sob_id_esperada, None
@@ -285,82 +365,112 @@ class IndicadoresAnalyzer:
                 "projetos_observados": [],
             },
             "periodo_observado": {"inicio": None, "fim": None, "duracao_dias": None},
-            "execucoes": _bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {
+            "proveniencia": PROVENIENCIA_FONTES,
+            "execucoes": bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {
                 "total_execucoes": None, "concluidas": None, "falhas": None, "canceladas": None,
                 "em_andamento": None, "taxa_conclusao_pct": None, "duracao_ms": None,
                 "distribuicao_por_acao": None, "falhas_por_tipo": None,
-            }),
-            "pendencias": _bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {
+            }, proveniencia=PROVENIENCIA_FONTES["execucoes"]),
+            "pendencias": bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {
                 "total": None, "abertas": None, "em_andamento": None, "resolvidas": None,
                 "descartadas": None, "taxa_resolucao_pct": None, "por_severidade": None,
-            }),
-            "entregas": _bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {
+            }, proveniencia=PROVENIENCIA_FONTES["pendencias"]),
+            "entregas": bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {
                 "total_pacotes": None, "aprovados": None, "revogados": None,
                 "pendentes_aprovacao": None, "integridade": None,
-            }),
-            "tempo_operacional": _bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {
+            }, proveniencia=PROVENIENCIA_FONTES["entregas"]),
+            "tempo_operacional": bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {
                 "estado": None, "tempo_acumulado_segundos": None, "tempo_acumulado_formatado": None, "total_sessoes": None,
-            }),
-            "versoes": _bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {"total_snapshots": None}),
-            "sob_manifesto": _bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {
+            }, proveniencia=PROVENIENCIA_FONTES["tempo_operacional"]),
+            "versoes": bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {"total_snapshots": None}, proveniencia=PROVENIENCIA_FONTES["versoes"]),
+            "sob_manifesto": bloco_nao_disponivel("IDENTITY_UNVERIFIABLE", {
                 "sob_id": None, "estado_preparacao": None, "duracao_segundos": None, "data_inicio": None, "data_fim": None,
-            }),
+            }, proveniencia=PROVENIENCIA_FONTES["sob_manifesto"]),
             "qualidade_dados": {
-                "linhas_totais_log": self.linhas_totais,
-                "linhas_validas_log": self.linhas_validas,
-                "linhas_invalidas_log": self.linhas_invalidas,
-                "arquivos_ausentes": self.arquivos_ausentes,
+                "cobertura": COBERTURA_IDENTIDADE_NAO_VERIFICAVEL,
+                "inicio_observado": None,
+                "fim_observado": None,
+                "fontes_utilizadas": self.collector.fontes_utilizadas,
+                "fontes_ausentes": self.collector.fontes_ausentes,
+                "fontes_invalidas": self.collector.fontes_invalidas,
+                "registros_considerados": 0,
+                "registros_descartados": 0,
+                "descartes_por_motivo": self.collector.descartes_por_motivo,
+                "linhas_totais_log": self.collector.linhas_totais,
+                "linhas_validas_log": self.collector.linhas_validas,
+                "linhas_invalidas_log": self.collector.linhas_invalidas,
+                "arquivos_ausentes": self.collector.fontes_ausentes,
                 "limitacoes_cobertura": ["Agregação recusada: identidade de projeto inverificável."],
+                "proveniencia": PROVENIENCIA_FONTES,
             },
         }
 
     def _processar_logs_execucao(self, sob_filtro: Optional[str]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Lê e reconstrói as execuções por execution_id com filtros de SOB, período, ação e estado."""
-        vazio_ret = _bloco_nao_disponivel("ARQUIVO_LOG_NAO_ENCONTRADO", {
+        vazio_ret = bloco_nao_disponivel("ARQUIVO_LOG_NAO_ENCONTRADO", {
             "total_execucoes": None, "concluidas": None, "falhas": None, "canceladas": None,
             "em_andamento": None, "taxa_conclusao_pct": None, "duracao_ms": None,
             "distribuicao_por_acao": None, "falhas_por_tipo": None,
-        }), {"inicio": None, "fim": None, "duracao_dias": None}
+        }, proveniencia=PROVENIENCIA_FONTES["execucoes"]), {"inicio": None, "fim": None, "duracao_dias": None}
 
         if not self.log_file or not self.log_file.is_file():
             if self.log_file:
-                self.arquivos_ausentes.append(str(self.log_file))
+                self.collector.registrar_fonte_ausente(str(self.log_file))
             return vazio_ret
 
+        try:
+            sz = self.log_file.stat().st_size
+            if sz >= 5 * 1024 * 1024:
+                self.collector.log_rotacionado_detectado = True
+        except OSError:
+            pass
+
+        self.collector.registrar_fonte_utilizada("logs/application.jsonl")
+
         execucoes_map: Dict[str, _ExecutionAggregate] = {}
+        primeiro_ts_arquivo: Optional[datetime] = None
         primeiro_ts_global: Optional[datetime] = None
         ultimo_ts_global: Optional[datetime] = None
 
         try:
             with open(self.log_file, "r", encoding="utf-8", errors="replace") as f:
                 for line in f:
-                    self.linhas_totais += 1
+                    self.collector.linhas_totais += 1
                     raw = line.strip()
                     if not raw:
                         continue
                     try:
                         record = json.loads(raw)
-                        self.linhas_validas += 1
+                        self.collector.linhas_validas += 1
                     except (json.JSONDecodeError, UnicodeDecodeError):
-                        self.linhas_invalidas += 1
+                        self.collector.linhas_invalidas += 1
+                        self.collector.registrar_descarte("LINHA_CORROMPIDA")
                         continue
 
                     if not isinstance(record, dict):
-                        self.linhas_invalidas += 1
+                        self.collector.linhas_invalidas += 1
+                        self.collector.registrar_descarte("LINHA_CORROMPIDA")
                         continue
 
                     exec_id = record.get("execution_id")
                     if not exec_id or not isinstance(exec_id, str):
+                        self.collector.registrar_descarte("SEM_EXECUTION_ID")
                         continue
 
                     ts_str = record.get("timestamp")
                     dt_evento = _parse_iso(ts_str)
 
+                    if dt_evento:
+                        if primeiro_ts_arquivo is None or dt_evento < primeiro_ts_arquivo:
+                            primeiro_ts_arquivo = dt_evento
+
                     # Filtragem de período
                     if dt_evento:
                         if self.periodo_inicio and dt_evento < self.periodo_inicio:
+                            self.collector.registrar_descarte("FILTRO_PERIODO")
                             continue
                         if self.periodo_fim and dt_evento > self.periodo_fim:
+                            self.collector.registrar_descarte("FILTRO_PERIODO")
                             continue
                         if primeiro_ts_global is None or dt_evento < primeiro_ts_global:
                             primeiro_ts_global = dt_evento
@@ -370,6 +480,7 @@ class IndicadoresAnalyzer:
                     # Filtragem por SOB
                     record_sob = _normalizar_sob_id(record.get("sob_id"))
                     if sob_filtro and record_sob and record_sob != sob_filtro:
+                        self.collector.registrar_descarte("FILTRO_SOB")
                         continue
 
                     # Reconstrução da execução
@@ -418,31 +529,48 @@ class IndicadoresAnalyzer:
                                 agg.estado_final = "Executando"
 
         except OSError as ex:
-            self.limitacoes_cobertura.append(f"Erro de E/S ao ler log {self.log_file.name}: {ex}")
-            return _bloco_nao_disponivel(f"ERRO_LEITURA_LOG: {ex}", {
+            self.collector.registrar_fonte_invalida(str(self.log_file))
+            self.collector.registrar_limitacao(f"Erro de E/S ao ler log {self.log_file.name}: {ex}")
+            return bloco_nao_disponivel(f"ERRO_LEITURA_LOG: {ex}", {
                 "total_execucoes": None, "concluidas": None, "falhas": None, "canceladas": None,
                 "em_andamento": None, "taxa_conclusao_pct": None, "duracao_ms": None,
                 "distribuicao_por_acao": None, "falhas_por_tipo": None,
-            }), {"inicio": None, "fim": None, "duracao_dias": None}
+            }, proveniencia=PROVENIENCIA_FONTES["execucoes"]), {"inicio": None, "fim": None, "duracao_dias": None}
 
-        # Descartar execuções vinculadas a outra SOB se filtro estiver ativo
         if sob_filtro:
-            execucoes_map = {eid: a for eid, a in execucoes_map.items() if a.sob_id == sob_filtro}
+            novos = {}
+            for eid, a in execucoes_map.items():
+                if a.sob_id == sob_filtro:
+                    novos[eid] = a
+                else:
+                    self.collector.registrar_descarte("FILTRO_SOB")
+            execucoes_map = novos
 
-        # Filtro analítico por tipo de ação
         if self.acao_filtro:
-            execucoes_map = {
-                eid: a for eid, a in execucoes_map.items()
-                if a.action and a.action.lower() == self.acao_filtro
-            }
+            novos = {}
+            for eid, a in execucoes_map.items():
+                if a.action and a.action.lower() == self.acao_filtro:
+                    novos[eid] = a
+                else:
+                    self.collector.registrar_descarte("FILTRO_ACAO")
+            execucoes_map = novos
 
-        # Filtro analítico por estado final da execução
         if self.estado_filtro:
-            execucoes_map = {
-                eid: a for eid, a in execucoes_map.items()
-                if a.estado_final.lower() == self.estado_filtro
-            }
+            novos = {}
+            for eid, a in execucoes_map.items():
+                if a.estado_final.lower() == self.estado_filtro:
+                    novos[eid] = a
+                else:
+                    self.collector.registrar_descarte("FILTRO_ESTADO")
+            execucoes_map = novos
 
+        if self.periodo_inicio and primeiro_ts_arquivo and self.periodo_inicio.date() < primeiro_ts_arquivo.date():
+            self.collector.solicitou_periodo_anterior_ao_log = True
+            self.collector.registrar_limitacao(
+                "Período inicial solicitado é anterior ao evento mais antigo do log rotativo disponível."
+            )
+
+        self.collector.registros_considerados = len(execucoes_map)
         total_execucoes = len(execucoes_map)
         duracao_dias = (
             round((ultimo_ts_global - primeiro_ts_global).total_seconds() / 86400.0, 2)
@@ -457,6 +585,7 @@ class IndicadoresAnalyzer:
         if total_execucoes == 0:
             return {
                 "status": "SEM_DADOS",
+                "proveniencia": PROVENIENCIA_FONTES["execucoes"],
                 "total_execucoes": 0,
                 "concluidas": 0,
                 "falhas": 0,
@@ -499,6 +628,7 @@ class IndicadoresAnalyzer:
 
         return {
             "status": "OK",
+            "proveniencia": PROVENIENCIA_FONTES["execucoes"],
             "total_execucoes": total_execucoes,
             "concluidas": concluidas,
             "falhas": falhas,
@@ -510,333 +640,6 @@ class IndicadoresAnalyzer:
             "falhas_por_tipo": dict(sorted(falhas_tipo.items())),
         }, periodo_res
 
-    def _processar_pending(self, root: Path, sob_resolvida: Optional[str]) -> Dict[str, Any]:
-        """Lê defensivamente o store autoritativo de pendências (.oxcad/pending.json)."""
-        store_file = root / ".oxcad" / "pending.json"
-        if not store_file.is_file():
-            self.arquivos_ausentes.append(str(store_file))
-            return _bloco_nao_disponivel("ARQUIVO_PENDING_NAO_ENCONTRADO", {
-                "total": None, "abertas": None, "em_andamento": None,
-                "resolvidas": None, "descartadas": None, "taxa_resolucao_pct": None, "por_severidade": None,
-            })
-
-        try:
-            data = json.loads(store_file.read_text(encoding="utf-8"))
-            if not isinstance(data, dict) or data.get("schema") != 1 or not isinstance(data.get("items"), list):
-                return _bloco_nao_disponivel("ARQUIVO_PENDING_INVALIDO", {
-                    "total": None, "abertas": None, "em_andamento": None,
-                    "resolvidas": None, "descartadas": None, "taxa_resolucao_pct": None, "por_severidade": None,
-                })
-
-            store_sob = _normalizar_sob_id(data.get("sob_id"))
-            if sob_resolvida and store_sob and store_sob != sob_resolvida:
-                return _bloco_nao_disponivel("SOB_ID_MISMATCH", {
-                    "total": None, "abertas": None, "em_andamento": None,
-                    "resolvidas": None, "descartadas": None, "taxa_resolucao_pct": None, "por_severidade": None,
-                })
-
-            items = data["items"]
-            total = len(items)
-            abertas, em_andamento, resolvidas, descartadas = 0, 0, 0, 0
-            por_severidade = {"BAIXA": 0, "MEDIA": 0, "ALTA": 0, "CRITICA": 0}
-
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                st = item.get("status")
-                if st == "ABERTA":
-                    abertas += 1
-                elif st == "EM_ANDAMENTO":
-                    em_andamento += 1
-                elif st == "RESOLVIDA":
-                    resolvidas += 1
-                elif st == "DESCARTADA":
-                    descartadas += 1
-
-                sev = str(item.get("severity", "")).upper()
-                if sev in por_severidade:
-                    por_severidade[sev] += 1
-
-            ativas_e_resolvidas = abertas + em_andamento + resolvidas
-            taxa = round((resolvidas / ativas_e_resolvidas * 100.0), 2) if ativas_e_resolvidas > 0 else None
-
-            return {
-                "status": "OK",
-                "total": total,
-                "abertas": abertas,
-                "em_andamento": em_andamento,
-                "resolvidas": resolvidas,
-                "descartadas": descartadas,
-                "taxa_resolucao_pct": taxa,
-                "por_severidade": por_severidade,
-            }
-        except Exception as ex:
-            return _bloco_nao_disponivel(f"ERRO_LEITURA_PENDING: {ex}", {
-                "total": None, "abertas": None, "em_andamento": None,
-                "resolvidas": None, "descartadas": None, "taxa_resolucao_pct": None, "por_severidade": None,
-            })
-
-    def _processar_deliveries(self, root: Path, sob_resolvida: Optional[str]) -> Dict[str, Any]:
-        """Lê defensivamente o store de pacotes de entrega (.oxcad/deliveries/)."""
-        store_dir = root / ".oxcad" / "deliveries"
-        if not store_dir.is_dir():
-            self.arquivos_ausentes.append(str(store_dir))
-            return _bloco_nao_disponivel("DIRETORIO_DELIVERIES_NAO_ENCONTRADO", {
-                "total_pacotes": None, "aprovados": None, "revogados": None, "pendentes_aprovacao": None, "integridade": None,
-            })
-
-        try:
-            total_pacotes, aprovados, revogados, pendentes = 0, 0, 0, 0
-            confirmados, divergentes, invalidos = 0, 0, 0
-
-            for entry in store_dir.iterdir():
-                if not entry.is_dir():
-                    continue
-                manifest_file = entry / "manifest.json"
-                if not manifest_file.is_file():
-                    continue
-
-                try:
-                    man_data = json.loads(manifest_file.read_text(encoding="utf-8"))
-                    man_sob = _normalizar_sob_id(man_data.get("sob_id"))
-                    if sob_resolvida and man_sob and man_sob != sob_resolvida:
-                        continue
-                except Exception:
-                    invalidos += 1
-                    continue
-
-                total_pacotes += 1
-                appr_file = entry / "approval.json"
-                if appr_file.is_file():
-                    try:
-                        appr_data = json.loads(appr_file.read_text(encoding="utf-8"))
-                        if appr_data.get("approved") is True:
-                            aprovados += 1
-                        elif appr_data.get("approved") is False:
-                            revogados += 1
-                        else:
-                            pendentes += 1
-                    except Exception:
-                        invalidos += 1
-                else:
-                    pendentes += 1
-
-                if (entry / "manifest.sha256").is_file():
-                    confirmados += 1
-                else:
-                    divergentes += 1
-
-            return {
-                "status": "OK",
-                "total_pacotes": total_pacotes,
-                "aprovados": aprovados,
-                "revogados": revogados,
-                "pendentes_aprovacao": pendentes,
-                "integridade": {
-                    "confirmados": confirmados,
-                    "divergentes": divergentes,
-                    "invalidos": invalidos,
-                },
-            }
-        except Exception as ex:
-            return _bloco_nao_disponivel(f"ERRO_LEITURA_DELIVERIES: {ex}", {
-                "total_pacotes": None, "aprovados": None, "revogados": None, "pendentes_aprovacao": None, "integridade": None,
-            })
-
-    def _processar_time(self, root: Path, sob_resolvida: Optional[str]) -> Dict[str, Any]:
-        """Lê defensivamente o apontamento operacional de tempo (.oxcad/time.json)."""
-        time_file = root / ".oxcad" / "time.json"
-        if not time_file.is_file():
-            self.arquivos_ausentes.append(str(time_file))
-            return _bloco_nao_disponivel("ARQUIVO_TIME_NAO_ENCONTRADO", {
-                "estado": None, "tempo_acumulado_segundos": None, "tempo_acumulado_formatado": None, "total_sessoes": None,
-            })
-
-        try:
-            data = json.loads(time_file.read_text(encoding="utf-8"))
-            if not isinstance(data, dict):
-                return _bloco_nao_disponivel("ARQUIVO_TIME_INVALIDO", {
-                    "estado": None, "tempo_acumulado_segundos": None, "tempo_acumulado_formatado": None, "total_sessoes": None,
-                })
-
-            store_sob = _normalizar_sob_id(data.get("sob_id"))
-            if sob_resolvida and store_sob and store_sob != sob_resolvida:
-                return _bloco_nao_disponivel("SOB_ID_MISMATCH", {
-                    "estado": None, "tempo_acumulado_segundos": None, "tempo_acumulado_formatado": None, "total_sessoes": None,
-                })
-
-            acumulado = data.get("tempo_acumulado_segundos")
-            sessoes = data.get("sessoes")
-            return {
-                "status": "OK",
-                "estado": data.get("estado"),
-                "tempo_acumulado_segundos": acumulado,
-                "tempo_acumulado_formatado": _formatar_segundos_hhmmss(acumulado),
-                "total_sessoes": len(sessoes) if isinstance(sessoes, list) else 0,
-            }
-        except Exception as ex:
-            return _bloco_nao_disponivel(f"ERRO_LEITURA_TIME: {ex}", {
-                "estado": None, "tempo_acumulado_segundos": None, "tempo_acumulado_formatado": None, "total_sessoes": None,
-            })
-
-    def _processar_versoes(self, root: Path) -> Dict[str, Any]:
-        """Conta snapshots de versão disponíveis em .auxcad_versions/."""
-        vers_dir = root / ".auxcad_versions"
-        if not vers_dir.is_dir():
-            return {"status": "OK", "total_snapshots": 0}
-        try:
-            snapshots = [d for d in vers_dir.iterdir() if d.is_dir() and (d / "manifest.json").is_file()]
-            return {"status": "OK", "total_snapshots": len(snapshots)}
-        except Exception as ex:
-            return _bloco_nao_disponivel(f"ERRO_LEITURA_VERSOES: {ex}", {"total_snapshots": None})
-
-    def _processar_sob_state(self, root: Path, sob_resolvida: Optional[str]) -> Dict[str, Any]:
-        """Lê defensivamente o manifesto de preparação de projeto (.sob_state.json)."""
-        state_file = root / ".sob_state.json"
-        if not state_file.is_file():
-            self.arquivos_ausentes.append(str(state_file))
-            return _bloco_nao_disponivel("MANIFESTO_SOB_NAO_ENCONTRADO", {
-                "sob_id": None, "estado_preparacao": None, "duracao_segundos": None, "data_inicio": None, "data_fim": None,
-            })
-
-        try:
-            data = json.loads(state_file.read_text(encoding="utf-8"))
-            if not isinstance(data, dict):
-                return _bloco_nao_disponivel("MANIFESTO_SOB_INVALIDO", {
-                    "sob_id": None, "estado_preparacao": None, "duracao_segundos": None, "data_inicio": None, "data_fim": None,
-                })
-
-            sob_id = _normalizar_sob_id(data.get("sob_id"))
-            if sob_resolvida and sob_id and sob_id != sob_resolvida:
-                return _bloco_nao_disponivel("SOB_ID_MISMATCH", {
-                    "sob_id": None, "estado_preparacao": None, "duracao_segundos": None, "data_inicio": None, "data_fim": None,
-                })
-
-            return {
-                "status": "OK",
-                "sob_id": sob_id,
-                "estado_preparacao": data.get("status"),
-                "duracao_segundos": data.get("duracao_segundos"),
-                "data_inicio": data.get("data_inicio"),
-                "data_fim": data.get("data_fim"),
-            }
-        except Exception as ex:
-            return _bloco_nao_disponivel(f"ERRO_LEITURA_MANIFESTO_SOB: {ex}", {
-                "sob_id": None, "estado_preparacao": None, "duracao_segundos": None, "data_inicio": None, "data_fim": None,
-            })
-
-    def _processar_workspace_consolidado(self) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], List[str]]:
-        """Consolida indicadores persistidos de múltiplos projetos sob self.workspace_root."""
-        projetos_encontrados: List[Path] = []
-        if self.workspace_root and self.workspace_root.is_dir():
-            for item in self.workspace_root.iterdir():
-                if item.is_dir() and ((item / ".sob_state.json").is_file() or (item / ".oxcad").is_dir()):
-                    projetos_encontrados.append(item)
-
-        total_projetos = len(projetos_encontrados)
-        sobs_observadas: List[str] = []
-
-        if total_projetos == 0:
-            self.limitacoes_cobertura.append(
-                "Nenhum diretório com manifesto de SOB (.sob_state.json) ou dados (.oxcad) localizado no workspace especificado."
-            )
-            vazio_pend = {
-                "status": "SEM_DADOS", "total": 0, "abertas": 0, "em_andamento": 0,
-                "resolvidas": 0, "descartadas": 0, "taxa_resolucao_pct": None,
-                "por_severidade": {"BAIXA": 0, "MEDIA": 0, "ALTA": 0, "CRITICA": 0},
-            }
-            vazio_deliv = {
-                "status": "SEM_DADOS", "total_pacotes": 0, "aprovados": 0, "revogados": 0,
-                "pendentes_aprovacao": 0, "integridade": {"confirmados": 0, "divergentes": 0, "invalidos": 0},
-            }
-            vazio_time = {
-                "status": "SEM_DADOS", "estado": None, "tempo_acumulado_segundos": 0.0,
-                "tempo_acumulado_formatado": "00:00:00", "total_sessoes": 0,
-            }
-            vazio_vers = {"status": "SEM_DADOS", "total_snapshots": 0}
-            vazio_manifesto = {
-                "status": "SEM_DADOS", "total_projetos": 0, "sobs": [],
-            }
-            return vazio_pend, vazio_deliv, vazio_time, vazio_vers, vazio_manifesto, []
-
-        # Consolidação acumulativa
-        tot_pend, abertas, em_andamento, resolvidas, descartadas = 0, 0, 0, 0, 0
-        por_severidade = {"BAIXA": 0, "MEDIA": 0, "ALTA": 0, "CRITICA": 0}
-        tot_pacotes, aprovados, revogados, pendentes = 0, 0, 0, 0
-        confirmados, divergentes, invalidos = 0, 0, 0
-        tempo_total_seg = 0.0
-        tot_sessoes = 0
-        tot_snapshots = 0
-
-        for p_dir in projetos_encontrados:
-            sob_nome = p_dir.name
-            manifesto = p_dir / ".sob_state.json"
-            if manifesto.is_file():
-                try:
-                    c = json.loads(manifesto.read_text(encoding="utf-8"))
-                    sob_nome = _normalizar_sob_id(c.get("sob_id")) or sob_nome
-                except Exception:
-                    pass
-            sobs_observadas.append(sob_nome)
-
-            # Pendencias
-            p_pend = self._processar_pending(p_dir, None)
-            if p_pend.get("status") == "OK":
-                tot_pend += p_pend.get("total") or 0
-                abertas += p_pend.get("abertas") or 0
-                em_andamento += p_pend.get("em_andamento") or 0
-                resolvidas += p_pend.get("resolvidas") or 0
-                descartadas += p_pend.get("descartadas") or 0
-                for k, v in (p_pend.get("por_severidade") or {}).items():
-                    por_severidade[k] = por_severidade.get(k, 0) + v
-
-            # Deliveries
-            p_del = self._processar_deliveries(p_dir, None)
-            if p_del.get("status") == "OK":
-                tot_pacotes += p_del.get("total_pacotes") or 0
-                aprovados += p_del.get("aprovados") or 0
-                revogados += p_del.get("revogados") or 0
-                pendentes += p_del.get("pendentes_aprovacao") or 0
-                integ = p_del.get("integridade") or {}
-                confirmados += integ.get("confirmados", 0)
-                divergentes += integ.get("divergentes", 0)
-                invalidos += integ.get("invalidos", 0)
-
-            # Time
-            p_time = self._processar_time(p_dir, None)
-            if p_time.get("status") == "OK":
-                tempo_total_seg += float(p_time.get("tempo_acumulado_segundos") or 0.0)
-                tot_sessoes += int(p_time.get("total_sessoes") or 0)
-
-            # Snapshots
-            p_vers = self._processar_versoes(p_dir)
-            if p_vers.get("status") == "OK":
-                tot_snapshots += int(p_vers.get("total_snapshots") or 0)
-
-        ativas_res = abertas + em_andamento + resolvidas
-        taxa_pend = round((resolvidas / ativas_res * 100.0), 2) if ativas_res > 0 else None
-
-        res_pend = {
-            "status": "OK", "total": tot_pend, "abertas": abertas, "em_andamento": em_andamento,
-            "resolvidas": resolvidas, "descartadas": descartadas, "taxa_resolucao_pct": taxa_pend,
-            "por_severidade": por_severidade,
-        }
-        res_deliv = {
-            "status": "OK", "total_pacotes": tot_pacotes, "aprovados": aprovados,
-            "revogados": revogados, "pendentes_aprovacao": pendentes,
-            "integridade": {"confirmados": confirmados, "divergentes": divergentes, "invalidos": invalidos},
-        }
-        res_time = {
-            "status": "OK", "estado": "Consolidado", "tempo_acumulado_segundos": round(tempo_total_seg, 2),
-            "tempo_acumulado_formatado": _formatar_segundos_hhmmss(tempo_total_seg), "total_sessoes": tot_sessoes,
-        }
-        res_vers = {"status": "OK", "total_snapshots": tot_snapshots}
-        res_manifesto = {
-            "status": "OK", "total_projetos": total_projetos, "sobs": sorted(sobs_observadas),
-        }
-
-        return res_pend, res_deliv, res_time, res_vers, res_manifesto, sorted(sobs_observadas)
-
 
 def consultar_indicadores(
     project_root: Optional[Union[str, Path]] = None,
@@ -847,9 +650,12 @@ def consultar_indicadores(
     acao: Optional[str] = None,
     estado: Optional[str] = None,
     workspace_root: Optional[Union[str, Path]] = None,
+    comparar_inicio: Optional[Union[datetime, str]] = None,
+    comparar_fim: Optional[Union[datetime, str]] = None,
 ) -> Dict[str, Any]:
     """
-    Função pública de entrada read-only do motor analítico OXCAD (P2.1 / P2.2).
+    Função pública de entrada read-only do motor analítico OXCAD (P2.1 / P2.2 / P2.3).
+    Suporta enriquecimento de qualidade, rastreamento de proveniência e comparação de períodos.
     """
     analyzer = IndicadoresAnalyzer(
         log_file=log_file,
@@ -861,14 +667,30 @@ def consultar_indicadores(
         estado_filtro=estado,
         workspace_root=workspace_root,
     )
-    return analyzer.gerar_relatorio()
+    relatorio_base = analyzer.gerar_relatorio()
+
+    if comparar_inicio or comparar_fim:
+        analyzer_comp = IndicadoresAnalyzer(
+            log_file=log_file,
+            project_root=project_root,
+            sob_id=sob_id,
+            periodo_inicio=comparar_inicio,
+            periodo_fim=comparar_fim,
+            acao_filtro=acao,
+            estado_filtro=estado,
+            workspace_root=workspace_root,
+        )
+        relatorio_comp = analyzer_comp.gerar_relatorio()
+        relatorio_base["comparacao"] = comparar_indicadores(relatorio_base, relatorio_comp)
+
+    return relatorio_base
 
 
 if __name__ == "__main__":
     import argparse
     import sys
 
-    parser = argparse.ArgumentParser(description="OXCAD — Indicadores de Gestão e Processo (P2.1 / P2.2)")
+    parser = argparse.ArgumentParser(description="OXCAD — Indicadores de Gestão e Processo (P2.1 / P2.2 / P2.3)")
     parser.add_argument("--project-root", type=str, default=None, help="Caminho raiz da SOB/projeto")
     parser.add_argument("--sob", type=str, default=None, help="Identificador oficial da SOB")
     parser.add_argument("--workspace-root", type=str, default=None, help="Caminho raiz do workspace")
@@ -876,6 +698,8 @@ if __name__ == "__main__":
     parser.add_argument("--state", type=str, default=None, help="Filtrar por estado (ex: Concluido, Falhou)")
     parser.add_argument("--start-date", type=str, default=None, help="Data/hora inicial ISO")
     parser.add_argument("--end-date", type=str, default=None, help="Data/hora final ISO")
+    parser.add_argument("--compare-start", type=str, default=None, help="Data inicial ISO para comparação")
+    parser.add_argument("--compare-end", type=str, default=None, help="Data final ISO para comparação")
     parser.add_argument("--log-file", type=str, default=None, help="Caminho do arquivo application.jsonl")
     parser.add_argument("--pretty", action="store_true", help="Formatar saída JSON")
 
@@ -895,6 +719,8 @@ if __name__ == "__main__":
         estado=args.state,
         periodo_inicio=args.start_date,
         periodo_fim=args.end_date,
+        comparar_inicio=args.compare_start,
+        comparar_fim=args.compare_end,
         log_file=log_path,
     )
 
