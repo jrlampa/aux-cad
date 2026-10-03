@@ -545,12 +545,20 @@ class WorkspaceActionDispatcher:
 
         # 1. Resolução do Template Word (.docx)
         tpl_final = ""
-        if template_path and Path(template_path).exists():
-            tpl_final = str(Path(template_path).resolve())
+        if template_path:
+            if Path(template_path).exists():
+                tpl_final = str(Path(template_path).resolve())
         else:
-            tpl_gdrive = Path(r"G:\Meu Drive\1-HBT\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx")
-            if tpl_gdrive.exists():
-                tpl_final = str(tpl_gdrive)
+            tpl_candidatos = [
+                Path(r"G:\Meu Drive\1-HBT\04_MODELOS\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx"),
+                Path(r"G:\Meu Drive\1-HBT\05_PROJETOS_HISTORICOS\SETEMBRO\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx"),
+                raiz / "ambiental" / "modelos" / "MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx",
+                Path(r"G:\Meu Drive\1-HBT\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx"),
+            ]
+            for tpl_cand in tpl_candidatos:
+                if tpl_cand.exists():
+                    tpl_final = str(tpl_cand.resolve())
+                    break
 
         # 2. Resolução de Pontos / Postes JSON
         pts_final = ""
@@ -570,9 +578,29 @@ class WorkspaceActionDispatcher:
         elif Path(r"C:\Temp\kmz_boxes.txt").exists():
             boxes_final = str(Path(r"C:\Temp\kmz_boxes.txt").resolve())
 
-        # 4. Fuso UTM e Pasta de Destino
+        # 4. Fuso UTM e Pasta de Destino (Subpasta de Licenciamento Ambiental LIC.AMB)
         fuso_str = str(fuso) if fuso else "23"
-        out_dir_str = str(root_path.resolve())
+        pasta_amb = root_path
+        subpastas_candidatas = [
+            "LIC.AMB", "Licen.Ambiental", "LICEN.AMBIENTAL", "LIC.AMBIENTAL",
+            "LICEN.AMB", "Licenciamento Ambiental", "LICENCIAMENTO AMBIENTAL",
+            "1_Documentos",
+        ]
+        for sub in subpastas_candidatas:
+            cand = root_path / sub
+            if cand.is_dir():
+                pasta_amb = cand
+                break
+        else:
+            if (root_path / ".sob_state.json").exists() or any(root_path.glob("*.dwg")):
+                cand_lic = root_path / "LIC.AMB"
+                try:
+                    cand_lic.mkdir(parents=True, exist_ok=True)
+                    pasta_amb = cand_lic
+                except Exception:
+                    pasta_amb = root_path
+
+        out_dir_str = str(pasta_amb.resolve())
 
         return [
             sys.executable,

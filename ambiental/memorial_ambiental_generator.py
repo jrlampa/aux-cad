@@ -121,15 +121,47 @@ def determinar_pasta_saida(candidate: Optional[str] = None, template_path: Optio
     """
     Determina a pasta de saída ideal para salvar o Checklist e Memorial.
     Prioridades:
-    1. Diretório informado pelo CAD (DWGPREFIX).
-    2. Diretório do template (se seguro e gravável, exceto se for System32/Windows).
-    3. Área de Trabalho (Desktop) do usuário.
-    4. Pasta Documentos do usuário.
-    5. C:\\Temp (garantidamente gravável para CAD/engenharia).
-    6. os.getcwd() (somente se seguro e gravável).
+    1. Subpasta de licenciamento ambiental (ex: LIC.AMB, Licen.Ambiental) dentro do candidato ou o próprio candidato.
+    2. Diretório informado pelo CAD (DWGPREFIX).
+    3. Diretório do template (se seguro e gravável, exceto se for System32/Windows).
+    4. Área de Trabalho (Desktop) do usuário.
+    5. Pasta Documentos do usuário.
+    6. C:\\Temp (garantidamente gravável para CAD/engenharia).
+    7. os.getcwd() (somente se seguro e gravável).
     """
     if candidate and is_safe_writable_dir(candidate):
-        return os.path.abspath(candidate.strip().strip('"').strip("'"))
+        cand_abs = os.path.abspath(candidate.strip().strip('"').strip("'"))
+        cand_name = os.path.basename(cand_abs).lower()
+        if any(term in cand_name for term in ["lic.amb", "licen", "ambiental"]):
+            return cand_abs
+
+        subpastas = [
+            "LIC.AMB", "Licen.Ambiental", "LICEN.AMBIENTAL", "LIC.AMBIENTAL",
+            "LICEN.AMB", "Licenciamento Ambiental", "1_Documentos"
+        ]
+        for sub in subpastas:
+            sub_p = os.path.join(cand_abs, sub)
+            if os.path.isdir(sub_p) and is_safe_writable_dir(sub_p):
+                return sub_p
+
+        tem_manifesto = os.path.exists(os.path.join(cand_abs, ".sob_state.json"))
+        tem_dwg = False
+        try:
+            if os.path.isdir(cand_abs):
+                tem_dwg = any(f.lower().endswith(".dwg") for f in os.listdir(cand_abs) if os.path.isfile(os.path.join(cand_abs, f)))
+        except OSError:
+            pass
+
+        if tem_manifesto or tem_dwg:
+            lic_amb = os.path.join(cand_abs, "LIC.AMB")
+            try:
+                os.makedirs(lic_amb, exist_ok=True)
+                if is_safe_writable_dir(lic_amb):
+                    return lic_amb
+            except Exception:
+                pass
+
+        return cand_abs
 
     if template_path:
         clean_tpl = template_path.strip().strip('"').strip("'")
@@ -290,12 +322,26 @@ def generate_docx_memorial(template_path: str, output_path: str, data: Dict[str,
 
 class MemorialGUI:
     def __init__(self, template_path: str, pts_path: str, boxes_path: str, fuso: int = 23, candidate_out_dir: Optional[str] = None):
-        self.template_path = template_path
+        # Resolução resiliente de template (.docx)
+        resolved_template = template_path
+        if not resolved_template or not os.path.exists(resolved_template):
+            candidatos_tpl = [
+                r"G:\Meu Drive\1-HBT\04_MODELOS\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx",
+                r"G:\Meu Drive\1-HBT\05_PROJETOS_HISTORICOS\SETEMBRO\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx",
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "modelos", "MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx"),
+                r"G:\Meu Drive\1-HBT\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx",
+            ]
+            for t_cand in candidatos_tpl:
+                if os.path.exists(t_cand):
+                    resolved_template = t_cand
+                    break
+
+        self.template_path = resolved_template
         self.pts_path = pts_path
         self.boxes_path = boxes_path
         self.fuso = fuso
         self.candidate_out_dir = candidate_out_dir
-        self.default_out_dir = determinar_pasta_saida(candidate_out_dir, template_path)
+        self.default_out_dir = determinar_pasta_saida(candidate_out_dir, resolved_template)
 
         # Extrai postes e coordenadas
         self.pts_list = []
@@ -511,12 +557,25 @@ class MemorialGUI:
 
             tk.Label(
                 alert_card,
-                text="Conforme procedimento operacional da concessionária:\n• O Memorial Descritivo é dispensado e NÃO será gerado.\n• Será emitido apenas o Checklist (.xlsx) atestando ausência de restrições.",
+                text="Conforme procedimento operacional da concessionária:\n• O Memorial Descritivo é opcional quando não há restrições ambientais.\n• O Checklist (.xlsx) será emitido atestando ausência de restrições.",
                 font=("Segoe UI", 9),
                 fg="#14532D",
                 bg="#F0FDF4",
                 justify="left"
             ).pack(anchor="w", pady=(4, 0))
+
+            self.var_gerar_memorial = tk.BooleanVar(value=True)
+            chk_mem = tk.Checkbutton(
+                alert_card,
+                text="Gerar também o Memorial Descritivo (.docx)",
+                variable=self.var_gerar_memorial,
+                font=("Segoe UI", 9, "bold"),
+                fg="#14532D",
+                bg="#F0FDF4",
+                activebackground="#F0FDF4",
+                cursor="hand2"
+            )
+            chk_mem.pack(anchor="w", pady=(6, 0))
 
         lbl_kmz = tk.Label(grp_amb, text="Áreas e Restrições Detectadas pelo KMZ:", font=("Segoe UI", 9, "bold"), fg="#1E293B", bg="#FFFFFF")
         lbl_kmz.grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 2), padx=6)
@@ -762,8 +821,9 @@ class MemorialGUI:
             messagebox.showerror("Erro", f"Falha ao gerar o Checklist Ambiental: {e_chk}")
             return
 
-        # 3. Regra de Negócio: Se NÃO houver restrição ambiental, o Memorial Descritivo é dispensado
-        if not self.tem_restricao:
+        # 3. Regra de Negócio: Se NÃO houver restrição ambiental e usuário desmarcou o Memorial, dispensa
+        deve_gerar_memorial = self.tem_restricao or (hasattr(self, "var_gerar_memorial") and self.var_gerar_memorial.get())
+        if not deve_gerar_memorial:
             msg_aviso = (
                 f"PROJETO LIVRE DE RESTRIÇÕES AMBIENTAIS!\n\n"
                 f"O caminhamento NÃO incide em nenhuma área de restrição ambiental cartográfica.\n"
@@ -774,7 +834,7 @@ class MemorialGUI:
             if croqui_ok:
                 msg_aviso += f"✔ A ORTOFOTO / CROQUI DE SATÉLITE foi gerada:\n{croqui_out_path}\n\n"
             msg_aviso += (
-                f"❌ O MEMORIAL DESCRITIVO AMBIENTAL É DISPENSADO E DEIXOU DE SER GERADO (não aplicável para projetos sem restrições ambientais).\n\n"
+                f"ℹ O MEMORIAL DESCRITIVO AMBIENTAL foi dispensado conforme seleção do usuário.\n\n"
                 f"Os arquivos gerados estão prontos para conferência."
             )
             messagebox.showinfo("Checklist Preenchido - Sem Restrições", msg_aviso)
@@ -786,8 +846,20 @@ class MemorialGUI:
                     pass
             return
 
-        # 4. Caso contrário (projeto COM restrições ambientais), gera obrigatoriamente o Memorial Descritivo
+        # 4. Caso contrário, gera o Memorial Descritivo
         try:
+            if not self.template_path or not os.path.exists(self.template_path):
+                candidatos_tpl = [
+                    r"G:\Meu Drive\1-HBT\04_MODELOS\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx",
+                    r"G:\Meu Drive\1-HBT\05_PROJETOS_HISTORICOS\SETEMBRO\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx",
+                    os.path.join(os.path.dirname(os.path.abspath(__file__)), "modelos", "MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx"),
+                    r"G:\Meu Drive\1-HBT\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx",
+                ]
+                for t_cand in candidatos_tpl:
+                    if os.path.exists(t_cand):
+                        self.template_path = t_cand
+                        break
+
             if not self.template_path or not os.path.exists(self.template_path):
                 messagebox.showwarning(
                     "Aviso - Modelo Word Não Localizado",
@@ -847,25 +919,36 @@ class MemorialGUI:
 
 
 if __name__ == '__main__':
-    template = r"G:\Meu Drive\1-HBT\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx"
+    candidatos_tpl = [
+        r"G:\Meu Drive\1-HBT\04_MODELOS\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx",
+        r"G:\Meu Drive\1-HBT\05_PROJETOS_HISTORICOS\SETEMBRO\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "modelos", "MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx"),
+        r"G:\Meu Drive\1-HBT\MODELO MEMORIAL DESCRITIVO_AMBIENTAL.docx",
+    ]
+    template = ""
+    for t_cand in candidatos_tpl:
+        if os.path.exists(t_cand):
+            template = t_cand
+            break
+
     pts = r"C:\Temp\kmz_points_input.json"
     boxes = r"C:\Temp\kmz_boxes.txt"
     fuso = 23
     out_dir = None
 
-    if len(sys.argv) > 1:
-        template = sys.argv[1]
-    if len(sys.argv) > 2:
-        pts = sys.argv[2]
-    if len(sys.argv) > 3:
-        boxes = sys.argv[3]
-    if len(sys.argv) > 4:
+    if len(sys.argv) > 1 and sys.argv[1].strip():
+        template = sys.argv[1].strip()
+    if len(sys.argv) > 2 and sys.argv[2].strip():
+        pts = sys.argv[2].strip()
+    if len(sys.argv) > 3 and sys.argv[3].strip():
+        boxes = sys.argv[3].strip()
+    if len(sys.argv) > 4 and sys.argv[4].strip():
         try:
             fuso = int(sys.argv[4])
         except ValueError:
             fuso = 23
-    if len(sys.argv) > 5:
-        out_dir = sys.argv[5]
+    if len(sys.argv) > 5 and sys.argv[5].strip():
+        out_dir = sys.argv[5].strip()
 
     app = MemorialGUI(template, pts, boxes, fuso, candidate_out_dir=out_dir)
     app.run()

@@ -423,3 +423,130 @@ finally
 {
     Directory.Delete(testRoot, recursive: true);
 }
+
+// ==========================================
+// P2.7A: Validação da Ponte CLI C# <-> Python
+// ==========================================
+var p27Root = Path.Combine(Path.GetTempPath(), "oxcad-p27a-test-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(p27Root);
+try
+{
+    string testDwg = Path.Combine(p27Root, "PROJETO_TESTE.dwg");
+    File.WriteAllText(testDwg, "DWG_FICTICIO");
+    string sob = "A057526153";
+    string fp = "{12345678-ABCD-EF01-2345-6789ABCDEF01}";
+    string repoRoot = Directory.GetCurrentDirectory();
+    while (!string.IsNullOrEmpty(repoRoot) && !File.Exists(Path.Combine(repoRoot, "acaddoc.lsp")))
+    {
+        repoRoot = Path.GetDirectoryName(repoRoot) ?? "";
+    }
+
+    async Task<string> ExecutarCliRevisaoAsync(string comando, Dictionary<string, string>? parametros = null, string? sobOverride = null, string? fpOverride = null)
+    {
+        var scriptPath = Path.Combine(repoRoot, "workspace", "workspace_review_cli.py");
+        var sbArgs = new System.Text.StringBuilder();
+        sbArgs.Append($"\"{scriptPath}\" {comando} --project-root \"{p27Root}\" --dwg \"{testDwg}\" --sob \"{sobOverride ?? sob}\" --fingerprint \"{fpOverride ?? fp}\"");
+        if (parametros != null)
+        {
+            foreach (var kvp in parametros)
+            {
+                if (!string.IsNullOrWhiteSpace(kvp.Value))
+                    sbArgs.Append($" --{kvp.Key} \"{kvp.Value}\"");
+                else
+                    sbArgs.Append($" --{kvp.Key}");
+            }
+        }
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "python",
+            Arguments = sbArgs.ToString(),
+            WorkingDirectory = repoRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardOutputEncoding = System.Text.Encoding.UTF8
+        };
+        using var proc = System.Diagnostics.Process.Start(psi)!;
+        string stdout = await proc.StandardOutput.ReadToEndAsync();
+        string stderr = await proc.StandardError.ReadToEndAsync();
+        await proc.WaitForExitAsync();
+        int idxStart = stdout.IndexOf('{');
+        int idxEnd = stdout.LastIndexOf('}');
+        if (idxStart >= 0 && idxEnd > idxStart)
+            return stdout.Substring(idxStart, idxEnd - idxStart + 1);
+        if (!string.IsNullOrWhiteSpace(stderr))
+            throw new Exception($"CLI error: {stderr}");
+        return stdout;
+    }
+
+    // 1. Status inicial (sem revisão)
+    string statusJson = await ExecutarCliRevisaoAsync("status");
+    using (var doc = System.Text.Json.JsonDocument.Parse(statusJson))
+    {
+        Assert(doc.RootElement.GetProperty("success").GetBoolean(), "P2.7A: Status deve retornar success=true");
+        Assert(!doc.RootElement.GetProperty("has_review").GetBoolean(), "P2.7A: Inicialmente não deve ter revisão");
+    }
+
+    // 2. Iniciar revisão
+    var startParams = new Dictionary<string, string>
+    {
+        ["revision-id"] = "REV-01",
+        ["reviewer"] = "Engenheiro QA"
+    };
+    string? createdRevId = null;
+    string startJson = await ExecutarCliRevisaoAsync("iniciar", startParams);
+    using (var doc = System.Text.Json.JsonDocument.Parse(startJson))
+    {
+        Assert(doc.RootElement.GetProperty("success").GetBoolean(), "P2.7A: Iniciar deve ter sucesso");
+        var revObj = doc.RootElement.GetProperty("review");
+        createdRevId = revObj.GetProperty("review_id").GetString();
+        Assert(revObj.GetProperty("status").GetString() == "IN_REVIEW", "P2.7A: Status da revisão deve ser IN_REVIEW");
+    }
+
+    // 3. Registrar achado
+    var findingParams = new Dictionary<string, string>
+    {
+        ["category"] = "DESENHO",
+        ["severity"] = "MINOR",
+        ["description"] = "Ajustar espessura de linha",
+        ["author"] = "Revisor C#"
+    };
+    string findingJson = await ExecutarCliRevisaoAsync("achado", findingParams);
+    using (var doc = System.Text.Json.JsonDocument.Parse(findingJson))
+    {
+        Assert(doc.RootElement.GetProperty("success").GetBoolean(), "P2.7A: Registrar achado deve ter sucesso");
+        int total = doc.RootElement.GetProperty("counts").GetProperty("total_findings").GetInt32();
+        Assert(total == 1, "P2.7A: Total de findings deve ser 1");
+    }
+
+    // 4. Solicitar alterações
+    var reqChangesParams = new Dictionary<string, string>
+    {
+        ["actor"] = "Revisor C#",
+        ["reason"] = "Correção de espessura necessária"
+    };
+    string reqChangesJson = await ExecutarCliRevisaoAsync("solicitar-alteracoes", reqChangesParams);
+    using (var doc = System.Text.Json.JsonDocument.Parse(reqChangesJson))
+    {
+        Assert(doc.RootElement.GetProperty("success").GetBoolean(), "P2.7A: Solicitar alterações deve ter sucesso");
+        Assert(doc.RootElement.GetProperty("review").GetProperty("status").GetString() == "CHANGES_REQUIRED",
+            "P2.7A: Status deve transicionar para CHANGES_REQUIRED");
+    }
+
+    // 5. Incompatibilidade de contexto / Fingerprint divergente deve ser bloqueada com CONTEXT_MISMATCH
+    Assert(!string.IsNullOrEmpty(createdRevId), "P2.7A: createdRevId deve ser válido");
+    var invalidParams = new Dictionary<string, string> { ["review-id"] = createdRevId! };
+    string invalidJson = await ExecutarCliRevisaoAsync("gate", invalidParams, fpOverride: "{DIVERGENTE-0000-0000-0000-000000000000}");
+    using (var doc = System.Text.Json.JsonDocument.Parse(invalidJson))
+    {
+        Assert(!doc.RootElement.GetProperty("success").GetBoolean(), "P2.7A: Context mismatch deve falhar com success=false");
+        Assert(doc.RootElement.GetProperty("error").GetString()!.Contains("CONTEXT_MISMATCH"), "P2.7A: Erro deve indicar CONTEXT_MISMATCH");
+    }
+
+    Console.WriteLine("P2.7A TechnicalReview CLI Bridge: all C# harness assertions passed.");
+}
+finally
+{
+    Directory.Delete(p27Root, recursive: true);
+}

@@ -146,29 +146,79 @@ class WorkspaceScanner:
         return sorted(candidatas)
 
     @classmethod
-    def detectar_base_sigla(cls, root_dir: Path, sob_id: str) -> str:
+    def _listar_pastas_busca(cls, root_dir: Path, max_depth: int = 3) -> List[Path]:
+        """
+        Retorna a lista de pastas para busca no projeto de forma otimizada:
+        1. root_dir (prioridade máxima)
+        2. subpastas válidas até max_depth (excluindo pastas ocultas e de sistema).
+        """
+        pastas = [root_dir]
+        pastas_ignoradas = {
+            ".oxcad", ".git", ".venv", ".vs", ".vscode",
+            ".idea", "__pycache__", "node_modules", "temp", "tmp"
+        }
+
+        def _coletar_subpastas(atual: Path, nivel: int):
+            if nivel > max_depth:
+                return
+            try:
+                for item in sorted(atual.iterdir(), key=lambda p: p.name.lower()):
+                    if item.is_dir() and not item.name.startswith("."):
+                        if item.name.casefold() not in pastas_ignoradas:
+                            pastas.append(item)
+                            _coletar_subpastas(item, nivel + 1)
+            except (OSError, PermissionError):
+                pass
+
+        _coletar_subpastas(root_dir, 1)
+        return pastas
+
+    @classmethod
+    def detectar_base_sigla(
+        cls, root_dir: Path, sob_id: str, pastas: Optional[List[Path]] = None
+    ) -> str:
         """
         Detecta a sigla de base técnica da concessionária (ex: 'PE', 'CF', 'NI')
         a partir do nome do DWG existente ou assume 'PE' por padrão.
         """
+        if pastas is None:
+            pastas = cls._listar_pastas_busca(root_dir)
+
         padrao = re.compile(rf"^([A-Z]{{2}})_{re.escape(sob_id)}_DESENHO\.dwg$", re.IGNORECASE)
-        for f in root_dir.glob("*.dwg"):
-            m = padrao.match(f.name)
-            if m:
-                return normalizar_sigla_base(m.group(1))
+        for p in pastas:
+            try:
+                for f in p.glob("*.dwg"):
+                    m = padrao.match(f.name)
+                    if m:
+                        return normalizar_sigla_base(m.group(1))
+            except (OSError, PermissionError):
+                pass
 
         # Procura qualquer DWG com prefixo de 2 letras
         padrao_geral = re.compile(r"^([A-Z]{{2}})_.*_DESENHO\.dwg$", re.IGNORECASE)
-        for f in root_dir.glob("*.dwg"):
-            m = padrao_geral.match(f.name)
-            if m:
-                return normalizar_sigla_base(m.group(1))
+        for p in pastas:
+            try:
+                for f in p.glob("*.dwg"):
+                    m = padrao_geral.match(f.name)
+                    if m:
+                        return normalizar_sigla_base(m.group(1))
+            except (OSError, PermissionError):
+                pass
 
         return "PE"
 
     @classmethod
-    def detectar_dwg_principal(cls, root_dir: Path, sob_id: str, base_sigla: str) -> Tuple[Optional[Path], ArtifactStatus, Dict[str, Any]]:
-        """Localiza o arquivo DWG principal do projeto."""
+    def detectar_dwg_principal(
+        cls,
+        root_dir: Path,
+        sob_id: str,
+        base_sigla: str,
+        pastas: Optional[List[Path]] = None,
+    ) -> Tuple[Optional[Path], ArtifactStatus, Dict[str, Any]]:
+        """Localiza o arquivo DWG principal do projeto, priorizando raiz e examinando subpastas."""
+        if pastas is None:
+            pastas = cls._listar_pastas_busca(root_dir)
+
         candidatos: List[Path] = []
 
         # 1. Prioridade absoluta: {BASE}_{SOB}_DESENHO.dwg
@@ -177,15 +227,30 @@ class WorkspaceScanner:
         if path_oficial.exists() and path_oficial.is_file():
             return path_oficial, ArtifactStatus.EXISTE, {"tamanho_bytes": path_oficial.stat().st_size, "tipo": "canônico"}
 
+        for p in pastas:
+            if p == root_dir:
+                continue
+            cand = p / nome_oficial
+            if cand.exists() and cand.is_file():
+                return cand, ArtifactStatus.EXISTE, {"tamanho_bytes": cand.stat().st_size, "tipo": "canônico_subpasta"}
+
         # 2. Prioridade 2: Qualquer {BASE}_{SOB}_DESENHO.dwg com outra base
-        for f in root_dir.glob(f"*_{sob_id}_DESENHO.dwg"):
-            if f.is_file():
-                return f, ArtifactStatus.EXISTE, {"tamanho_bytes": f.stat().st_size, "tipo": "base_alternativa"}
+        for p in pastas:
+            try:
+                for f in p.glob(f"*_{sob_id}_DESENHO.dwg"):
+                    if f.is_file():
+                        return f, ArtifactStatus.EXISTE, {"tamanho_bytes": f.stat().st_size, "tipo": "base_alternativa"}
+            except (OSError, PermissionError):
+                pass
 
         # 3. Prioridade 3: Qualquer DWG contendo o número da SOB
-        for f in root_dir.glob(f"*{sob_id}*.dwg"):
-            if f.is_file():
-                candidatos.append(f)
+        for p in pastas:
+            try:
+                for f in p.glob(f"*{sob_id}*.dwg"):
+                    if f.is_file():
+                        candidatos.append(f)
+            except (OSError, PermissionError):
+                pass
 
         if candidatos:
             candidatos.sort(key=lambda x: x.stat().st_size, reverse=True)
@@ -193,20 +258,33 @@ class WorkspaceScanner:
             return escolhido, ArtifactStatus.EXISTE, {"tamanho_bytes": escolhido.stat().st_size, "tipo": "correspondência_sob"}
 
         # 4. Prioridade 4: Arquivo *_DESENHO.dwg
-        desenhos = [f for f in root_dir.glob("*_DESENHO.dwg") if f.is_file()]
-        if desenhos:
-            return desenhos[0], ArtifactStatus.EXISTE, {"tamanho_bytes": desenhos[0].stat().st_size, "tipo": "sufixo_desenho"}
+        for p in pastas:
+            try:
+                desenhos = [f for f in p.glob("*_DESENHO.dwg") if f.is_file()]
+                if desenhos:
+                    return desenhos[0], ArtifactStatus.EXISTE, {"tamanho_bytes": desenhos[0].stat().st_size, "tipo": "sufixo_desenho"}
+            except (OSError, PermissionError):
+                pass
 
         # 5. Prioridade 5: Primeiro DWG não-temporário encontrado
-        dwgs = [f for f in root_dir.glob("*.dwg") if f.is_file() and not f.name.startswith("~")]
-        if dwgs:
-            return dwgs[0], ArtifactStatus.EXISTE, {"tamanho_bytes": dwgs[0].stat().st_size, "tipo": "dwg_geral"}
+        for p in pastas:
+            try:
+                dwgs = [f for f in p.glob("*.dwg") if f.is_file() and not f.name.startswith("~")]
+                if dwgs:
+                    return dwgs[0], ArtifactStatus.EXISTE, {"tamanho_bytes": dwgs[0].stat().st_size, "tipo": "dwg_geral"}
+            except (OSError, PermissionError):
+                pass
 
         return None, ArtifactStatus.NAO_EXISTE, {}
 
     @classmethod
-    def detectar_croqui(cls, root_dir: Path) -> Tuple[Optional[Path], ArtifactStatus, Dict[str, Any]]:
+    def detectar_croqui(
+        cls, root_dir: Path, pastas: Optional[List[Path]] = None
+    ) -> Tuple[Optional[Path], ArtifactStatus, Dict[str, Any]]:
         """Verifica a existência da pasta de croqui e contabiliza seus arquivos."""
+        if pastas is None:
+            pastas = cls._listar_pastas_busca(root_dir)
+
         pastas_candidatas = ["CROQUI", "CROQUIS", "Levantamento", "LEVANTAMENTO"]
         pasta_alvo: Optional[Path] = None
 
@@ -215,6 +293,12 @@ class WorkspaceScanner:
             if cand.exists() and cand.is_dir():
                 pasta_alvo = cand
                 break
+
+        if not pasta_alvo:
+            for p in pastas:
+                if p != root_dir and p.name.upper() in {"CROQUI", "CROQUIS", "LEVANTAMENTO"}:
+                    pasta_alvo = p
+                    break
 
         if not pasta_alvo:
             return None, ArtifactStatus.NAO_EXISTE, {"total_arquivos": 0}
@@ -237,8 +321,16 @@ class WorkspaceScanner:
         return pasta_alvo, ArtifactStatus.EXISTE, detalhes
 
     @classmethod
-    def detectar_documentos(cls, root_dir: Path, croqui_dir: Optional[Path]) -> Tuple[Optional[Path], ArtifactStatus, Dict[str, Any]]:
+    def detectar_documentos(
+        cls,
+        root_dir: Path,
+        croqui_dir: Optional[Path],
+        pastas: Optional[List[Path]] = None,
+    ) -> Tuple[Optional[Path], ArtifactStatus, Dict[str, Any]]:
         """Localiza anexos do GOMNET ou pasta de documentos técnicos."""
+        if pastas is None:
+            pastas = cls._listar_pastas_busca(root_dir)
+
         candidatos = []
         if croqui_dir and (croqui_dir / "ANEXOS").is_dir():
             candidatos.append(croqui_dir / "ANEXOS")
@@ -246,6 +338,12 @@ class WorkspaceScanner:
             candidatos.append(root_dir / "DOCUMENTOS")
         if (root_dir / "ANEXOS").is_dir():
             candidatos.append(root_dir / "ANEXOS")
+
+        nomes_conhecidos = {"documentos", "anexos", "docs", "doc", "gomnet", "anexo", "documento"}
+        for p in pastas:
+            if p != root_dir and p.name.casefold() in nomes_conhecidos:
+                if p not in candidatos:
+                    candidatos.append(p)
 
         if candidatos:
             pasta_doc = candidatos[0]
@@ -260,14 +358,45 @@ class WorkspaceScanner:
         return None, ArtifactStatus.NAO_EXISTE, {"total_arquivos": 0}
 
     @classmethod
-    def detectar_arquivo_por_padroes(cls, root_dir: Path, padroes: List[str]) -> Optional[Path]:
-        """Busca o primeiro arquivo correspondente à lista de padrões fornecida."""
+    def detectar_arquivo_por_padroes(
+        cls,
+        root_dir: Path,
+        padroes: List[str],
+        pastas: Optional[List[Path]] = None,
+    ) -> Optional[Path]:
+        """
+        Busca o primeiro arquivo correspondente à lista de padrões fornecida.
+        Prioriza arquivos na raiz e examina subpastas do projeto, ordenando pelos mais recentes.
+        """
+        if pastas is None:
+            pastas = cls._listar_pastas_busca(root_dir)
+
         for padrao in padroes:
-            arquivos = [f for f in root_dir.glob(padrao) if f.is_file() and not f.name.startswith("~")]
-            if arquivos:
-                # Ordena pelos mais recentes
-                arquivos.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-                return arquivos[0]
+            # 1. Primeiro verifica arquivos diretamente na raiz do projeto
+            arquivos_raiz = [
+                f for f in root_dir.glob(padrao)
+                if f.is_file() and not f.name.startswith("~")
+            ]
+            if arquivos_raiz:
+                arquivos_raiz.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                return arquivos_raiz[0]
+
+            # 2. Se não houver na raiz, verifica nas subpastas
+            arquivos_sub: List[Path] = []
+            for pasta in pastas:
+                if pasta == root_dir:
+                    continue
+                try:
+                    for f in pasta.glob(padrao):
+                        if f.is_file() and not f.name.startswith("~"):
+                            arquivos_sub.append(f)
+                except (OSError, PermissionError):
+                    pass
+
+            if arquivos_sub:
+                arquivos_sub.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                return arquivos_sub[0]
+
         return None
 
     @classmethod
@@ -305,25 +434,28 @@ class WorkspaceScanner:
         id_final = obter_sob_id(id_final) if validar_sob_id(id_final) else id_final.upper()
         sob_name = f"SOB_{id_final}"
 
-        # 2. Base da Concessionária
-        base_sigla = cls.detectar_base_sigla(p_root, id_final)
+        # 2. Lista de pastas de busca otimizada (executada uma única vez por varredura)
+        pastas_busca = cls._listar_pastas_busca(p_root)
 
-        # 3. DWG Principal
-        dwg_path, st_dwg, det_dwg = cls.detectar_dwg_principal(p_root, id_final, base_sigla)
+        # 3. Base da Concessionária
+        base_sigla = cls.detectar_base_sigla(p_root, id_final, pastas=pastas_busca)
 
-        # 4. Croqui de Campo
-        croqui_path, st_croqui, det_croqui = cls.detectar_croqui(p_root)
+        # 4. DWG Principal
+        dwg_path, st_dwg, det_dwg = cls.detectar_dwg_principal(p_root, id_final, base_sigla, pastas=pastas_busca)
 
-        # 5. Documentos e Anexos
-        doc_path, st_doc, det_doc = cls.detectar_documentos(p_root, croqui_path)
+        # 5. Croqui de Campo
+        croqui_path, st_croqui, det_croqui = cls.detectar_croqui(p_root, pastas=pastas_busca)
 
-        # 6. Ambiental (Checklist, Memorial, Croqui Satélite)
+        # 6. Documentos e Anexos
+        doc_path, st_doc, det_doc = cls.detectar_documentos(p_root, croqui_path, pastas=pastas_busca)
+
+        # 7. Ambiental (Checklist, Memorial, Croqui Satélite)
         chk_path = cls.detectar_arquivo_por_padroes(p_root, [
             f"CHECKLIST_{id_final}*.xlsx",
             f"CHECKLIST*{id_final}*.xlsx",
             "CHECKLIST*.xlsx",
             "*checklist*.xlsx"
-        ])
+        ], pastas=pastas_busca)
         st_chk = ArtifactStatus.EXISTE if chk_path else ArtifactStatus.NAO_EXISTE
 
         mem_path = cls.detectar_arquivo_por_padroes(p_root, [
@@ -331,7 +463,7 @@ class WorkspaceScanner:
             f"MEMORIAL*{id_final}*.docx",
             "MEMORIAL*.docx",
             "*memorial*.docx"
-        ])
+        ], pastas=pastas_busca)
         st_mem = ArtifactStatus.EXISTE if mem_path else ArtifactStatus.NAO_EXISTE
 
         crq_amb_path = cls.detectar_arquivo_por_padroes(p_root, [
@@ -339,19 +471,19 @@ class WorkspaceScanner:
             f"CROQUI_AMBIENTAL*{id_final}*.png",
             "CROQUI_AMBIENTAL*.png",
             "*croqui_ambiental*.png"
-        ])
+        ], pastas=pastas_busca)
         st_crq_amb = ArtifactStatus.EXISTE if crq_amb_path else ArtifactStatus.NAO_EXISTE
 
-        # 7. CQT (Queda de Tensão BT)
+        # 8. CQT (Queda de Tensão BT)
         cqt_path = cls.detectar_arquivo_por_padroes(p_root, [
             f"CQT_{id_final}*.xls*",
             f"*CQT*_{id_final}*.xls*",
             "CQT*.xls*",
             "*queda*tensao*.xls*"
-        ])
+        ], pastas=pastas_busca)
         st_cqt = ArtifactStatus.EXISTE if cqt_path else ArtifactStatus.NAO_EXISTE
 
-        # 8. Orçamento de Materiais e Mão de Obra
+        # 9. Orçamento de Materiais e Mão de Obra
         orc_path = cls.detectar_arquivo_por_padroes(p_root, [
             f"ORCAMENTO_{id_final}*.xlsx",
             f"*ORCAMENTO*_{id_final}*.xlsx",
@@ -360,24 +492,24 @@ class WorkspaceScanner:
             "ORCAMENTO*.xlsx",
             "sisORCA*.xlsx",
             "sisORÇA*.xlsx"
-        ])
+        ], pastas=pastas_busca)
         st_orc = ArtifactStatus.EXISTE if orc_path else ArtifactStatus.NAO_EXISTE
 
-        # 9. CPFC (Participação Financeira)
+        # 10. CPFC (Participação Financeira)
         cpfc_path = cls.detectar_arquivo_por_padroes(p_root, [
             f"*_{id_final}_CPFC*.xlsx",
             f"CPFC_{id_final}*.xlsx",
             "*CPFC*.xlsx"
-        ])
+        ], pastas=pastas_busca)
         st_cpfc = ArtifactStatus.EXISTE if cpfc_path else ArtifactStatus.NAO_EXISTE
 
-        # 10. Diagrama Unifilar
+        # 11. Diagrama Unifilar
         unifilar_path = cls.detectar_arquivo_por_padroes(p_root, [
             f"UNIFILAR_{id_final}*.json",
             f"*unifilar*_{id_final}*.json",
             "UNIFILAR*.json",
             "*unifilar*.json"
-        ])
+        ], pastas=pastas_busca)
         st_unifilar = ArtifactStatus.EXISTE if unifilar_path else ArtifactStatus.NAO_EXISTE
 
         # Montagem do mapa de artefatos

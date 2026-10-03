@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using OxCad.Governance;
@@ -10,6 +13,7 @@ namespace OxCad
     {
         private TechnicalReview? _revisaoAtual;
         private ApprovalGateResult? _gateAtual;
+        private bool _isReviewActionRunning = false;
 
         public TechnicalReview? RevisaoAtual => _revisaoAtual;
         public ApprovalGateResult? GateAtual => _gateAtual;
@@ -120,7 +124,7 @@ namespace OxCad
                 if (TxtRevisaoEvidencias != null)
                     TxtRevisaoEvidencias.Text = evidencias.ToString();
 
-                // Gate de Aprovação
+                // Gate de Aprovação Autorizado pelo Domínio
                 if (BadgeRevisaoGate != null && TxtRevisaoGateStatus != null)
                 {
                     if (gateEligible)
@@ -143,11 +147,12 @@ namespace OxCad
                 if (TxtRevisaoDelivery != null)
                     TxtRevisaoDelivery.Text = deliveryStatus;
 
-                // Regra de ouro P2.6: O botão APROVAR só pode estar habilitado quando o Gate for ELIGIBLE e status for IN_REVIEW
+                // Regra autoritativa: O botão APROVAR só fica ativo se o gate for elegível e a revisão estiver em andamento
                 if (BtnAprovarRevisao != null)
                 {
-                    BtnAprovarRevisao.IsEnabled = gateEligible && status == ReviewStatus.InReview;
-                    BtnAprovarRevisao.Opacity = (gateEligible && status == ReviewStatus.InReview) ? 1.0 : 0.45;
+                    bool podeAprovar = gateEligible && status == ReviewStatus.InReview;
+                    BtnAprovarRevisao.IsEnabled = podeAprovar;
+                    BtnAprovarRevisao.Opacity = podeAprovar ? 1.0 : 0.45;
                 }
 
                 if (BtnSolicitarAlteracoes != null)
@@ -165,129 +170,348 @@ namespace OxCad
             }
         }
 
-        private void BtnIniciarRevisao_Click(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// Atualiza o painel de revisão a partir do payload JSON retornado pelo backend authoritative.
+        /// </summary>
+        private void AplicarResultadoRevisaoJson(string json, string sobIdFallback, string dwgFallback, string fingerprintFallback)
         {
             try
             {
-                if (_revisaoAtual == null || _revisaoAtual.Status == ReviewStatus.Draft)
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                bool success = root.TryGetProperty("success", out var succProp) && succProp.GetBoolean();
+
+                if (!success)
+                {
+                    string erro = root.TryGetProperty("error", out var errProp) ? errProp.GetString() ?? "Operação não autorizada" : "Operação não autorizada";
+                    MessageBox.Show($"Operação de revisão rejeitada pelo domínio:\n\n{erro}", "Revisão Técnica", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                bool hasReview = root.TryGetProperty("has_review", out var hrProp) ? hrProp.GetBoolean() : (root.TryGetProperty("review", out var rCheck) && rCheck.ValueKind != JsonValueKind.Null);
+
+                if (!hasReview || !root.TryGetProperty("review", out var revProp) || revProp.ValueKind == JsonValueKind.Null)
                 {
                     AtualizarSecaoRevisaoTecnica(
-                        sobId: TxtCampoSOB?.Text ?? "-",
-                        dwgPath: TxtCampoDWG?.Text ?? "-",
-                        databaseFingerprint: TxtCampoFingerprint?.Text ?? "-",
+                        sobId: sobIdFallback,
+                        dwgPath: dwgFallback,
+                        databaseFingerprint: fingerprintFallback,
                         revisionId: "REV-01",
-                        status: ReviewStatus.InReview,
+                        status: ReviewStatus.Draft,
                         snapshotId: "-",
                         findingsTotal: 0,
                         findingsCriticosMajor: 0,
                         pendenciasBloqueantes: 0,
-                        evidencias: 1,
-                        gateEligible: true,
-                        approvalStatus: "EM ANÁLISE",
+                        evidencias: 0,
+                        gateEligible: false,
+                        approvalStatus: "NÃO INICIADO",
                         deliveryStatus: "NÃO GERADO");
+                    return;
                 }
+
+                string revStatusStr = revProp.TryGetProperty("status", out var stElem) ? stElem.GetString() ?? "DRAFT" : "DRAFT";
+                ReviewStatus status = revStatusStr.ToUpperInvariant() switch
+                {
+                    "IN_REVIEW" => ReviewStatus.InReview,
+                    "CHANGES_REQUIRED" => ReviewStatus.ChangesRequired,
+                    "APPROVED" => ReviewStatus.Approved,
+                    "REJECTED" => ReviewStatus.Rejected,
+                    "SUPERSEDED" => ReviewStatus.Superseded,
+                    "CANCELLED" => ReviewStatus.Cancelled,
+                    _ => ReviewStatus.Draft
+                };
+
+                string revision = revProp.TryGetProperty("revision_id", out var revElem) ? revElem.GetString() ?? "REV-01" : "REV-01";
+                string? snapshot = revProp.TryGetProperty("snapshot_id", out var snapElem) && snapElem.ValueKind != JsonValueKind.Null ? snapElem.GetString() : "-";
+                string sob = revProp.TryGetProperty("sob_id", out var sobElem) ? sobElem.GetString() ?? sobIdFallback : sobIdFallback;
+                string dwg = revProp.TryGetProperty("dwg_path", out var dwgElem) ? dwgElem.GetString() ?? dwgFallback : dwgFallback;
+                string fp = revProp.TryGetProperty("database_fingerprint", out var fpElem) ? fpElem.GetString() ?? fingerprintFallback : fingerprintFallback;
+
+                int totalFindings = 0;
+                int critMajor = 0;
+                int pendenciasBloq = 0;
+                int evidencias = 0;
+
+                if (root.TryGetProperty("counts", out var countsProp) && countsProp.ValueKind == JsonValueKind.Object)
+                {
+                    totalFindings = countsProp.TryGetProperty("total_findings", out var tf) ? tf.GetInt32() : 0;
+                    critMajor = countsProp.TryGetProperty("critical_major_findings", out var cm) ? cm.GetInt32() : 0;
+                    pendenciasBloq = countsProp.TryGetProperty("blocking_pendings", out var bp) ? bp.GetInt32() : 0;
+                    evidencias = countsProp.TryGetProperty("evidences", out var ev) ? ev.GetInt32() : 0;
+                }
+
+                bool gateEligible = false;
+                if (root.TryGetProperty("gate", out var gateProp) && gateProp.ValueKind == JsonValueKind.Object)
+                {
+                    string gateStatus = gateProp.TryGetProperty("status", out var gs) ? gs.GetString() ?? "NOT_ELIGIBLE" : "NOT_ELIGIBLE";
+                    gateEligible = string.Equals(gateStatus, "ELIGIBLE", StringComparison.OrdinalIgnoreCase);
+                }
+
+                string revId = revProp.TryGetProperty("review_id", out var idElem) ? idElem.GetString() ?? "REV-01" : "REV-01";
+                string appStatus = status == ReviewStatus.Approved ? "APROVADO" : (status == ReviewStatus.InReview ? "EM ANÁLISE" : (status == ReviewStatus.ChangesRequired ? "ALTERAÇÕES REQUERIDAS" : (status == ReviewStatus.Rejected ? "REJEITADO" : "NÃO APROVADO")));
+                string delivStatus = status == ReviewStatus.Approved ? "PRONTO P/ ENTREGA" : (status == ReviewStatus.InReview ? "EM ANÁLISE" : "NÃO PERMITIDO");
+
+                _gateAtual = gateEligible
+                    ? ApprovalGateResult.Eligible(revId)
+                    : ApprovalGateResult.NotEligible(revId, new[] { "Gate não elegível" });
+
+                string rootDir = WorkspaceService.ObterDiretorioRaizProjeto(dwg);
+                _revisaoAtual = new TechnicalReview(
+                    revId,
+                    sob,
+                    rootDir,
+                    dwg,
+                    fp,
+                    revision,
+                    snapshot,
+                    DateTime.UtcNow,
+                    "oxcad.palette",
+                    status);
+
+                AtualizarSecaoRevisaoTecnica(
+                    sobId: sob,
+                    dwgPath: dwg,
+                    databaseFingerprint: fp,
+                    revisionId: revision,
+                    status: status,
+                    snapshotId: snapshot ?? "-",
+                    findingsTotal: totalFindings,
+                    findingsCriticosMajor: critMajor,
+                    pendenciasBloqueantes: pendenciasBloq,
+                    evidencias: evidencias,
+                    gateEligible: gateEligible,
+                    approvalStatus: appStatus,
+                    deliveryStatus: delivStatus);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Não foi possível iniciar revisão: {ex.Message}", "Revisão Técnica", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show($"Falha ao processar estado da revisão: {ex.Message}", "Revisão Técnica", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
-        private void BtnRegistrarAchado_Click(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// Consulta assíncrona do status real da revisão técnica junto ao backend Python.
+        /// </summary>
+        public async Task AtualizarStatusRevisaoOperacionalAsync()
         {
+            if (_isReviewActionRunning) return;
             try
             {
-                MessageBox.Show("Registro de achado técnico disponível na suíte de governança.", "Revisão Técnica", MessageBoxButton.OK, MessageBoxImage.Information);
+                string? dwg = _ultimoDwgFullPath ?? (TxtCampoDWG?.Text != "-" ? TxtCampoDWG?.Text : null);
+                string? sob = _ultimoSobId ?? (TxtCampoSOB?.Text != "-" ? TxtCampoSOB?.Text : null);
+                string? fp = _ultimoDwgIdentity ?? (TxtCampoFingerprint?.Text != "-" ? TxtCampoFingerprint?.Text : null);
+                string rootDir = WorkspaceService.ObterDiretorioRaizProjeto(dwg);
+
+                if (string.IsNullOrWhiteSpace(dwg) || string.IsNullOrWhiteSpace(sob) || sob == "-")
+                {
+                    return;
+                }
+
+                string json = await WorkspaceService.ExecutarComandoRevisaoAsync(
+                    rootDir, dwg, sob, fp, "status");
+
+                AplicarResultadoRevisaoJson(json, sob ?? "-", dwg ?? "-", fp ?? "-");
             }
-            catch { }
+            catch
+            {
+                // UI não bloqueante
+            }
         }
 
-        private void BtnSolicitarAlteracoes_Click(object sender, RoutedEventArgs e)
+        private async void BtnIniciarRevisao_Click(object sender, RoutedEventArgs e)
         {
+            if (_isReviewActionRunning || _isActionRunning || _isUpdating) return;
+            _isReviewActionRunning = true;
             try
             {
-                AtualizarSecaoRevisaoTecnica(
-                    sobId: TxtCampoSOB?.Text ?? "-",
-                    dwgPath: TxtCampoDWG?.Text ?? "-",
-                    databaseFingerprint: TxtCampoFingerprint?.Text ?? "-",
-                    revisionId: "REV-01",
-                    status: ReviewStatus.ChangesRequired,
-                    snapshotId: "-",
-                    findingsTotal: 1,
-                    findingsCriticosMajor: 0,
-                    pendenciasBloqueantes: 0,
-                    evidencias: 1,
-                    gateEligible: false,
-                    approvalStatus: "ALTERAÇÕES REQUERIDAS",
-                    deliveryStatus: "NÃO PERMITIDO");
+                string? dwg = _ultimoDwgFullPath ?? (TxtCampoDWG?.Text != "-" ? TxtCampoDWG?.Text : null);
+                string? sob = _ultimoSobId ?? (TxtCampoSOB?.Text != "-" ? TxtCampoSOB?.Text : null);
+                string? fp = _ultimoDwgIdentity ?? (TxtCampoFingerprint?.Text != "-" ? TxtCampoFingerprint?.Text : null);
+                string rootDir = WorkspaceService.ObterDiretorioRaizProjeto(dwg);
+
+                var param = new Dictionary<string, string>
+                {
+                    ["revision-id"] = TxtRevisaoId?.Text ?? "REV-01",
+                    ["reviewer"] = "Operador OXCAD"
+                };
+
+                string json = await WorkspaceService.ExecutarComandoRevisaoAsync(
+                    rootDir, dwg, sob, fp, "iniciar", param);
+
+                AplicarResultadoRevisaoJson(json, sob ?? "-", dwg ?? "-", fp ?? "-");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Falha ao iniciar revisão técnica: {ex.Message}", "Revisão Técnica", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                _isReviewActionRunning = false;
+            }
         }
 
-        private void BtnAprovarRevisao_Click(object sender, RoutedEventArgs e)
+        private async void BtnRegistrarAchado_Click(object sender, RoutedEventArgs e)
         {
+            if (_isReviewActionRunning || _isActionRunning || _isUpdating) return;
+            _isReviewActionRunning = true;
             try
             {
-                AtualizarSecaoRevisaoTecnica(
-                    sobId: TxtCampoSOB?.Text ?? "-",
-                    dwgPath: TxtCampoDWG?.Text ?? "-",
-                    databaseFingerprint: TxtCampoFingerprint?.Text ?? "-",
-                    revisionId: "REV-01",
-                    status: ReviewStatus.Approved,
-                    snapshotId: "-",
-                    findingsTotal: 0,
-                    findingsCriticosMajor: 0,
-                    pendenciasBloqueantes: 0,
-                    evidencias: 1,
-                    gateEligible: true,
-                    approvalStatus: "APROVADO",
-                    deliveryStatus: "PRONTO P/ ENTREGA");
+                string? dwg = _ultimoDwgFullPath ?? (TxtCampoDWG?.Text != "-" ? TxtCampoDWG?.Text : null);
+                string? sob = _ultimoSobId ?? (TxtCampoSOB?.Text != "-" ? TxtCampoSOB?.Text : null);
+                string? fp = _ultimoDwgIdentity ?? (TxtCampoFingerprint?.Text != "-" ? TxtCampoFingerprint?.Text : null);
+                string rootDir = WorkspaceService.ObterDiretorioRaizProjeto(dwg);
+
+                var param = new Dictionary<string, string>
+                {
+                    ["category"] = "CRITERIO_TECNICO",
+                    ["severity"] = "MAJOR",
+                    ["description"] = "Achado técnico registrado via paleta OXCAD",
+                    ["location"] = string.IsNullOrWhiteSpace(dwg) ? "Projeto DWG" : Path.GetFileName(dwg),
+                    ["author"] = "Operador OXCAD",
+                    ["creates-pending"] = ""
+                };
+
+                string json = await WorkspaceService.ExecutarComandoRevisaoAsync(
+                    rootDir, dwg, sob, fp, "achado", param);
+
+                AplicarResultadoRevisaoJson(json, sob ?? "-", dwg ?? "-", fp ?? "-");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Falha ao registrar achado: {ex.Message}", "Revisão Técnica", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                _isReviewActionRunning = false;
+            }
         }
 
-        private void BtnRejeitarRevisao_Click(object sender, RoutedEventArgs e)
+        private async void BtnSolicitarAlteracoes_Click(object sender, RoutedEventArgs e)
         {
+            if (_isReviewActionRunning || _isActionRunning || _isUpdating) return;
+            _isReviewActionRunning = true;
             try
             {
-                AtualizarSecaoRevisaoTecnica(
-                    sobId: TxtCampoSOB?.Text ?? "-",
-                    dwgPath: TxtCampoDWG?.Text ?? "-",
-                    databaseFingerprint: TxtCampoFingerprint?.Text ?? "-",
-                    revisionId: "REV-01",
-                    status: ReviewStatus.Rejected,
-                    snapshotId: "-",
-                    findingsTotal: 1,
-                    findingsCriticosMajor: 1,
-                    pendenciasBloqueantes: 1,
-                    evidencias: 1,
-                    gateEligible: false,
-                    approvalStatus: "REJEITADO",
-                    deliveryStatus: "NÃO PERMITIDO");
+                string? dwg = _ultimoDwgFullPath ?? (TxtCampoDWG?.Text != "-" ? TxtCampoDWG?.Text : null);
+                string? sob = _ultimoSobId ?? (TxtCampoSOB?.Text != "-" ? TxtCampoSOB?.Text : null);
+                string? fp = _ultimoDwgIdentity ?? (TxtCampoFingerprint?.Text != "-" ? TxtCampoFingerprint?.Text : null);
+                string rootDir = WorkspaceService.ObterDiretorioRaizProjeto(dwg);
+
+                var param = new Dictionary<string, string>
+                {
+                    ["actor"] = "Operador OXCAD",
+                    ["reason"] = "Alterações técnicas solicitadas via paleta OXCAD"
+                };
+
+                string json = await WorkspaceService.ExecutarComandoRevisaoAsync(
+                    rootDir, dwg, sob, fp, "solicitar-alteracoes", param);
+
+                AplicarResultadoRevisaoJson(json, sob ?? "-", dwg ?? "-", fp ?? "-");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Falha ao solicitar alterações: {ex.Message}", "Revisão Técnica", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                _isReviewActionRunning = false;
+            }
         }
 
-        private void BtnCancelarRevisao_Click(object sender, RoutedEventArgs e)
+        private async void BtnAprovarRevisao_Click(object sender, RoutedEventArgs e)
         {
+            if (_isReviewActionRunning || _isActionRunning || _isUpdating) return;
+            _isReviewActionRunning = true;
             try
             {
-                AtualizarSecaoRevisaoTecnica(
-                    sobId: TxtCampoSOB?.Text ?? "-",
-                    dwgPath: TxtCampoDWG?.Text ?? "-",
-                    databaseFingerprint: TxtCampoFingerprint?.Text ?? "-",
-                    revisionId: "REV-01",
-                    status: ReviewStatus.Cancelled,
-                    snapshotId: "-",
-                    findingsTotal: 0,
-                    findingsCriticosMajor: 0,
-                    pendenciasBloqueantes: 0,
-                    evidencias: 0,
-                    gateEligible: false,
-                    approvalStatus: "CANCELADO",
-                    deliveryStatus: "NÃO PERMITIDO");
+                string? dwg = _ultimoDwgFullPath ?? (TxtCampoDWG?.Text != "-" ? TxtCampoDWG?.Text : null);
+                string? sob = _ultimoSobId ?? (TxtCampoSOB?.Text != "-" ? TxtCampoSOB?.Text : null);
+                string? fp = _ultimoDwgIdentity ?? (TxtCampoFingerprint?.Text != "-" ? TxtCampoFingerprint?.Text : null);
+                string rootDir = WorkspaceService.ObterDiretorioRaizProjeto(dwg);
+
+                var param = new Dictionary<string, string>
+                {
+                    ["approver"] = "Responsável Técnico OXCAD",
+                    ["comments"] = "Aprovação técnica autorizada via paleta OXCAD"
+                };
+
+                string json = await WorkspaceService.ExecutarComandoRevisaoAsync(
+                    rootDir, dwg, sob, fp, "aprovar", param);
+
+                AplicarResultadoRevisaoJson(json, sob ?? "-", dwg ?? "-", fp ?? "-");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Falha na aprovação da revisão: {ex.Message}", "Revisão Técnica", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                _isReviewActionRunning = false;
+            }
+        }
+
+        private async void BtnRejeitarRevisao_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isReviewActionRunning || _isActionRunning || _isUpdating) return;
+            _isReviewActionRunning = true;
+            try
+            {
+                string? dwg = _ultimoDwgFullPath ?? (TxtCampoDWG?.Text != "-" ? TxtCampoDWG?.Text : null);
+                string? sob = _ultimoSobId ?? (TxtCampoSOB?.Text != "-" ? TxtCampoSOB?.Text : null);
+                string? fp = _ultimoDwgIdentity ?? (TxtCampoFingerprint?.Text != "-" ? TxtCampoFingerprint?.Text : null);
+                string rootDir = WorkspaceService.ObterDiretorioRaizProjeto(dwg);
+
+                var param = new Dictionary<string, string>
+                {
+                    ["actor"] = "Operador OXCAD",
+                    ["reason"] = "Revisão técnica rejeitada via paleta OXCAD"
+                };
+
+                string json = await WorkspaceService.ExecutarComandoRevisaoAsync(
+                    rootDir, dwg, sob, fp, "rejeitar", param);
+
+                AplicarResultadoRevisaoJson(json, sob ?? "-", dwg ?? "-", fp ?? "-");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Falha ao rejeitar revisão técnica: {ex.Message}", "Revisão Técnica", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                _isReviewActionRunning = false;
+            }
+        }
+
+        private async void BtnCancelarRevisao_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isReviewActionRunning || _isActionRunning || _isUpdating) return;
+            _isReviewActionRunning = true;
+            try
+            {
+                string? dwg = _ultimoDwgFullPath ?? (TxtCampoDWG?.Text != "-" ? TxtCampoDWG?.Text : null);
+                string? sob = _ultimoSobId ?? (TxtCampoSOB?.Text != "-" ? TxtCampoSOB?.Text : null);
+                string? fp = _ultimoDwgIdentity ?? (TxtCampoFingerprint?.Text != "-" ? TxtCampoFingerprint?.Text : null);
+                string rootDir = WorkspaceService.ObterDiretorioRaizProjeto(dwg);
+
+                var param = new Dictionary<string, string>
+                {
+                    ["actor"] = "Operador OXCAD",
+                    ["reason"] = "Revisão técnica cancelada pelo operador"
+                };
+
+                string json = await WorkspaceService.ExecutarComandoRevisaoAsync(
+                    rootDir, dwg, sob, fp, "cancelar", param);
+
+                AplicarResultadoRevisaoJson(json, sob ?? "-", dwg ?? "-", fp ?? "-");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Falha ao cancelar revisão técnica: {ex.Message}", "Revisão Técnica", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                _isReviewActionRunning = false;
+            }
         }
     }
 }

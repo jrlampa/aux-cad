@@ -232,4 +232,39 @@ def test_cqt_manager_gui_init_and_get_all_scenarios(fake_root, monkeypatch):
         assert len(payload["scenarios"]["PROJETADO"]) == 1
 
 
+def test_cqt_manager_gui_resilient_template_resolution(fake_root, monkeypatch):
+    """Testa que caminhos inexistentes ou quebrados de template fazem fallback automático para o modelo oficial."""
+    monkeypatch.setattr(tk, "Tk", lambda: fake_root)
+
+    caminho_inexistente = r"G:\Meu Drive\1-HBT\HBT\SETEMBRO\CQT TRECHO.xlsm"
+    app = CQTManagerGUI(template_path=caminho_inexistente)
+
+    assert os.path.exists(app.template_path)
+    assert app.template_path.endswith("cqt_modelo.xlsm") or "CQT TRECHO.xlsm" in app.template_path
+    assert not app.template_path.endswith(caminho_inexistente)
+
+
+def test_cqt_manager_gui_gravar_re_resolves_if_template_missing(fake_root, monkeypatch):
+    """Testa recuperação defensiva durante _on_gravar se o template apontar para arquivo inexistente."""
+    monkeypatch.setattr(tk, "Tk", lambda: fake_root)
+
+    app = CQTManagerGUI()
+    # Força atributo para caminho inexistente
+    app.template_path = r"G:\Inexistente\CQT TRECHO.xlsm"
+
+    app.tabs["ATUAL"].add_trecho_row({
+        "letra": "A", "montante": "TRAFO", "comprimento_m": 50.0, "condutor": "3x150+70 - Al - F.P 1"
+    })
+
+    with patch("cqt_excel_manager.update_cqt_excel", return_value=["ATUAL"]) as mock_update, \
+         patch("tkinter.messagebox.showinfo"), \
+         patch("os.startfile", create=True), \
+         patch.object(app.root, "destroy"):
+        app._on_gravar()
+        mock_update.assert_called_once()
+        template_usado = mock_update.call_args[0][0]
+        assert os.path.exists(template_usado)
+        assert template_usado != r"G:\Inexistente\CQT TRECHO.xlsm"
+
+
 

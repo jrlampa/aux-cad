@@ -25,7 +25,6 @@ def get_default_template_path() -> str:
         os.path.join(_root_dir, "modelos", "cqt_modelo.xlsm"),
         r"G:\Meu Drive\1-HBT\04_MODELOS\CQT TRECHO.xlsm",
         r"G:\Meu Drive\1-HBT\05_PROJETOS_HISTORICOS\SETEMBRO\CQT TRECHO.xlsm",
-        r"G:\Meu Drive\1-HBT\HBT\SETEMBRO\CQT TRECHO.xlsm",
     ]
     for p in candidate_paths:
         if p and os.path.exists(p):

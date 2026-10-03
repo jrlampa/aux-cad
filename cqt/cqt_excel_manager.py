@@ -34,7 +34,7 @@ from cqt_scenario_tab import ScenarioTab
 class CQTManagerGUI:
     """Janela Principal e Orquestradora da Ferramenta CQT."""
     def __init__(self, template_path: Optional[str] = None, cad_input_json: Optional[str] = None, initial_dest_path: Optional[str] = None):
-        if not template_path:
+        if not template_path or not os.path.exists(template_path):
             template_path = get_default_template_path()
         self.template_path = template_path
         self.cad_input_json = cad_input_json
@@ -108,7 +108,7 @@ class CQTManagerGUI:
 
         default_dest = self.initial_dest_path
         if not default_dest:
-            base_dir = os.path.dirname(self.template_path)
+            base_dir = os.path.dirname(self.template_path) if self.template_path and os.path.exists(self.template_path) else os.path.join(os.path.expanduser("~"), "Desktop")
             default_dest = os.path.join(base_dir, "CQT_PREENCHIDO.xlsm")
         self.ent_dest_path.insert(0, default_dest)
 
@@ -347,6 +347,17 @@ class CQTManagerGUI:
             "scenarios": scenarios_payload
         }
 
+        # Validação defensiva de existência do template antes de gravar
+        if not self.template_path or not os.path.exists(self.template_path):
+            self.template_path = get_default_template_path()
+
+        if not self.template_path or not os.path.exists(self.template_path):
+            messagebox.showerror(
+                "Erro ao Gravar",
+                f"Template CQT não encontrado em nenhum local padrão:\n- {os.path.join(_root_dir, 'modelos', 'cqt_modelo.xlsm')}\nPor favor, verifique o arquivo de modelo."
+            )
+            return
+
         try:
             gravados = update_cqt_excel(self.template_path, dest, payload)
             cenarios_str = ", ".join(gravados)
@@ -392,18 +403,23 @@ if __name__ == '__main__':
     dest_file = None
 
     if len(sys.argv) > 1:
-        arg1 = sys.argv[1]
+        arg1 = sys.argv[1].strip()
         if arg1.lower().endswith(".json"):
             cad_json = arg1
         elif arg1 == "--json" and len(sys.argv) > 2:
-            cad_json = sys.argv[2]
-        else:
+            cad_json = sys.argv[2].strip()
+        elif arg1 and os.path.exists(arg1):
             template = arg1
+        # Se arg1 for vazio ou apontar para arquivo inexistente, preserva DEFAULT_TEMPLATE_PATH
 
     if len(sys.argv) > 2 and not cad_json:
-        cad_json = sys.argv[2]
+        arg2 = sys.argv[2].strip()
+        if arg2:
+            cad_json = arg2
     if len(sys.argv) > 3:
-        dest_file = sys.argv[3]
+        arg3 = sys.argv[3].strip()
+        if arg3:
+            dest_file = arg3
 
     app = CQTManagerGUI(template, cad_json, dest_file)
     app.run()

@@ -45,6 +45,12 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Seletor Visual de Destino no Módulo Ambiental**: Campo editável e botão "Procurar..." (`filedialog.askdirectory`) no formulário do Memorial Descritivo/Checklist Ambiental, permitindo ao projetista definir a pasta de saída dos documentos técnicos com um clique.
 - **Proteção de Escrita e Rejeição de Diretórios do Sistema**: Mecanismo `is_safe_writable_dir` e `determinar_pasta_saida` que rejeita gravação em `C:\Windows\System32`, `C:\Windows`, `C:\Program Files` e raiz de disco, redirecionando automaticamente para a pasta do DWG, Desktop ou Temp.
 - **Resiliência a Concorrência de Arquivo (File Lock)**: Tratamento de `PermissionError` ao exportar `.xlsx` ou `.docx` abertos no Excel/Word, gerando cópia segura com sufixo de timestamp (`CHECKLIST_{SOB}_{HHMMSS}.xlsx`) sem travamento.
+- **Ponte Operacional de Revisão Técnica WPF → CLI (P2.7A)**:
+  - Transformação da seção `REVISÃO TÉCNICA` da paleta WPF em interface operacional real, substituindo mock visual pelo domínio real em `workspace_review.py`.
+  - Criação do CLI dedicado `workspace/workspace_review_cli.py` (461 linhas) expondo status, iniciar, gate, achado, solicitar-alterações, aprovar, rejeitar, cancelar e rastreabilidade, sem inflar `workspace_context_cli.py`.
+  - Método assíncrono `WorkspaceService.ExecutarComandoRevisaoAsync` em C# para comunicação com subprocesso Python via stdout JSON (`ExtrairJsonValido`).
+  - Execução assíncrona não-bloqueante na paleta WPF (`OxCadControl.RevisaoTecnica.cs`), refletindo estados de `.oxcad/reviews.json` e bloqueio determinístico no Gate de Aprovação (`APPROVAL_GATE_BLOCKED`).
+  - Suíte dedicada de testes `tests/test_oxcad_review_cli.py` (12 testes, 100% PASS) e validação no harness C# (`tests/oxcad_context_gate/Program.cs`).
 - **Revisão Técnica, Governança de Entrega e Rastreabilidade Operacional (P2.6)**:
   - Separação explícita de cinco conceitos fundamentais: REVISION (versão técnica analisada), REVIEW (processo de análise técnica), APPROVAL (decisão formal), DELIVERY (pacote preparado) e REVOCATION (invalidação posterior auditável), respeitando a regra REVIEW != APPROVAL != DELIVERY != SYNC.
   - Contrato formal de revisão técnica (TechnicalReview, ReviewContracts.cs, workspace/workspace_review.py) atrelado à autoridade estrita do AutoCAD (FingerprintGuid + AUXCAD_PROJECT_SCOPE + SOB_ID), com persistência atômica e lock em .oxcad/reviews.json.

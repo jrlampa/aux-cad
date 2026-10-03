@@ -1073,6 +1073,125 @@ namespace OxCad
                 }
             });
         }
+
+        /// <summary>
+        /// P2.7A: Execução de comandos de revisão técnica e governança via CLI dedicado (workspace_review_cli.py).
+        /// Conecta a paleta WPF diretamente ao domínio authoritative em workspace_review.py.
+        /// </summary>
+        public static async Task<string> ExecutarComandoRevisaoAsync(
+            string? projectRoot,
+            string? dwgPath,
+            string? sobId,
+            string? fingerprint,
+            string comando,
+            Dictionary<string, string>? parametros = null,
+            string? correlationId = null)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    string rootDir = ObterDiretorioRaizProjeto(projectRoot ?? dwgPath);
+                    string scriptPath = Path.Combine(rootDir, "workspace", "workspace_review_cli.py");
+
+                    if (!File.Exists(scriptPath))
+                    {
+                        return "{\"success\": false, \"error\": \"Script workspace_review_cli.py não localizado.\"}";
+                    }
+
+                    string pythonExe = ObterExecutavelPython();
+                    int timeout = ObterTimeoutMilissegundos();
+
+                    var sbArgs = new StringBuilder();
+                    sbArgs.Append($"\"{scriptPath}\" {comando}");
+
+                    if (!string.IsNullOrWhiteSpace(projectRoot) && Directory.Exists(projectRoot))
+                    {
+                        sbArgs.Append($" --project-root \"{projectRoot}\"");
+                    }
+                    else if (!string.IsNullOrWhiteSpace(rootDir) && Directory.Exists(rootDir))
+                    {
+                        sbArgs.Append($" --project-root \"{rootDir}\"");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(dwgPath))
+                    {
+                        sbArgs.Append($" --dwg \"{dwgPath}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(sobId) && sobId != "-")
+                    {
+                        sbArgs.Append($" --sob \"{sobId}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(fingerprint) && fingerprint != "-")
+                    {
+                        sbArgs.Append($" --fingerprint \"{fingerprint}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(correlationId))
+                    {
+                        sbArgs.Append($" --correlation-id \"{correlationId}\"");
+                    }
+
+                    if (parametros != null)
+                    {
+                        foreach (var kvp in parametros)
+                        {
+                            if (!string.IsNullOrWhiteSpace(kvp.Value))
+                            {
+                                sbArgs.Append($" --{kvp.Key} \"{kvp.Value}\"");
+                            }
+                            else if (kvp.Key == "creates-pending")
+                            {
+                                sbArgs.Append(" --creates-pending");
+                            }
+                        }
+                    }
+
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = pythonExe,
+                        Arguments = sbArgs.ToString(),
+                        WorkingDirectory = rootDir,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        StandardOutputEncoding = Encoding.UTF8,
+                        StandardErrorEncoding = Encoding.UTF8
+                    };
+
+                    using var proc = new Process { StartInfo = psi };
+                    var outputBuilder = new StringBuilder();
+                    var errorBuilder = new StringBuilder();
+
+                    proc.OutputDataReceived += (s, e) => { if (e.Data != null) outputBuilder.AppendLine(e.Data); };
+                    proc.ErrorDataReceived += (s, e) => { if (e.Data != null) errorBuilder.AppendLine(e.Data); };
+
+                    proc.Start();
+                    proc.BeginOutputReadLine();
+                    proc.BeginErrorReadLine();
+
+                    bool finished = proc.WaitForExit(timeout);
+                    if (!finished)
+                    {
+                        EncerrarProcessoETodosOsFilhos(proc);
+                        return "{\"success\": false, \"error\": \"Tempo limite excedido na operação de revisão técnica.\"}";
+                    }
+
+                    string saidaLimpa = ExtrairJsonValido(outputBuilder.ToString());
+                    if (string.IsNullOrWhiteSpace(saidaLimpa))
+                    {
+                        string err = errorBuilder.ToString().Trim();
+                        return $"{{\"success\": false, \"error\": \"{(string.IsNullOrWhiteSpace(err) ? "Falha ao obter resposta JSON da revisão técnica." : err.Replace("\"", "'"))}\"}}";
+                    }
+
+                    return saidaLimpa;
+                }
+                catch (Exception ex)
+                {
+                    return $"{{\"success\": false, \"error\": \"Exceção na operação de revisão: {ex.Message.Replace("\"", "'")}\"}}";
+                }
+            });
+        }
     }
 
     /// <summary>

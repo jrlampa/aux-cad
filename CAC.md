@@ -1242,7 +1242,39 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
     - **Operação Offline-First**:
       - Fluxo completo de revisão, registro de achados, avaliação de gate e aprovação local-first sem dependências de rede, sem chamadas externas e sem segredos/credenciais em disco.
     - **Qualidade e Cobertura**:
-      - Suíte dedicada 	ests/test_oxcad_review_governance.py com 35 testes contratuais (100% PASS).
-      - Testes C# no harness 	ests/oxcad_context_gate/Program.cs validando contratos e rastreabilidade (100% PASS).
+      - Suíte dedicada `tests/test_oxcad_review_governance.py` com 35 testes contratuais (100% PASS).
+      - Testes C# no harness `tests/oxcad_context_gate/Program.cs` validando contratos e rastreabilidade (100% PASS).
       - Suíte completa: 900 passaram, 2 skipped (902 coletados) (100% de sucesso).
-    - **Status**: **IMPLEMENTADO E TESTADO (P2.6 CONCLUÍDO; P2.7 AINDA NÃO INICIADO)**.
+    - **Status**: **IMPLEMENTADO E TESTADO (P2.6 CONCLUÍDO)**.
+
+24. **Decisão Arquitetural — P2.7A: Ponte Operacional WPF → CLI → workspace_review.py (workspace/workspace_review_cli.py, oxcad/WorkspaceService.cs, oxcad/OxCadControl.RevisaoTecnica.cs) (2026-10-02)**:
+    - **Princípio e Escopo**:
+      - Transformação da seção 'REVISÃO TÉCNICA' da paleta WPF em uma interface operacional real para o domínio de governança P2.6 já implementado em `workspace_review.py`.
+      - Pipeline estrito: `WPF → WorkspaceService/CLI → workspace_review.py → .oxcad/reviews.json → resultado real → WPF`.
+      - Reutilização integral e inalterada dos contratos e regras de negócio de `workspace_review.py` (786 linhas preservadas).
+    - **Backend CLI Dedicado**:
+      - Criação de `workspace/workspace_review_cli.py` (461 linhas, abaixo do teto de 500 linhas) sem inflar `workspace_context_cli.py` (mantido em 1927 linhas).
+      - Comandos expostos: `status`, `iniciar`, `gate`, `achado`, `solicitar-alteracoes`, `aprovar`, `rejeitar`, `cancelar`, `rastreabilidade`.
+      - Suporte determinístico a passagem de argumentos antes ou depois do comando via `argparse.SUPPRESS`.
+    - **Identidade e Autoridade Soberana do AutoCAD**:
+      - A identidade continua pertencendo exclusivamente ao AutoCAD: validação de `--project-root`, `--dwg`, `--sob`, `--fingerprint`.
+      - Rejeição estrita com `CONTEXT_MISMATCH` para qualquer divergência de fingerprint ou DWG, e `STORE_INVALID` para divergência de SOB.
+    - **Transporte Seguro e UI Não-Bloqueante**:
+      - `WorkspaceService.ExecutarComandoRevisaoAsync` em C# executa o processo Python de forma assíncrona com `ProcessStartInfo` UTF-8 e extração atômica de payload JSON válido (`ExtrairJsonValido`).
+      - UI do AutoCAD 100% não-bloqueante; proteção anti-concorrência via flags operacionais.
+    - **Paleta WPF Integrada e Ausência de Segunda Máquina de Estados**:
+      - `oxcad/OxCadControl.RevisaoTecnica.cs` (517 linhas) atualizado para que os 6 botões operacionais (`INICIAR REVISÃO`, `REGISTRAR ACHADO`, `SOLICITAR ALTERAÇÕES`, `APROVAR`, `REJEITAR`, `CANCELAR`) executem chamadas reais no backend.
+      - Estado exibido na paleta derivado diretamente do payload JSON retornado de `.oxcad/reviews.json` (badges, contadores de achados, pendências bloqueantes, evidências e resultado do Gate).
+      - Erros operacionais do domínio (ex: transição inválida, gate bloqueado, contexto incompatível) exibidos para o usuário sem corromper o estado em tela.
+      - Nenhuma segunda máquina de estados em C#.
+    - **Approval Gate Autoritativo**:
+      - O botão `APROVAR` consulta obrigatoriamente o Gate do backend, sendo bloqueado caso haja findings críticos/major abertos, pendências impeditivas ou inconsistências de snapshot/identidade.
+    - **Qualidade e Cobertura**:
+      - Suíte dedicada `tests/test_oxcad_review_cli.py` com 12 testes contratuais (100% PASS).
+      - Testes de integração C# no harness `tests/oxcad_context_gate/Program.cs` validando execução do CLI, inicialização, achados, solicitação de alterações e bloqueio de identidade divergente (100% PASS).
+      - Suíte completa do repositório: 911 passaram, 3 skipped (914 coletados) (100% de sucesso).
+      - `dotnet build` e `dotnet run` (harness): 0 erros.
+      - `git diff --check`: 0 erros.
+    - **Limitações e Status**:
+      - P2.7A concluído; P2.7B (integrações externas/sincronização futura) ainda não iniciado.
+      - **Status**: **P2.7A IMPLEMENTADO — AGUARDANDO APROVAÇÃO PARA COMMIT**.

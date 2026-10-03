@@ -1166,4 +1166,40 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - **Cobertura de Testes**:
   - `tests/test_oxcad_review_governance.py`: 35 testes contratuais específicos cobrindo todos os requisitos obrigatórios do P2.6 (100% PASS).
   - `tests/oxcad_context_gate/Program.cs`: Validação de contratos C# e cadeia de rastreabilidade no harness (100% PASS).
-- **Status do Roadmap**: **P2.6 CONCLUÍDO; P2.7 AINDA NÃO INICIADO**.
+- **Status do Roadmap**: **P2.6 CONCLUÍDO**.
+
+### 39. Decisão Arquitetural e Implementação: P2.7A — Ponte Operacional WPF → CLI → workspace_review.py (2026-10-02)
+- **Motivação e Diretrizes**:
+  - Transformação da seção "REVISÃO TÉCNICA" da paleta WPF do AutoCAD em uma interface operacional real para o domínio de revisão técnica e governança P2.6.
+  - Implementação estrita do pipeline unidirecional:
+    `WPF → WorkspaceService/CLI → workspace_review.py → .oxcad/reviews.json → resultado real → WPF`.
+  - Reutilização integral e inalterada de `workspace/workspace_review.py` (786 linhas, 0 duplicação de máquina de estados ou contratos).
+  - Preservação da soberania da identidade pertencente ao AutoCAD (`AUXCAD_PROJECT_SCOPE`, `FingerprintGuid`, `DWGPath`, `SOB_ID`) com validação explícita de coerência (`CONTEXT_MISMATCH` / `STORE_INVALID`).
+- **Implementação Realizada**:
+  - `workspace/workspace_review_cli.py`:
+    - CLI dedicado e independente (~461 linhas, abaixo do teto de 500 linhas) sem poluir `workspace_context_cli.py`.
+    - Subcomandos suportados: `status`, `iniciar`, `gate`, `achado`, `solicitar-alteracoes`, `aprovar`, `rejeitar`, `cancelar`, `rastreabilidade`.
+    - Resolução robusta de argumentos posicionais/comuns antes ou após o subcomando via `default=argparse.SUPPRESS`.
+    - Saída JSON estruturada e padronizada com `ok`, `data`, `error`, `error_type` e `traceability`.
+  - `oxcad/WorkspaceService.cs`:
+    - Adicionado método assíncrono `ExecutarComandoRevisaoAsync(string subcomando, Dictionary<string, string> args)` utilizando `ProcessStartInfo` (UTF-8, captura de stdout/stderr) e parsing robusto via `ExtrairJsonValido`.
+  - `oxcad/OxCadControl.RevisaoTecnica.cs`:
+    - Conexão real dos 6 botões operacionais da seção "REVISÃO TÉCNICA":
+      - `BtnIniciarRevisao`: invoca `iniciar`.
+      - `BtnRegistrarAchado`: invoca `achado`.
+      - `BtnSolicitarAlteracoes`: invoca `solicitar-alteracoes`.
+      - `BtnAprovarRevisao`: invoca `aprovar` (validando o Gate real de aprovação).
+      - `BtnRejeitarRevisao`: invoca `rejeitar`.
+      - `BtnCancelarRevisao`: invoca `cancelar`.
+    - Estado visual e contadores 100% derivados da resposta JSON do backend (nenhuma máquina de estados em C#).
+    - Exibição de mensagens operacionais e tratamento de rejeição de domínio (`APPROVAL_GATE_BLOCKED`, `INVALID_TRANSITION`, etc.).
+  - `tests/test_oxcad_review_cli.py`:
+    - 12 testes unitários completos cobrindo: consulta de status, início de revisão, registro de findings, transições para alterações solicitadas, aprovação válida, rejeição de gate, bloqueio por identidade inconsistente (`CONTEXT_MISMATCH`), rejeição, cancelamento, e cadeia de rastreabilidade (12/12 PASS).
+  - `tests/oxcad_context_gate/Program.cs`:
+    - Adicionados testes de integração no C# harness exercitando o pipeline da ponte C# → CLI Python → `reviews.json` e bloqueio de identidade.
+- **Métricas de Validação**:
+  - Pytest completo: 911 passaram, 3 skipped (914 coletados), 0 falhas.
+  - C# Harness: PASS (código 0).
+  - Dotnet Build: 0 erros, 0 warnings.
+  - `git diff --check`: 0 pendências.
+- **Status do Roadmap**: **P2.7A IMPLEMENTADO — AGUARDANDO APROVAÇÃO PARA COMMIT; P2.7B AINDA NÃO INICIADO**.

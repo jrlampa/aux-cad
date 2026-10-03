@@ -249,6 +249,73 @@ class TestWorkspaceScanner:
 
         assert resumo1 == resumo2
 
+    def test_deteccao_artefatos_em_subpastas(self, tmp_path):
+        """Valida que o scanner localiza artefatos organizados em subpastas do projeto."""
+        sob_id = "A057123456"
+        root = tmp_path / f"SOB_{sob_id}"
+        root.mkdir()
+        (root / f"PE_{sob_id}_DESENHO.dwg").touch()
+
+        # 1. Subpasta Ambiental (ex: LIC.AMB)
+        lic_amb = root / "LIC.AMB"
+        lic_amb.mkdir()
+        (lic_amb / f"CHECKLIST_{sob_id}.xlsx").touch()
+        (lic_amb / f"MEMORIAL_DESCRITIVO_{sob_id}.docx").touch()
+        (lic_amb / f"CROQUI_AMBIENTAL_{sob_id}.png").touch()
+
+        # 2. Subpasta Orçamento
+        orc_dir = root / "ORCAMENTO"
+        orc_dir.mkdir()
+        (orc_dir / f"ORCAMENTO_{sob_id}.xlsx").touch()
+
+        # 3. Subpasta CPFC / Financeiro
+        cpfc_dir = root / "FINANCEIRO" / "CPFC"
+        cpfc_dir.mkdir(parents=True)
+        (cpfc_dir / f"CPFC_{sob_id}.xlsx").touch()
+
+        # 4. Subpasta CQT
+        cqt_dir = root / "ESTUDOS"
+        cqt_dir.mkdir()
+        (cqt_dir / f"CQT_{sob_id}.xlsm").touch()
+
+        # 5. Subpasta Unifilar
+        unif_dir = root / "UNIFILAR"
+        unif_dir.mkdir()
+        (unif_dir / f"UNIFILAR_{sob_id}.json").touch()
+
+        # 6. Subpasta Documentos
+        doc_dir = root / "DOCUMENTOS"
+        doc_dir.mkdir()
+        (doc_dir / "especificacao_tecnica.pdf").touch()
+
+        ws = WorkspaceScanner.scan(root)
+
+        assert ws.status_de("DWG") == ArtifactStatus.EXISTE
+        assert ws.status_de("CHECKLIST_AMBIENTAL") == ArtifactStatus.EXISTE
+        assert ws.checklist_ambiental == lic_amb / f"CHECKLIST_{sob_id}.xlsx"
+
+        assert ws.status_de("MEMORIAL_AMBIENTAL") == ArtifactStatus.EXISTE
+        assert ws.memorial_ambiental == lic_amb / f"MEMORIAL_DESCRITIVO_{sob_id}.docx"
+
+        assert ws.status_de("CROQUI_AMBIENTAL") == ArtifactStatus.EXISTE
+        assert ws.croqui_ambiental == lic_amb / f"CROQUI_AMBIENTAL_{sob_id}.png"
+
+        assert ws.status_de("ORCAMENTO") == ArtifactStatus.EXISTE
+        assert ws.orcamento_planilha == orc_dir / f"ORCAMENTO_{sob_id}.xlsx"
+
+        assert ws.status_de("CPFC") == ArtifactStatus.EXISTE
+        assert ws.cpfc_planilha == cpfc_dir / f"CPFC_{sob_id}.xlsx"
+
+        assert ws.status_de("CQT") == ArtifactStatus.EXISTE
+        assert ws.cqt_planilha == cqt_dir / f"CQT_{sob_id}.xlsm"
+
+        assert ws.status_de("UNIFILAR") == ArtifactStatus.EXISTE
+        assert ws.unifilar_path == unif_dir / f"UNIFILAR_{sob_id}.json"
+
+        assert ws.status_de("DOCUMENTOS") == ArtifactStatus.EXISTE
+        assert ws.documentos_dir == doc_dir
+
+
 
 class TestWorkspaceHighLevelHelpers:
     """Testes dos utilitários de alto nível expostos em workspace."""

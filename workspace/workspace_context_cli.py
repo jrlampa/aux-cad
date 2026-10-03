@@ -1354,7 +1354,7 @@ def _artefato_tecnico_gerado(
         "cqt": ("cqt_planilha",),
         "orcamento": ("orcamento_planilha",),
         "cpfc": ("cpfc_planilha",),
-        "ambiental": ("checklist_ambiental",),
+        "ambiental": ("checklist_ambiental", "memorial_ambiental"),
     }
     for campo in campos.get(acao, ()):
         path = getattr(atualizado, campo, None)
@@ -1478,14 +1478,10 @@ def _capturar_arquivos_execucao(root_dir: Path) -> Dict[str, Tuple[int, int]]:
     if not root_dir.is_dir():
         return snapshot
 
-    pastas = [root_dir]
     try:
-        pastas.extend(
-            pasta for pasta in root_dir.iterdir()
-            if pasta.is_dir() and pasta.name.casefold() != ".oxcad"
-        )
+        pastas = WorkspaceScanner._listar_pastas_busca(root_dir)
     except OSError:
-        return snapshot
+        pastas = [root_dir]
 
     for pasta in pastas:
         try:
