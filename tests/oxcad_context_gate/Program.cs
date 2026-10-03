@@ -662,3 +662,53 @@ finally
 {
     Directory.Delete(p27Root, recursive: true);
 }
+
+// ========================================================
+// FRENTE C: Teste do Contrato OxCadProjectContext
+// ========================================================
+var emptyCtx = MapaCadPaleta.OxCadProjectContext.Empty;
+Assert(!emptyCtx.IsBound, "Frente C: Empty context não deve estar vinculado");
+Assert(emptyCtx.SobId == null, "Frente C: Empty context SobId deve ser nulo");
+Assert(emptyCtx.DwgPath == null, "Frente C: Empty context DwgPath deve ser nulo");
+Assert(emptyCtx.DatabaseFingerprint == null, "Frente C: Empty context DatabaseFingerprint deve ser nulo");
+Assert(emptyCtx.Generation == 0, "Frente C: Empty context Generation deve ser 0");
+Assert(!emptyCtx.IsDwgSaved, "Frente C: Empty context IsDwgSaved deve ser falso");
+
+var scopeBound = MapaCadPaleta.ProjectScopeContract.Bound("A057526153");
+var boundCtx1 = new MapaCadPaleta.OxCadProjectContext(
+    scopeBound,
+    @"C:\Projetos\A057526153\desenho.dwg",
+    "{FINGERPRINT-123}",
+    @"C:\Projetos\A057526153",
+    generation: 5,
+    isDwgSaved: true);
+
+Assert(boundCtx1.IsBound, "Frente C: Contexto bound deve ter IsBound = true");
+Assert(boundCtx1.SobId == "A057526153", "Frente C: SobId deve ser A057526153");
+Assert(boundCtx1.DwgPath == @"C:\Projetos\A057526153\desenho.dwg", "Frente C: DwgPath deve ser preservado");
+Assert(boundCtx1.DatabaseFingerprint == "{FINGERPRINT-123}", "Frente C: DatabaseFingerprint deve ser preservado");
+Assert(boundCtx1.ProjectRoot == @"C:\Projetos\A057526153", "Frente C: ProjectRoot deve ser preservado");
+Assert(boundCtx1.Generation == 5, "Frente C: Generation deve ser 5");
+Assert(boundCtx1.IsDwgSaved, "Frente C: IsDwgSaved deve ser true");
+
+var boundCtx2 = new MapaCadPaleta.OxCadProjectContext(
+    MapaCadPaleta.ProjectScopeContract.Bound("A057526153"),
+    @"c:\projetos\a057526153\desenho.dwg",
+    "{FINGERPRINT-123}",
+    @"c:\projetos\a057526153",
+    generation: 5,
+    isDwgSaved: true);
+
+Assert(boundCtx1.Equals(boundCtx2), "Frente C: Contextos equivalentes devem ser iguais");
+Assert(boundCtx1.GetHashCode() == boundCtx2.GetHashCode(), "Frente C: HashCode deve ser coerente");
+
+var boundCtxDiff = new MapaCadPaleta.OxCadProjectContext(
+    scopeBound,
+    @"C:\Projetos\A057526153\desenho.dwg",
+    "{FINGERPRINT-123}",
+    @"C:\Projetos\A057526153",
+    generation: 6,
+    isDwgSaved: true);
+Assert(!boundCtx1.Equals(boundCtxDiff), "Frente C: Contextos com gerações distintas não devem ser iguais");
+
+Console.WriteLine("Frente C Shared Project Context: all C# harness assertions passed.");

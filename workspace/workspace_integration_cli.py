@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
+from workspace.workspace_context import ProjectContext
 from workspace.workspace_integration_executor import IntegrationExecutor
 from workspace.workspace_integrations import IntegrationContext
 from workspace.workspace_sync_queue import SyncQueue, SyncStatus
@@ -105,12 +106,13 @@ def handle_executar(
         return {"sucesso": False, "erro": "Parametro '--fingerprint' obrigatorio para acao 'executar'."}
 
     try:
-        context = IntegrationContext(
+        proj_ctx = ProjectContext(
             sob_id=sob,
-            project_root=str(project_root.resolve()),
             dwg_path=dwg,
             database_fingerprint=fingerprint,
+            project_root=project_root,
         )
+        context = proj_ctx.to_integration_context()
     except Exception as e:
         return {"sucesso": False, "erro": f"Contexto de integracao invalido: {e}"}
 

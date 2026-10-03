@@ -391,4 +391,73 @@ namespace MapaCadPaleta
             return false;
         }
     }
+
+    /// <summary>
+    /// Contrato imutavel de contexto compartilhado de projeto do OXCAD.
+    /// Captura atomicamente o estado autoritativo do AutoCAD (DWG, FingerprintGuid, ProjectScope, ProjectRoot, Generation).
+    /// </summary>
+    public sealed class OxCadProjectContext : IEquatable<OxCadProjectContext>
+    {
+        public static readonly OxCadProjectContext Empty = new(
+            ProjectScopeContract.Unbound(),
+            dwgPath: null,
+            databaseFingerprint: null,
+            projectRoot: null,
+            generation: 0,
+            isDwgSaved: false);
+
+        public OxCadProjectContext(
+            ProjectScope scope,
+            string? dwgPath,
+            string? databaseFingerprint,
+            string? projectRoot,
+            long generation,
+            bool isDwgSaved)
+        {
+            Scope = scope ?? ProjectScopeContract.Unbound();
+            DwgPath = dwgPath;
+            DatabaseFingerprint = databaseFingerprint;
+            ProjectRoot = projectRoot;
+            Generation = generation;
+            IsDwgSaved = isDwgSaved;
+        }
+
+        public ProjectScope Scope { get; }
+        public string? SobId => Scope.SobId;
+        public bool IsBound => Scope.IsBound;
+        public ProjectScopeStatus Status => Scope.Status;
+        public string? DwgPath { get; }
+        public string? DatabaseFingerprint { get; }
+        public string? ProjectRoot { get; }
+        public long Generation { get; }
+        public bool IsDwgSaved { get; }
+
+        public bool Equals(OxCadProjectContext? other)
+        {
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return Scope.Equals(other.Scope) &&
+                   string.Equals(DwgPath, other.DwgPath, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(DatabaseFingerprint, other.DatabaseFingerprint, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(ProjectRoot, other.ProjectRoot, StringComparison.OrdinalIgnoreCase) &&
+                   Generation == other.Generation &&
+                   IsDwgSaved == other.IsDwgSaved;
+        }
+
+        public override bool Equals(object? obj) => Equals(obj as OxCadProjectContext);
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int hash = Scope.GetHashCode();
+                hash = (hash * 397) ^ (DwgPath?.ToUpperInvariant().GetHashCode() ?? 0);
+                hash = (hash * 397) ^ (DatabaseFingerprint?.ToUpperInvariant().GetHashCode() ?? 0);
+                hash = (hash * 397) ^ (ProjectRoot?.ToUpperInvariant().GetHashCode() ?? 0);
+                hash = (hash * 397) ^ Generation.GetHashCode();
+                hash = (hash * 397) ^ IsDwgSaved.GetHashCode();
+                return hash;
+            }
+        }
+    }
 }

@@ -28,36 +28,12 @@ from workspace.workspace_sync_queue import (
     SyncQueue,
     SyncStatus,
 )
+from workspace.workspace_context import build_validation_context
 from workspace.workspace_validation import ValidationContext
 
 
 def _build_context(args: argparse.Namespace) -> ValidationContext:
-    root_arg = getattr(args, "project_root", None)
-    dwg_arg = getattr(args, "dwg", None)
-    sob_arg = getattr(args, "sob", "")
-    fp_arg = getattr(args, "fingerprint", "")
-
-    root = Path(root_arg).resolve() if root_arg else Path.cwd().resolve()
-    dwg = Path(dwg_arg).resolve() if dwg_arg else None
-    sob = sob_arg.strip().upper() if sob_arg else ""
-    fingerprint = fp_arg.strip() if fp_arg else ""
-    correlation = getattr(args, "correlation_id", None) or uuid.uuid4().hex
-    execution = uuid.uuid4().hex
-    origin = getattr(args, "origin", None) or "oxcad.delivery"
-
-    return ValidationContext(
-        execution_id=execution,
-        correlation_id=correlation,
-        sob_id=sob,
-        dwg_path=str(dwg) if dwg else None,
-        dwg_identity=fingerprint,
-        database_fingerprint=fingerprint,
-        project_root=root,
-        cqt_path=None,
-        revision=getattr(args, "revision_id", None) or "REV-01",
-        origin=origin,
-        host_verified=True,
-    )
+    return build_validation_context(args, default_origin="oxcad.delivery")
 
 
 def handle_status(args: argparse.Namespace) -> Dict[str, Any]:

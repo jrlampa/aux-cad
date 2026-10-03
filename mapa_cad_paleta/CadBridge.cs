@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Security.Cryptography;
 using System.Linq;
 using System.Text.Json;
@@ -251,12 +252,32 @@ namespace MapaCadPaleta
 
         public static event EventHandler<ProjectScopeChangedEventArgs>? ProjectScopeChanged;
 
-        public static ProjectScope GetCurrentProjectScope()
+        public static OxCadProjectContext GetCurrentProjectContext()
         {
             Document? document = acApp.DocumentManager.MdiActiveDocument;
-            return document == null
-                ? ProjectScopeContract.Unbound()
-                : DwgProjectScopeStore.Read(document.Database);
+            if (document == null)
+                return OxCadProjectContext.Empty;
+
+            string? dwgFilename = document.Database.Filename;
+            bool isSaved = !string.IsNullOrWhiteSpace(dwgFilename) && File.Exists(dwgFilename);
+            string? canonicalDwg = isSaved ? Path.GetFullPath(dwgFilename!) : null;
+            string? projectRoot = isSaved ? Path.GetDirectoryName(canonicalDwg) : null;
+            string? fingerprint = document.Database.FingerprintGuid;
+            ProjectScope scope = DwgProjectScopeStore.Read(document.Database);
+            long generation = ActiveDocumentGeneration;
+
+            return new OxCadProjectContext(
+                scope,
+                canonicalDwg,
+                fingerprint,
+                projectRoot,
+                generation,
+                isSaved);
+        }
+
+        public static ProjectScope GetCurrentProjectScope()
+        {
+            return GetCurrentProjectContext().Scope;
         }
 
         public static void NotifyActiveDocumentChanged()

@@ -22,26 +22,27 @@ namespace MapaCadPaleta
         {
             InitializeComponent();
             Loaded += SobConsultaControl_Loaded;
-            CadBridge.ProjectScopeChanged += (s, e) => Dispatcher.Invoke(() => AtualizarEstadoContexto(e.Current));
+            CadBridge.ProjectScopeChanged += (s, e) => Dispatcher.Invoke(() => AtualizarEstadoContexto());
         }
 
         private void SobConsultaControl_Loaded(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(TxtDestino.Text))
-                TxtDestino.Text = ObterDiretorioDwgAtivo();
+            OxCadProjectContext context = CadBridge.GetCurrentProjectContext();
+            if (string.IsNullOrWhiteSpace(TxtDestino.Text) && !string.IsNullOrWhiteSpace(context.ProjectRoot))
+                TxtDestino.Text = context.ProjectRoot;
 
-            AtualizarEstadoContexto();
+            AtualizarEstadoContexto(context);
         }
 
-        private void AtualizarEstadoContexto(ProjectScope? scope = null)
+        private void AtualizarEstadoContexto(OxCadProjectContext? context = null)
         {
-            scope ??= CadBridge.GetCurrentProjectScope();
-            if (scope.IsBound && !string.IsNullOrWhiteSpace(scope.SobId))
+            context ??= CadBridge.GetCurrentProjectContext();
+            if (context.IsBound && !string.IsNullOrWhiteSpace(context.SobId))
             {
-                TxtContextoStatus.Text = $"Projeto ativo: SOB {scope.SobId} (DWG vinculado via AUXCAD_PROJECT_SCOPE)";
+                TxtContextoStatus.Text = $"Projeto ativo: SOB {context.SobId} (DWG vinculado via AUXCAD_PROJECT_SCOPE)";
                 TxtContextoStatus.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1B, 0x36, 0x5D));
                 if (string.IsNullOrWhiteSpace(TxtSob.Text))
-                    TxtSob.Text = scope.SobId;
+                    TxtSob.Text = context.SobId;
             }
             else
             {
@@ -49,7 +50,7 @@ namespace MapaCadPaleta
                 TxtContextoStatus.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x64, 0x74, 0x8B));
             }
 
-            VerificarDivergenciaContexto();
+            VerificarDivergenciaContexto(context);
         }
 
         private void TxtSob_TextChanged(object sender, TextChangedEventArgs e)
@@ -57,13 +58,13 @@ namespace MapaCadPaleta
             VerificarDivergenciaContexto();
         }
 
-        private void VerificarDivergenciaContexto()
+        private void VerificarDivergenciaContexto(OxCadProjectContext? context = null)
         {
-            ProjectScope scope = CadBridge.GetCurrentProjectScope();
-            if (scope.IsBound && !string.IsNullOrWhiteSpace(scope.SobId))
+            context ??= CadBridge.GetCurrentProjectContext();
+            if (context.IsBound && !string.IsNullOrWhiteSpace(context.SobId))
             {
                 string sobDigitada = NormalizarSob(TxtSob.Text);
-                string sobAtiva = NormalizarSob(scope.SobId);
+                string sobAtiva = NormalizarSob(context.SobId);
 
                 if (!string.IsNullOrWhiteSpace(sobDigitada) && !string.Equals(sobDigitada, sobAtiva, StringComparison.OrdinalIgnoreCase))
                 {
@@ -87,27 +88,8 @@ namespace MapaCadPaleta
 
         private static string ObterDiretorioDwgAtivo()
         {
-            try
-            {
-                Document? document = acApp.DocumentManager.MdiActiveDocument;
-                if (document == null || !Path.IsPathRooted(document.Name))
-                    return "";
-
-                string prefixo = Convert.ToString(acApp.GetSystemVariable("DWGPREFIX"))?.Trim() ?? "";
-                if (string.IsNullOrWhiteSpace(prefixo) || !Path.IsPathRooted(prefixo))
-                    return "";
-
-                string prefixoCompleto = Path.GetFullPath(prefixo);
-                string tempCompleto = Path.GetFullPath(Path.GetTempPath());
-                if (prefixoCompleto.StartsWith(tempCompleto, StringComparison.OrdinalIgnoreCase))
-                    return "";
-
-                return Directory.Exists(prefixoCompleto) ? prefixoCompleto : "";
-            }
-            catch
-            {
-                return "";
-            }
+            OxCadProjectContext context = CadBridge.GetCurrentProjectContext();
+            return context.ProjectRoot ?? "";
         }
 
         private async void BtnConsultar_Click(object sender, RoutedEventArgs e)
@@ -125,8 +107,8 @@ namespace MapaCadPaleta
             BtnBaixar.IsEnabled = false;
             BtnAbrirPasta.IsEnabled = false;
 
-            ProjectScope scope = CadBridge.GetCurrentProjectScope();
-            string contextoSob = (scope.IsBound && !string.IsNullOrWhiteSpace(scope.SobId)) ? scope.SobId! : "";
+            OxCadProjectContext context = CadBridge.GetCurrentProjectContext();
+            string contextoSob = (context.IsBound && !string.IsNullOrWhiteSpace(context.SobId)) ? context.SobId! : "";
             await ExecutarAcaoAsync("consultar", sob, "", contextoSob);
         }
 
@@ -139,12 +121,12 @@ namespace MapaCadPaleta
                 return;
             }
 
-            ProjectScope scope = CadBridge.GetCurrentProjectScope();
+            OxCadProjectContext context = CadBridge.GetCurrentProjectContext();
             bool divergente = false;
-            if (scope.IsBound && !string.IsNullOrWhiteSpace(scope.SobId))
+            if (context.IsBound && !string.IsNullOrWhiteSpace(context.SobId))
             {
                 string sobDigitada = NormalizarSob(TxtSob.Text);
-                string sobAtiva = NormalizarSob(scope.SobId);
+                string sobAtiva = NormalizarSob(context.SobId);
                 if (!string.Equals(sobDigitada, sobAtiva, StringComparison.OrdinalIgnoreCase))
                 {
                     divergente = true;
@@ -164,7 +146,7 @@ namespace MapaCadPaleta
                 }
             }
 
-            string contextoSob = (scope.IsBound && !string.IsNullOrWhiteSpace(scope.SobId)) ? scope.SobId! : "";
+            string contextoSob = (context.IsBound && !string.IsNullOrWhiteSpace(context.SobId)) ? context.SobId! : "";
             await ExecutarAcaoAsync("baixar", TxtSob.Text.Trim(), destino, contextoSob, divergente);
         }
 
