@@ -91,6 +91,39 @@ HTML_UPLOAD_SEM_ANEXOS = """
 </html>
 """
 
+HTML_GRID_STATUS_SOB = """
+<table id="ctl00_ContentPlaceHolder1_Gridview_GomNet1">
+    <tr><td>Num.SOB</td><td>Projeto</td><td>Estado</td></tr>
+    <tr>
+        <td>A056595635</td><td>Projeto de teste</td>
+        <td align="left"><span id="ctl00_ContentPlaceHolder1_Gridview_GomNet1_ctl02_LabelEstado">Em Execução</span>
+            <input id="ctl00_ContentPlaceHolder1_Gridview_GomNet1_ctl02_HiddenField_EstadoSolic"
+                         name="ctl00$ContentPlaceHolder1$Gridview_GomNet1$ctl02$HiddenField_EstadoSolic"
+                         type="hidden" value="07" />
+        </td>
+    </tr>
+</table>
+"""
+
+HTML_FORM_CONSULTA_STATUS = """
+<html><head><title>Estudo Técnico</title></head><body>
+<form id="aspnetForm" action="./EstudoTecnico.aspx">
+  <input type="hidden" name="__VIEWSTATE" value="VIEWSTATE_TESTE" />
+  <input type="hidden" name="__EVENTTARGET" value="" />
+  <input type="hidden" name="__EVENTARGUMENT" value="" />
+  <input type="text" id="ctl00_ContentPlaceHolder1_txtBoxNumSOB"
+      name="ctl00$ContentPlaceHolder1$txtBoxNumSOB" value="" />
+  <input type="image" id="ctl00_ContentPlaceHolder1_ImageButton_Enviar"
+      name="ctl00$ContentPlaceHolder1$ImageButton_Enviar" src="imagens/Enviar.gif" />
+</form></body></html>
+"""
+
+HTML_HOME_GOMNET = """
+<html><head><title>GOMNet</title></head><body>
+    <form id="aspnetForm"><a href="EstudoTecnico.aspx">Acompanhamento Projeto</a></form>
+</body></html>
+"""
+
 
 def test_carregar_credenciais_gomnet_sucesso(tmp_path):
     env_file = tmp_path / ".env"
@@ -127,6 +160,50 @@ def test_gomnet_login_sucesso():
         assert client.autenticado is True
 
 
+def test_gomnet_extrai_status_da_linha_da_sob():
+    client = GomnetClient(usuario="USR_TESTE", senha="PWD_TESTE", login_url="http://gomnet/login.aspx")
+    client.autenticado = True
+    client._pagina_pos_login = HTML_GRID_STATUS_SOB
+
+    assert client.obter_status_sob("A056595635") == "Em Execução"
+    assert client.obter_status_sob("A000000000") is None
+
+
+def test_gomnet_status_em_branco():
+    html = HTML_GRID_STATUS_SOB.replace("Em Execução", "")
+    client = GomnetClient(usuario="USR_TESTE", senha="PWD_TESTE", login_url="http://gomnet/login.aspx")
+    client.autenticado = True
+    client._pagina_pos_login = html
+
+    assert client.obter_status_sob("A056595635") == ""
+
+
+def test_gomnet_consulta_status_usa_formulario_da_mesma_sessao():
+    client = GomnetClient(usuario="USR_TESTE", senha="PWD_TESTE", login_url="http://gomnet/login.aspx")
+    client.autenticado = True
+    client._pagina_pos_login = "<html><title>GOMNet</title></html>"
+    mock_get_home = MagicMock(status_code=200, text=HTML_HOME_GOMNET)
+    mock_get_form = MagicMock(status_code=200, text=HTML_FORM_CONSULTA_STATUS)
+    mock_post = MagicMock(status_code=200, text=HTML_GRID_STATUS_SOB)
+
+    with patch.object(client.session, "get", side_effect=[mock_get_home, mock_get_form]) as get, \
+         patch.object(client.session, "post", return_value=mock_post) as post:
+        assert client.obter_status_sob("A056595635") == "Em Execução"
+
+    assert get.call_args_list[0].args[0] == "http://gomnet/PaginaPrincipal.aspx"
+    assert get.call_args_list[1].args[0] == "http://gomnet/EstudoTecnico.aspx"
+    assert get.call_args_list[1].kwargs["headers"]["Referer"] == "http://gomnet/PaginaPrincipal.aspx"
+    payload = post.call_args.kwargs["data"]
+    assert payload["ctl00$ContentPlaceHolder1$txtBoxNumSOB"] == "A056595635"
+    assert payload["__EVENTTARGET"] == ""
+    assert payload["ctl00$ContentPlaceHolder1$ImageButton_Enviar.x"] == "1"
+    assert payload["ctl00$ContentPlaceHolder1$ImageButton_Enviar.y"] == "10"
+    assert post.call_args.kwargs["headers"]["Origin"] == "http://gomnet"
+    assert post.call_args.kwargs["headers"]["Referer"] == "http://gomnet/EstudoTecnico.aspx"
+    assert post.call_args.kwargs["headers"]["User-Agent"].endswith("Firefox/157.0")
+    assert post.call_args.kwargs["headers"]["Accept-Language"].startswith("pt-BR")
+
+
 def test_gomnet_login_falha():
     client = GomnetClient(usuario="USR_TESTE", senha="PWD_ERRADA", login_url="http://gomnet/login.aspx")
     mock_get = MagicMock()
@@ -141,6 +218,21 @@ def test_gomnet_login_falha():
          patch.object(client.session, "post", return_value=mock_post):
         with pytest.raises(GomnetAuthError):
             client.autenticar()
+
+
+def test_gomnet_login_nao_trata_rotulo_senha_como_falha():
+    client = GomnetClient(usuario="USR_TESTE", senha="PWD_TESTE", login_url="http://gomnet/login.aspx")
+    mock_get = MagicMock(status_code=200, text=HTML_LOGIN_FORM)
+    mock_post = MagicMock(
+        status_code=200,
+        url="http://gomnet/principal.aspx",
+        text="<html><title>GOM.NET</title><body><span>Senha</span></body></html>",
+    )
+
+    with patch.object(client.session, "get", return_value=mock_get), \
+         patch.object(client.session, "post", return_value=mock_post):
+        assert client.autenticar() is True
+        assert client._pagina_pos_login == mock_post.text
 
 
 def test_gomnet_listar_anexos_filtra_gif():

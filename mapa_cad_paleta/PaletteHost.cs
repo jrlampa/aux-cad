@@ -10,6 +10,7 @@ namespace MapaCadPaleta
     {
         private static PaletteSet? _paletteSet;
         private static MapaControl? _mapaControl;
+        private static SobConsultaControl? _sobConsultaControl;
         private static readonly Guid PaletteGuid = new Guid("E4C23A4D-7E81-4C5D-912A-18F2E7D90B31");
 
         public static event EventHandler<ProjectScopeChangedEventArgs>? ProjectScopeChanged;
@@ -40,6 +41,9 @@ namespace MapaCadPaleta
 
                 _mapaControl = new MapaControl();
                 _paletteSet.AddVisual("Mapa OSM", _mapaControl);
+
+                _sobConsultaControl = new SobConsultaControl();
+                _paletteSet.AddVisual("Consulta SOB", _sobConsultaControl);
             }
 
             _paletteSet.Visible = true;

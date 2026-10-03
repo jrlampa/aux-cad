@@ -19,7 +19,7 @@ import os
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional, Tuple, Union
-from urllib.parse import quote, urljoin
+from urllib.parse import quote, urljoin, urlsplit
 
 from bs4 import BeautifulSoup
 from dotenv import dotenv_values
@@ -34,6 +34,64 @@ logger = logging.getLogger("aux_cad.sob.gomnet")
 
 DEFAULT_GOMNET_URL = "http://gomnet-rj.enelint.global/login.aspx"
 DEFAULT_TIMEOUT = 25
+STATUS_CONSULTA_PATH = "EstudoTecnico.aspx"
+STATUS_GRID_ID = re.compile(r"Gridview_GomNet1", re.IGNORECASE)
+STATUS_BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:157.0) Gecko/20100101 Firefox/157.0",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "DNT": "1",
+    "Sec-GPC": "1",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+
+def _normalizar_chave_sob(valor: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", (valor or "").upper().replace("SOB_", ""))
+
+
+def _extrair_status_sob_html(html: str, sob_id: str) -> Optional[str]:
+    """Localiza o status visível na linha da SOB no grid principal do GOMNET."""
+    soup = BeautifulSoup(html or "", "html.parser")
+    sob_chave = _normalizar_chave_sob(sob_id)
+
+    for grid in soup.find_all("table", id=STATUS_GRID_ID):
+        rows = grid.find_all("tr")
+        if not rows:
+            continue
+
+        cabecalhos = [
+            re.sub(r"[^a-z0-9]", "", cell.get_text(" ", strip=True).casefold())
+            for cell in rows[0].find_all(["th", "td"], recursive=False)
+        ]
+        idx_estado = next(
+            (i for i, texto in enumerate(cabecalhos) if texto in {"estado", "status"}),
+            None,
+        )
+
+        for row in rows[1:]:
+            celulas = row.find_all(["th", "td"], recursive=False)
+            sob_na_linha = any(
+                _normalizar_chave_sob(cell.get_text(" ", strip=True)) == sob_chave
+                for cell in celulas
+            )
+            if not sob_na_linha:
+                continue
+
+            if idx_estado is not None and idx_estado < len(celulas):
+                return celulas[idx_estado].get_text(" ", strip=True)
+
+            hidden_estado = row.find(
+                "input",
+                {"type": "hidden", "id": re.compile(r"HiddenField_EstadoSolic", re.IGNORECASE)},
+            )
+            if hidden_estado:
+                celula_estado = hidden_estado.find_parent("td")
+                if celula_estado:
+                    return celula_estado.get_text(" ", strip=True)
+            return ""
+
+    return None
 
 
 class GomnetError(Exception):
@@ -134,6 +192,8 @@ class GomnetClient:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         })
         self.autenticado = False
+        self._pagina_pos_login = ""
+        self._url_pos_login = self.login_url
 
     def autenticar(self) -> bool:
         """Realiza autenticação segura via POST em login.aspx preservando ASP.NET_SessionId."""
@@ -165,15 +225,160 @@ class GomnetClient:
             if r_post.status_code != 200:
                 raise GomnetAuthError(f"Resposta inesperada do login GOMNET. HTTP {r_post.status_code}")
 
-            if "txtBoxLogin" in r_post.text and "txtBoxSenha" in r_post.text and ("Inválido" in r_post.text or "Incorret" in r_post.text or "Senha" in r_post.text):
+            resposta_login = BeautifulSoup(r_post.text, "html.parser")
+            texto_login = resposta_login.get_text(" ", strip=True).casefold()
+            mensagens_credencial_invalida = (
+                "usuário ou senha incorretos",
+                "usuario ou senha incorretos",
+                "senha incorreta",
+                "senha inválida",
+                "senha invalida",
+                "usuário inválido",
+                "usuario invalido",
+            )
+            credencial_invalida = any(msg in texto_login for msg in mensagens_credencial_invalida)
+            formulario_login_presente = bool(
+                resposta_login.find(id="txtBoxLogin") and resposta_login.find(id="txtBoxSenha")
+            )
+            titulo_login = resposta_login.title.get_text(" ", strip=True).casefold() if resposta_login.title else ""
+            if credencial_invalida:
                 raise GomnetAuthError("Falha de autenticação no GOMNET: usuário ou senha incorretos.")
+            if formulario_login_presente and "gom.net - login" in titulo_login:
+                raise GomnetAuthError(
+                    "O GOMNET manteve a tela de login; verifique usuário, senha e perfil de acesso."
+                )
 
             self.autenticado = True
+            self._pagina_pos_login = r_post.text
+            self._url_pos_login = r_post.url
             logger.info("Autenticação no GOMNET realizada com sucesso.")
             return True
 
         except requests.RequestException as e:
             raise GomnetAuthError(f"Erro de comunicação com o GOMNET: {e}")
+
+    def obter_status_sob(self, sob_id: str) -> Optional[str]:
+        """Consulta EstudoTecnico.aspx e lê a linha da SOB no grid principal."""
+        if not self.autenticado:
+            self.autenticar()
+
+        status = _extrair_status_sob_html(self._pagina_pos_login, sob_id)
+        if status is not None:
+            return status
+        if BeautifulSoup(self._pagina_pos_login, "html.parser").find("table", id=STATUS_GRID_ID):
+            return None
+
+        base_url = self.login_url.rsplit("/", 1)[0] + "/"
+        home_url = urljoin(base_url, "PaginaPrincipal.aspx")
+        consulta_url = urljoin(base_url, STATUS_CONSULTA_PATH)
+        try:
+            home = self.session.get(
+                home_url,
+                headers={**STATUS_BROWSER_HEADERS, "Referer": self._url_pos_login},
+                timeout=self.timeout,
+            )
+            if home.status_code != 200:
+                raise GomnetError(
+                    f"Falha ao carregar o menu principal do GOMNET. HTTP {home.status_code}"
+                )
+
+            home_soup = BeautifulSoup(home.text, "html.parser")
+            if home_soup.find(id="txtBoxLogin") and home_soup.find(id="txtBoxSenha"):
+                self.autenticado = False
+                raise GomnetAuthError("A sessão do GOMNET expirou antes da consulta de status.")
+
+            pagina = self.session.get(
+                consulta_url,
+                headers={**STATUS_BROWSER_HEADERS, "Referer": home_url},
+                timeout=self.timeout,
+            )
+            if pagina.status_code != 200:
+                raise GomnetError(
+                    f"Falha ao abrir a consulta de status do GOMNET. HTTP {pagina.status_code}"
+                )
+
+            soup = BeautifulSoup(pagina.text, "html.parser")
+            if soup.find(id="txtBoxLogin") and soup.find(id="txtBoxSenha"):
+                self.autenticado = False
+                raise GomnetAuthError("A sessão do GOMNET expirou durante a consulta de status.")
+
+            form = soup.find("form")
+            if not form:
+                raise GomnetError("A tela de status do GOMNET não contém o formulário ASP.NET esperado.")
+
+            payload: Dict[str, str] = {}
+            for campo in form.find_all("input"):
+                nome = campo.get("name")
+                tipo = (campo.get("type") or "").lower()
+                if not nome:
+                    continue
+                if tipo in {"hidden", "text", "password"}:
+                    payload[nome] = campo.get("value", "")
+                elif tipo in {"checkbox", "radio"} and campo.has_attr("checked"):
+                    payload[nome] = campo.get("value", "on")
+
+            for campo in form.find_all("select"):
+                nome = campo.get("name")
+                selecionado = campo.find("option", selected=True) or campo.find("option")
+                if nome and selecionado:
+                    payload[nome] = selecionado.get("value", "")
+
+            for campo in form.find_all("textarea"):
+                if campo.get("name"):
+                    payload[campo["name"]] = campo.get_text()
+
+            filtro_sob = next(
+                (
+                    campo
+                    for campo in form.find_all("input")
+                    if re.search(r"(?:txtBox|TextBox)_?NumSOB", campo.get("id", "") + campo.get("name", ""), re.I)
+                ),
+                None,
+            )
+            botao_busca = next(
+                (
+                    campo
+                    for campo in form.find_all("input", type="image")
+                    if "ImageButton_Enviar" in (campo.get("id", "") + campo.get("name", ""))
+                ),
+                None,
+            )
+            if not filtro_sob or not filtro_sob.get("name") or not botao_busca or not botao_busca.get("name"):
+                raise GomnetError(
+                    "A tela EstudoTecnico.aspx mudou: filtro da SOB ou botão de consulta não encontrado."
+                )
+
+            sob_limpa = re.sub(r"^SOB_", "", sob_id, flags=re.IGNORECASE).strip()
+            payload[filtro_sob["name"]] = sob_limpa
+            payload["__EVENTTARGET"] = ""
+            payload["__EVENTARGUMENT"] = ""
+            payload[f"{botao_busca['name']}.x"] = "1"
+            payload[f"{botao_busca['name']}.y"] = "10"
+
+            resposta = self.session.post(
+                consulta_url,
+                data=payload,
+                headers={
+                    **STATUS_BROWSER_HEADERS,
+                    "Origin": f"{urlsplit(consulta_url).scheme}://{urlsplit(consulta_url).netloc}",
+                    "Referer": consulta_url,
+                },
+                timeout=self.timeout,
+            )
+            if resposta.status_code != 200:
+                raise GomnetError(
+                    f"Falha ao consultar status da SOB {sob_limpa} no GOMNET. HTTP {resposta.status_code}"
+                )
+
+            resultado = BeautifulSoup(resposta.text, "html.parser")
+            if resultado.find(id="txtBoxLogin") and resultado.find(id="txtBoxSenha"):
+                self.autenticado = False
+                raise GomnetAuthError("A sessão do GOMNET expirou durante a consulta de status.")
+
+            self._pagina_status = resposta.text
+            return _extrair_status_sob_html(resposta.text, sob_limpa)
+        except requests.RequestException as e:
+            raise GomnetError(f"Erro de comunicação ao consultar status da SOB no GOMNET: {e}")
 
     def localizar_sob_e_listar_anexos(self, sob_id: str) -> List[GomnetAnexo]:
         """
@@ -193,6 +398,19 @@ class GomnetClient:
                 raise GomnetError(f"Falha ao consultar anexos da SOB {sob_limpa} no GOMNET. HTTP {resp.status_code}")
 
             html = resp.text
+            html_lower = html.casefold()
+            if any(
+                marker in html_lower
+                for marker in (
+                    "sob não encontrada",
+                    "sob nao encontrada",
+                    "sob inexistente",
+                    "número da sob não existe",
+                    "numero da sob nao existe",
+                )
+            ):
+                raise GomnetNotFoundError(f"SOB {sob_limpa} não encontrada no GOMNET.")
+
             if "Não existem dados para serem exibidos" in html:
                 logger.info(f"A SOB {sob_limpa} foi localizada no GOMNET mas não possui anexos cadastrados.")
                 return []
@@ -200,8 +418,10 @@ class GomnetClient:
             soup = BeautifulSoup(html, "html.parser")
             grid = soup.find("table", {"id": re.compile(r"gridviewUploads", re.IGNORECASE)})
             if not grid:
-                logger.info(f"Nenhuma tabela de anexos encontrada para a SOB {sob_limpa}.")
-                return []
+                raise GomnetError(
+                    f"O GOMNET não confirmou a consulta da SOB {sob_limpa}; "
+                    "a resposta não contém a tabela de anexos esperada."
+                )
 
             anexos: List[GomnetAnexo] = []
             for tr in grid.find_all("tr"):

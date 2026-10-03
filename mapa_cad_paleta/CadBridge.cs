@@ -2017,7 +2017,7 @@ namespace MapaCadPaleta
                 LayerTableRecord ltr = new LayerTableRecord
                 {
                     Name = nome,
-                    Color = Color.FromColorIndex(ColorMethod.ByAci, colorIndex),
+                    Color = Autodesk.AutoCAD.Colors.Color.FromColorIndex(ColorMethod.ByAci, colorIndex),
                     IsOff = isOff
                 };
                 lt.Add(ltr);
