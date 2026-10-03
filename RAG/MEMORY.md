@@ -1261,3 +1261,31 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Pytest completo: 930 passaram, 3 skipped (933 coletados, 0 falhas).
   - `git diff --check`: 0 pendências.
 - **Status do Roadmap**: **P2.7B CONCLUÍDO E HOMOLOGADO — PRONTO PARA CONSOLIDAÇÃO**.
+
+---
+
+### Frente C — Contexto Comum entre Módulos & Frente D — Universalização & P3 Executor (2026-10-03)
+
+- **Frente C — Contexto Comum Centralizado**:
+  - Eliminação da fragmentação de leitura de identidade AutoCAD e reconstruções redundantes de contexto em C# e Python.
+  - **Autoridade Única Preservada**: O AutoCAD continua como a única autoridade da identidade técnica (`Database.FingerprintGuid`, `Database.Filename`, `DwgProjectScopeStore.Read()`, `ActiveDocumentGeneration`).
+  - **Contrato C# Unificado**: `OxCadProjectContext` (classe imutável em `mapa_cad_paleta/ProjectScope.cs` e linkada em `oxcad/OxCadPaleta.csproj` e `OxCadContextGateHarness.csproj`).
+    - Atributos: `Scope`, `SobId`, `IsBound`, `Status`, `DwgPath`, `DatabaseFingerprint`, `ProjectRoot`, `Generation`, `IsDwgSaved`.
+    - Provedor autoritativo: `CadBridge.GetCurrentProjectContext()`.
+    - Consumidor Piloto C#: `SobConsultaControl.xaml.cs` consome atomicamente o contexto de `CadBridge`, eliminando queries repetidas ao DWG e inspeção manual de caminhos.
+  - **Módulo Python Central**: `workspace/workspace_context.py` implementando `ProjectContext`, `build_validation_context()` e `build_integration_context()`.
+    - Elimina código duplicado entre `workspace_review_cli.py`, `workspace_delivery_cli.py` e `workspace_integration_cli.py`.
+    - Testes dedicados em `tests/test_oxcad_workspace_context.py` (9 testes, 100% PASS).
+- **Frente D — Investigação Técnica da Universalização (`http://gtecprorio.enelint.global/sistemas/universalizacao/`)**:
+  - Servidor: Microsoft-IIS/10.0 sob Windows Server (`D:\web\sistemas\GTEC\sistemas\universalizacao\`), entrada `principal.asp`.
+  - Mecanismo de Autenticação: **Windows Integrated Authentication** (`WWW-Authenticate: Negotiate, NTLM`) contra o domínio corporativo `ENELINT.GLOBAL` (servidor `EWAAZISDEF02`).
+  - **Veredito de Viabilidade**: **INVIÁVEL** como segunda fonte automática do Consulta SOB via `requests.Session()` com credenciais GOMNET.
+  - **Bloqueio Estrutural**: As credenciais GOMNET são logins locais de aplicação web e não contas de domínio do Windows no Active Directory `ENELINT`. Todas as requisições NTLM são rejeitadas pelo Domain Controller corporativo com HTTP 401.2.
+  - Documentação consolidada em `UNIVERSALIZACAO_DISCOVERY.md`.
+- **P3 — Continuidade Real do Executor**:
+  - Lacuna identificada e sanada: `WorkspaceService.cs` não possuía ponte para o executor CLI de integrações externas.
+  - Adicionado `ExecutarComandoIntegracaoAsync` com sobrecargas para `OxCadProjectContext` e `OxCadVerifiedDwgContext`.
+- **Validação Global**:
+  - Pytest completo: 635 passed, 0 failed na suite OXCAD/SOB.
+  - C# Test Harness (`OxCadContextGateHarness.csproj`): 100% PASS.
+  - Compilação .NET de `MapaCadPaleta.csproj` (net48 + net8.0-windows) e `OxCadPaleta.csproj`: 0 erros.
