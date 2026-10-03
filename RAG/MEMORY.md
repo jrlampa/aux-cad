@@ -1202,4 +1202,62 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - C# Harness: PASS (código 0).
   - Dotnet Build: 0 erros, 0 warnings.
   - `git diff --check`: 0 pendências.
-- **Status do Roadmap**: **P2.7A IMPLEMENTADO — AGUARDANDO APROVAÇÃO PARA COMMIT; P2.7B AINDA NÃO INICIADO**.
+- **Status do Roadmap**: **P2.7A CONCLUÍDO E HOMOLOGADO**.
+
+### 40. Decisão Arquitetural e Implementação: P2.7B — Fechamento da Entrega e Reconciliação Offline (2026-10-03)
+- **Motivação e Diretrizes**:
+  - Fechar o ciclo operacional de engenharia:
+    `OS/SOB → projeto → validação → revisão → aprovação → entrega → verificação local → preparação para sincronização externa`.
+  - Estabelecer a capacidade explícita de verificar e reconciliar determinística e localmente uma entrega aprovada antes de qualquer envio.
+  - Deixar o núcleo 100% pronto para o P3 (integrações externas reais com SharePoint e GOMNET), sem implementar daemons, schedulers, workers, HTTP ou serviços externos neste momento.
+- **Implementação Realizada**:
+  - `workspace/workspace_delivery_reconciliation.py`:
+    - 405 linhas (abaixo da meta ideal de 500 linhas).
+    - Função `reconcile_delivery`: verificação determinística e sem heurísticas em 8 dimensões de integridade:
+      1. Contexto e Identidade soberana do AutoCAD (`SOB_ID`, `DWGPath`, `FingerprintGuid`).
+      2. Revisão técnica formal e aprovada (`ReviewId`, `RevisionId`, `SourceSnapshotId`).
+      3. Aprovação ativa e não-revogada (`APPROVAL_REVOKED`, `APPROVAL_NOT_ACTIVE`).
+      4. Pacote de entrega P1.4 (`package_id`).
+      5. Arquivos físicos previstos: existência, tamanho em bytes e hash SHA-256 idêntico ao do manifesto gerado.
+      6. Ausência de alteração ou inserção de pendências pós-entrega (`pending_changed`).
+      7. Compatibilidade entre snapshot da revisão e snapshot referenciado no pacote de entrega (`SNAPSHOT_MISMATCH`).
+      8. Approval Gate (`evaluate_approval_gate`): bloqueio preventivo caso existam pendências bloqueantes ou findings impeditivos.
+    - Princípio basilar: *"Arquivo existe" não significa "entrega válida"*.
+    - Distinção entre Reconciliação e Sync Queue: `reconcile_delivery()` realiza verificação determinística e materialização controlada da aprovação P1.4 no pacote (`approval.json`) quando vinculado a revisão formalmente aprovada em estado `UNAPPROVED`, nunca alterando `sync_queue.json`. A gravação e transição de itens na `SyncQueue` (para `READY` ou `BLOCKED`) é prerrogativa exclusiva de `prepare_sync_queue_for_delivery()`.
+    - Estados determinísticos de reconciliação:
+      - `NOT_GENERATED`: Nenhum pacote gerado para a revisão aprovada.
+      - `GENERATED`: Pacote gerado mas ainda pendente de confirmação.
+      - `VERIFIED`: Pacote aprovado, íntegro, compatível e fisicamente verificado.
+      - `INCOMPATIBLE`: Divergência entre manifesto e arquivos atuais (hash, tamanho, ausência física) ou pendências alteradas.
+      - `BLOCKED`: Revisão não aprovada, aprovação formal revogada ou Approval Gate bloqueado.
+      - `READY_FOR_SYNC`: Entrega verificada com item preparado e enfileirado como `READY` na `SyncQueue`.
+    - Função `prepare_sync_queue_for_delivery`:
+      - Enfileira ou atualiza o `SyncItem` com status `READY` se a entrega estiver verificada, ou `BLOCKED` se as pré-condições falharem.
+      - Idempotência estrita: chave `delivery:{sob_id}:{package_id}` garante que execuções repetidas não dupliquem itens.
+      - Preservação de conclusão: itens já sincronizados (`SUCCEEDED`) nunca regridem para `READY`.
+  - `workspace/workspace_sync_queue.py`:
+    - 283 linhas (abaixo da meta ideal de 500 linhas).
+    - Preservação exata dos 5 estados persistidos oficiais: `PENDING`, `READY`, `SUCCEEDED`, `FAILED`, `BLOCKED`. Proibição de estados inventados como `PENDING_EXTERNAL_SYNC`.
+    - Adição dos métodos `update_status`, `update_item`, `get_by_sync_id` e `get_by_operation_id`.
+  - `oxcad/offline/SyncQueueContracts.cs`:
+    - 175 linhas. Classes `SyncQueueStore`, `SyncItem` e enum `SyncStatus` (`Pending`, `Ready`, `Succeeded`, `Failed`, `Blocked`).
+    - Adição de `GetBySyncId` e `UpdateStatus`.
+  - `workspace/workspace_delivery_cli.py`:
+    - 273 linhas (abaixo da meta ideal de 500 linhas).
+    - Subcomandos: `status`, `reconciliar`, `preparar-sync`, `gerar`, `fila-listar`, `fila-atualizar`.
+    - Retorno JSON estruturado e determinístico.
+  - `oxcad/WorkspaceService.cs`:
+    - Adicionado método assíncrono `ExecutarComandoDeliveryAsync` com `ProcessStartInfo` UTF-8 e extração atômica de JSON.
+  - `oxcad/OxCadControl.RevisaoTecnica.cs`:
+    - Reflete o status real de reconciliação de entrega na paleta WPF (`PRONTA P/ SYNC`, `VERIFICADA`, `INCOMPATÍVEL`, `BLOQUEADA`, `NÃO GERADO`) derivado do backend, sem segunda máquina de estados.
+- **Preparação Conceitual para P3**:
+  - Fluxo Local Fechado: OS/SOB → projeto → validação → revisão → aprovação → Delivery → reconciliação → Sync Queue `READY`.
+  - P3 (Integrações Reais): Lerá itens `READY` da `SyncQueue`, invocará os provedores SharePoint e GOMNET, auditará o resultado e atualizará o status na fila para `SUCCEEDED` ou `FAILED`.
+- **Métricas de Validação e Qualidade**:
+  - Suíte dedicada `tests/test_oxcad_delivery_reconciliation.py`: 19 testes (100% PASS).
+  - Suíte direcionada de regressão: 108 testes (100% PASS).
+  - C# Harness (`tests/oxcad_context_gate/Program.cs`): PASS (código 0).
+  - Dotnet Build (`OxCadPaleta.csproj`): 0 erros.
+  - Pytest completo: 930 passaram, 3 skipped (933 coletados, 0 falhas).
+  - `git diff --check`: 0 pendências.
+- **Status do Roadmap**: **P2.7B CONCLUÍDO E HOMOLOGADO — PRONTO PARA CONSOLIDAÇÃO**.

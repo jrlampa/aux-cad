@@ -10,5 +10,6 @@
     <Compile Include="../../oxcad/OxCadExecution.cs" Link="OxCadExecution.cs" />
     <Compile Include="../../mapa_cad_paleta/ProjectScope.cs" Link="ProjectScope.cs" />
     <Compile Include="../../oxcad/governance/ReviewContracts.cs" Link="ReviewContracts.cs" />
+    <Compile Include="../../oxcad/offline/SyncQueueContracts.cs" Link="SyncQueueContracts.cs" />
   </ItemGroup>
 </Project>

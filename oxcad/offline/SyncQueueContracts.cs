@@ -143,5 +143,32 @@ namespace OxCad.Offline
                 return null;
             }
         }
+
+        public SyncItem? GetBySyncId(string syncId)
+        {
+            lock (_lock)
+            {
+                if (_itemsById.TryGetValue(syncId.Trim(), out var item))
+                {
+                    return item;
+                }
+                return null;
+            }
+        }
+
+        public SyncItem? UpdateStatus(string syncId, SyncStatus newStatus, string? errorMessage = null)
+        {
+            lock (_lock)
+            {
+                if (_itemsById.TryGetValue(syncId.Trim(), out var item))
+                {
+                    item.Status = newStatus;
+                    item.UpdatedAt = DateTime.UtcNow;
+                    item.ErrorMessage = errorMessage;
+                    return item;
+                }
+                return null;
+            }
+        }
     }
 }

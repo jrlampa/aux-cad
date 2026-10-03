@@ -201,18 +201,82 @@ class SyncQueue:
         data = self._read_data()
         for raw in data.get("items", []):
             if raw.get("idempotency_key") == key.strip():
-                return SyncItem(
-                    sync_id=raw["sync_id"],
-                    operation_id=raw["operation_id"],
-                    idempotency_key=raw["idempotency_key"],
-                    correlation_id=raw["correlation_id"],
-                    operation=raw["operation"],
-                    provider_id=raw["provider_id"],
-                    sob_id=raw["sob_id"],
-                    artifact=raw.get("artifact", {}),
-                    created_at=raw["created_at"],
-                    status=SyncStatus(raw["status"]),
-                    updated_at=raw.get("updated_at"),
-                    error_message=raw.get("error_message"),
-                )
+                return self._parse_item(raw)
         return None
+
+    def get_by_sync_id(self, sync_id: str) -> Optional[SyncItem]:
+        """Recupera item na fila pelo seu sync_id único."""
+        data = self._read_data()
+        for raw in data.get("items", []):
+            if raw.get("sync_id") == sync_id.strip():
+                return self._parse_item(raw)
+        return None
+
+    def get_by_operation_id(self, operation_id: str) -> Optional[SyncItem]:
+        """Recupera item na fila pelo seu operation_id."""
+        data = self._read_data()
+        for raw in data.get("items", []):
+            if raw.get("operation_id") == operation_id.strip():
+                return self._parse_item(raw)
+        return None
+
+    def update_item(self, item: SyncItem) -> bool:
+        """
+        Atualiza item existente na fila por sync_id mantendo atomicidade.
+        Retorna True se localizado e atualizado, False caso contrário.
+        """
+        data = self._read_data()
+        items = data.get("items", [])
+        found = False
+        for i, raw in enumerate(items):
+            if raw.get("sync_id") == item.sync_id:
+                items[i] = item.to_dict()
+                found = True
+                break
+        if found:
+            data["items"] = items
+            self._write_data(data)
+        return found
+
+    def update_status(
+        self,
+        sync_id: str,
+        new_status: SyncStatus,
+        error: Optional[str] = None,
+    ) -> Optional[SyncItem]:
+        """
+        Atualiza deterministicamente o status e mensagem de erro de um item na fila.
+        Garante idempotência e registro de auditoria com updated_at em UTC.
+        """
+        data = self._read_data()
+        items = data.get("items", [])
+        updated_item = None
+        for i, raw in enumerate(items):
+            if raw.get("sync_id") == sync_id.strip():
+                raw["status"] = new_status.value
+                raw["updated_at"] = _now_utc()
+                raw["error_message"] = error
+                updated_item = self._parse_item(raw)
+                items[i] = raw
+                break
+        if updated_item:
+            data["items"] = items
+            self._write_data(data)
+        return updated_item
+
+    @staticmethod
+    def _parse_item(raw: Dict[str, Any]) -> SyncItem:
+        return SyncItem(
+            sync_id=raw["sync_id"],
+            operation_id=raw["operation_id"],
+            idempotency_key=raw["idempotency_key"],
+            correlation_id=raw["correlation_id"],
+            operation=raw["operation"],
+            provider_id=raw["provider_id"],
+            sob_id=raw["sob_id"],
+            artifact=raw.get("artifact", {}),
+            created_at=raw["created_at"],
+            status=SyncStatus(raw["status"]),
+            updated_at=raw.get("updated_at"),
+            error_message=raw.get("error_message"),
+        )

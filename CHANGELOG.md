@@ -45,6 +45,15 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Seletor Visual de Destino no Módulo Ambiental**: Campo editável e botão "Procurar..." (`filedialog.askdirectory`) no formulário do Memorial Descritivo/Checklist Ambiental, permitindo ao projetista definir a pasta de saída dos documentos técnicos com um clique.
 - **Proteção de Escrita e Rejeição de Diretórios do Sistema**: Mecanismo `is_safe_writable_dir` e `determinar_pasta_saida` que rejeita gravação em `C:\Windows\System32`, `C:\Windows`, `C:\Program Files` e raiz de disco, redirecionando automaticamente para a pasta do DWG, Desktop ou Temp.
 - **Resiliência a Concorrência de Arquivo (File Lock)**: Tratamento de `PermissionError` ao exportar `.xlsx` ou `.docx` abertos no Excel/Word, gerando cópia segura com sufixo de timestamp (`CHECKLIST_{SOB}_{HHMMSS}.xlsx`) sem travamento.
+- **Fechamento da Entrega e Reconciliação Offline (P2.7B)**:
+  - Motor determinístico de reconciliação em `workspace/workspace_delivery_reconciliation.py` (405 linhas) com verificação rigorosa em 8 dimensões (SOB, DWG, Fingerprint, Revisão, Snapshot, Aprovação, arquivos previstos com tamanho e SHA-256 exatos, e estabilidade de pendências).
+  - Classificação auditável de reconciliação: `NOT_GENERATED`, `GENERATED`, `VERIFIED`, `INCOMPATIBLE`, `BLOCKED`, `READY_FOR_SYNC`.
+  - CLI dedicado `workspace/workspace_delivery_cli.py` (273 linhas) com subcomandos `status`, `reconciliar`, `preparar-sync`, `gerar`, `fila-listar` e `fila-atualizar`.
+  - Evolução da fila de sincronização `SyncQueue` (`workspace/workspace_sync_queue.py` e contratos C# `OxCad.Offline.SyncQueueContracts.cs`), mantendo estritamente os 5 estados persistidos oficiais (`PENDING`, `READY`, `SUCCEEDED`, `FAILED`, `BLOCKED`).
+  - Transição determinística para `READY` após reconciliação íntegra e `BLOCKED` mediante pendências impeditivas ou ausência de aprovação formal.
+  - Idempotência estrita por chave composta `delivery:{sob_id}:{package_id}` sem duplicação de itens.
+  - Operação 100% offline, zero chamadas de rede externa, zero credenciais armazenadas e preparação estrita dos contratos para P3 (SharePoint/GOMNET).
+  - Suíte dedicada `tests/test_oxcad_delivery_reconciliation.py` (19 testes, 100% PASS), integração C# no harness (`Program.cs`) e suíte completa com 930 testes aprovados.
 - **Ponte Operacional de Revisão Técnica WPF → CLI (P2.7A)**:
   - Transformação da seção `REVISÃO TÉCNICA` da paleta WPF em interface operacional real, substituindo mock visual pelo domínio real em `workspace_review.py`.
   - Criação do CLI dedicado `workspace/workspace_review_cli.py` (461 linhas) expondo status, iniciar, gate, achado, solicitar-alterações, aprovar, rejeitar, cancelar e rastreabilidade, sem inflar `workspace_context_cli.py`.

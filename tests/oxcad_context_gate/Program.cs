@@ -545,6 +545,118 @@ try
     }
 
     Console.WriteLine("P2.7A TechnicalReview CLI Bridge: all C# harness assertions passed.");
+
+    // =========================================================================
+    // P2.7B C# HARNESS: RECONCILIAÇÃO DA ENTREGA & SYNC QUEUE OFFLINE
+    // =========================================================================
+    async Task<string> ExecutarCliDeliveryAsync(string comando, Dictionary<string, string>? parametros = null, string? sobOverride = null, string? fpOverride = null)
+    {
+        var scriptPath = Path.Combine(repoRoot, "workspace", "workspace_delivery_cli.py");
+        var sbArgs = new System.Text.StringBuilder();
+        sbArgs.Append($"\"{scriptPath}\" {comando} --project-root \"{p27Root}\" --dwg \"{testDwg}\" --sob \"{sobOverride ?? sob}\" --fingerprint \"{fpOverride ?? fp}\"");
+        if (parametros != null)
+        {
+            foreach (var kvp in parametros)
+            {
+                if (!string.IsNullOrWhiteSpace(kvp.Value))
+                    sbArgs.Append($" --{kvp.Key} \"{kvp.Value}\"");
+                else
+                    sbArgs.Append($" --{kvp.Key}");
+            }
+        }
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "python",
+            Arguments = sbArgs.ToString(),
+            WorkingDirectory = repoRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardOutputEncoding = System.Text.Encoding.UTF8
+        };
+        using var proc = System.Diagnostics.Process.Start(psi)!;
+        string stdout = await proc.StandardOutput.ReadToEndAsync();
+        string stderr = await proc.StandardError.ReadToEndAsync();
+        await proc.WaitForExitAsync();
+        int idxStart = stdout.IndexOf('{');
+        int idxEnd = stdout.LastIndexOf('}');
+        if (idxStart >= 0 && idxEnd > idxStart)
+            return stdout.Substring(idxStart, idxEnd - idxStart + 1);
+        if (!string.IsNullOrWhiteSpace(stderr))
+            throw new Exception($"CLI error: {stderr}");
+        return stdout;
+    }
+
+    // 1. Status de reconciliação de entrega não aprovada / não gerada -> BLOCKED
+    string delivStatusJson = await ExecutarCliDeliveryAsync("status");
+    using (var doc = System.Text.Json.JsonDocument.Parse(delivStatusJson))
+    {
+        Assert(doc.RootElement.GetProperty("success").GetBoolean(), "P2.7B: Status delivery deve retornar success=true");
+        var rec = doc.RootElement.GetProperty("data").GetProperty("reconciliation");
+        Assert(rec.GetProperty("status").GetString() == "BLOCKED", "P2.7B: Status deve ser BLOCKED quando não aprovada");
+        Assert(!rec.GetProperty("eligible_for_sync").GetBoolean(), "P2.7B: Não deve ser elegível para sync");
+    }
+
+    // 2. Preparar sync para entrega não aprovada -> enfileira BLOCKED deterministicamente
+    string prepSyncJson = await ExecutarCliDeliveryAsync("preparar-sync", new Dictionary<string, string>
+    {
+        ["provider-id"] = "sharepoint",
+        ["package-id"] = "0123456789abcdef0123456789abcdef"
+    });
+    using (var doc = System.Text.Json.JsonDocument.Parse(prepSyncJson))
+    {
+        Assert(doc.RootElement.GetProperty("success").GetBoolean(), "P2.7B: Preparar sync deve retornar success=true");
+        Assert(doc.RootElement.GetProperty("reconciliation").GetProperty("status").GetString() == "BLOCKED", "P2.7B: Status da reconciliação deve ser BLOCKED");
+        var item = doc.RootElement.GetProperty("sync_item");
+        Assert(item.ValueKind == System.Text.Json.JsonValueKind.Object, "P2.7B: SyncItem deve ser um objeto");
+        Assert(item.GetProperty("status").GetString() == "BLOCKED", "P2.7B: SyncItem deve ser registrado como BLOCKED");
+        Assert(item.GetProperty("sob_id").GetString() == sob, "P2.7B: SyncItem deve ter sob_id correspondente");
+    }
+
+    // 3. Listar fila e confirmar item gravado
+    string filaJson = await ExecutarCliDeliveryAsync("fila-listar");
+    using (var doc = System.Text.Json.JsonDocument.Parse(filaJson))
+    {
+        Assert(doc.RootElement.GetProperty("success").GetBoolean(), "P2.7B: Listar fila deve ter sucesso");
+        int count = doc.RootElement.GetProperty("count").GetInt32();
+        Assert(count >= 1, "P2.7B: Fila deve conter pelo menos 1 item");
+    }
+
+    // 4. Idempotência: reexecutar preparar-sync não duplica item na fila
+    string prepSync2Json = await ExecutarCliDeliveryAsync("preparar-sync", new Dictionary<string, string>
+    {
+        ["provider-id"] = "sharepoint",
+        ["package-id"] = "0123456789abcdef0123456789abcdef"
+    });
+    using (var doc = System.Text.Json.JsonDocument.Parse(prepSync2Json))
+    {
+        Assert(doc.RootElement.GetProperty("success").GetBoolean(), "P2.7B: Reexecução de preparar-sync deve ter sucesso");
+    }
+    string fila2Json = await ExecutarCliDeliveryAsync("fila-listar");
+    using (var doc = System.Text.Json.JsonDocument.Parse(fila2Json))
+    {
+        int count = doc.RootElement.GetProperty("count").GetInt32();
+        Assert(count == 1, "P2.7B: Fila deve manter exatamente 1 item (idempotência garantida)");
+    }
+
+    // 5. Teste de contrato C# de SyncQueue (SyncQueueContracts.cs)
+    var csharpQueue = new OxCad.Offline.SyncQueueStore();
+    var itemObj = OxCad.Offline.SyncItem.Create("op-p27b-01", "idemp-p27b-01", "delivery", "sharepoint", sob, status: OxCad.Offline.SyncStatus.Blocked);
+    csharpQueue.Enqueue(itemObj);
+    var queuedItems = csharpQueue.ListItems();
+    Assert(queuedItems.Count == 1, "P2.7B: SyncQueueStore C# deve conter 1 item");
+    var firstItem = queuedItems[0];
+    Assert(firstItem.SobId == sob, "P2.7B: SyncQueueStore C# deve ler SOB_ID corretamente");
+    Assert(firstItem.Status == OxCad.Offline.SyncStatus.Blocked, "P2.7B: SyncQueueStore C# deve ter status Blocked");
+
+    // Atualização de status via contrato C#
+    var updated = csharpQueue.UpdateStatus(firstItem.SyncId, OxCad.Offline.SyncStatus.Ready);
+    Assert(updated != null && updated.Status == OxCad.Offline.SyncStatus.Ready, "P2.7B: UpdateStatus C# deve transicionar para Ready");
+    var fetched = csharpQueue.GetBySyncId(firstItem.SyncId);
+    Assert(fetched != null && fetched.Status == OxCad.Offline.SyncStatus.Ready, "P2.7B: GetBySyncId C# deve refletir atualização");
+
+    Console.WriteLine("P2.7B Delivery Reconciliation & Offline SyncQueue: all C# harness assertions passed.");
 }
 finally
 {

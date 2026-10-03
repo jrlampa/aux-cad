@@ -249,7 +249,31 @@ namespace OxCad
 
                 string revId = revProp.TryGetProperty("review_id", out var idElem) ? idElem.GetString() ?? "REV-01" : "REV-01";
                 string appStatus = status == ReviewStatus.Approved ? "APROVADO" : (status == ReviewStatus.InReview ? "EM ANÁLISE" : (status == ReviewStatus.ChangesRequired ? "ALTERAÇÕES REQUERIDAS" : (status == ReviewStatus.Rejected ? "REJEITADO" : "NÃO APROVADO")));
-                string delivStatus = status == ReviewStatus.Approved ? "PRONTO P/ ENTREGA" : (status == ReviewStatus.InReview ? "EM ANÁLISE" : "NÃO PERMITIDO");
+
+                string delivStatus = "NÃO PERMITIDO";
+                if (status == ReviewStatus.Approved)
+                {
+                    if (revProp.TryGetProperty("delivery", out var delivObj) && delivObj.ValueKind == JsonValueKind.Object)
+                    {
+                        string dStatus = delivObj.TryGetProperty("status", out var dsElem) ? dsElem.GetString() ?? "PREPARED" : "PREPARED";
+                        delivStatus = dStatus.ToUpperInvariant() switch
+                        {
+                            "PRONTA_PARA_SINCRONIZACAO" or "READY_FOR_SYNC" => "PRONTA P/ SYNC",
+                            "VERIFIED" or "CONFIRMED" => "VERIFICADA",
+                            "INCOMPATIBLE" => "INCOMPATÍVEL",
+                            "BLOCKED" => "BLOQUEADA",
+                            _ => "PREPARADA"
+                        };
+                    }
+                    else
+                    {
+                        delivStatus = "NÃO GERADO";
+                    }
+                }
+                else if (status == ReviewStatus.InReview)
+                {
+                    delivStatus = "EM ANÁLISE";
+                }
 
                 _gateAtual = gateEligible
                     ? ApprovalGateResult.Eligible(revId)
