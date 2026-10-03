@@ -711,4 +711,32 @@ var boundCtxDiff = new MapaCadPaleta.OxCadProjectContext(
     isDwgSaved: true);
 Assert(!boundCtx1.Equals(boundCtxDiff), "Frente C: Contextos com gerações distintas não devem ser iguais");
 
+// Invariantes estritas de soberania e proteção contra DWG stale
+var boundCtxDiffFp = new MapaCadPaleta.OxCadProjectContext(
+    scopeBound,
+    @"C:\Projetos\A057526153\desenho.dwg",
+    "{FINGERPRINT-OUTRO-DWG}",
+    @"C:\Projetos\A057526153",
+    generation: 5,
+    isDwgSaved: true);
+Assert(!boundCtx1.Equals(boundCtxDiffFp), "Frente C: Fingerprint distinto invalida igualdade de contexto");
+
+var boundCtxDiffSob = new MapaCadPaleta.OxCadProjectContext(
+    MapaCadPaleta.ProjectScopeContract.Bound("B999999999"),
+    @"C:\Projetos\A057526153\desenho.dwg",
+    "{FINGERPRINT-123}",
+    @"C:\Projetos\A057526153",
+    generation: 5,
+    isDwgSaved: true);
+Assert(!boundCtx1.Equals(boundCtxDiffSob), "Frente C: SOB distinta invalida igualdade de contexto");
+
+var boundCtxDiffDwg = new MapaCadPaleta.OxCadProjectContext(
+    scopeBound,
+    @"C:\Projetos\OUTRO_DWG\outro.dwg",
+    "{FINGERPRINT-123}",
+    @"C:\Projetos\OUTRO_DWG",
+    generation: 5,
+    isDwgSaved: true);
+Assert(!boundCtx1.Equals(boundCtxDiffDwg), "Frente C: Caminho DWG distinto invalida igualdade de contexto");
+
 Console.WriteLine("Frente C Shared Project Context: all C# harness assertions passed.");

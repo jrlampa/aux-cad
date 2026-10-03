@@ -1,6 +1,7 @@
 """
 Testes unitários do módulo centralizador de contexto compartilhado (Frente C).
-Garante aderência aos contratos de autoridade de identidade, imutabilidade e conversão.
+Garante aderência aos contratos de autoridade de identidade, imutabilidade,
+ausência de defaults sintéticos e proteção contra contexto obsoleto (stale).
 """
 
 from __future__ import annotations
@@ -33,8 +34,31 @@ def test_extract_operator():
     assert extract_operator(args) == "eng_joao"
 
     args_empty = argparse.Namespace()
-    op = extract_operator(args_empty, default="padrao")
-    assert bool(op)
+    op = extract_operator(args_empty)
+    # Deve ser None ou usuário real do SO, NUNCA 'operador' inventado
+    assert op != "operador"
+
+
+def test_no_synthetic_defaults_in_parsed_context(tmp_path: Path):
+    dwg = tmp_path / "desenho.dwg"
+    dwg.touch()
+
+    # Passando apenas dados reais de identidade DWG
+    args = argparse.Namespace(
+        sob="A057526153",
+        dwg=str(dwg),
+        fingerprint="GUID-AUTOCAD-123",
+        project_root=str(tmp_path),
+    )
+
+    ctx = parse_project_context(args)
+    # Prova de ausência de defaults sintéticos fictícios
+    assert ctx.revision_id is None, "revision_id não deve receber 'REV-01' fictício por padrão"
+    assert ctx.operator != "operador", "operator não deve receber 'operador' fictício"
+
+    # Na projeção de validação, revision continua None se não especificado
+    val_ctx = ctx.to_validation_context()
+    assert val_ctx.revision is None, "ValidationContext.revision deve ser None quando não informado"
 
 
 def test_project_context_is_bound():
@@ -127,6 +151,31 @@ def test_project_context_to_integration_context_rejection(tmp_path: Path):
     )
     with pytest.raises(ValueError, match="database_fingerprint obrigatorio"):
         ctx_no_fp.to_integration_context()
+
+
+def test_sovereignty_protection_against_stale_context(tmp_path: Path):
+    dwg = tmp_path / "desenho.dwg"
+    dwg.touch()
+
+    ctx = ProjectContext(
+        sob_id="A057526153",
+        dwg_path=str(dwg),
+        database_fingerprint="FP-ACTIVE-1",
+        project_root=tmp_path,
+    )
+    integ = ctx.to_integration_context()
+
+    # Mesma SOB e mesmo Fingerprint -> Soberania preservada
+    assert integ.validate_sovereignty("A057526153", "FP-ACTIVE-1") is True
+
+    # Fingerprint obsoleto (stale de outro DWG) -> Rejeitado
+    assert integ.validate_sovereignty("A057526153", "FP-STALE-OLD") is False
+
+    # SOB divergente da ativa -> Rejeitado
+    assert integ.validate_sovereignty("B999999999", "FP-ACTIVE-1") is False
+
+    # Ambas divergentes -> Rejeitado
+    assert integ.validate_sovereignty("B999999999", "FP-STALE-OLD") is False
 
 
 def test_parse_project_context(tmp_path: Path):

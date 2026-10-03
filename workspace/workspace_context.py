@@ -2,10 +2,12 @@
 Módulo centralizador de contexto compartilhado de projetos OXCAD.
 Frente C: Contrato unificado de contexto entre módulos C# e Python.
 
-Regras fundamentais:
+Regras fundamentais de governança:
 1. O AutoCAD/C# é a única autoridade da identidade técnica (SOB_ID, DWG, FingerprintGuid, ProjectRoot).
 2. O Python não fabrica identidades; apenas analisa, valida e projeta contextos recebidos do host.
 3. Imutabilidade e ausência de singletons globais ou persistência redundante.
+4. Nenhum dado que represente identidade, revisão, operador ou rastreabilidade real pode receber
+   valor fictício sintético (ex.: "REV-01", "operador"). Preferência estrita por None ou campo obrigatório.
 """
 
 from __future__ import annotations
@@ -31,18 +33,22 @@ def normalize_sob_id(sob_id: Optional[str]) -> str:
     return cand
 
 
-def extract_operator(args: argparse.Namespace, default: str = "operador") -> str:
-    """Extrai o operador do argumento CLI ou ambiente do sistema operacional."""
-    val = getattr(args, "operator", None)
-    if val and str(val).strip():
-        return str(val).strip()
+def extract_operator(args: argparse.Namespace) -> Optional[str]:
+    """
+    Extrai o operador do argumento CLI ou da sessão real do sistema operacional.
+    Retorna None se não for informado, evitando a criação de operadores fictícios.
+    """
+    for attr in ("operator", "reviewer", "actor", "approver", "author"):
+        val = getattr(args, attr, None)
+        if val and str(val).strip():
+            return str(val).strip()
     try:
         user = getpass.getuser()
         if user and user.strip():
             return user.strip()
     except Exception:
         pass
-    return default
+    return None
 
 
 @dataclass(frozen=True)
@@ -50,14 +56,15 @@ class ProjectContext:
     """
     Contrato imutável de contexto unificado de projeto do lado Python.
     Representa a projeção fiel da autoridade C# do AutoCAD.
+    Todos os campos de identidade e rastreabilidade refletem estritamente a autoridade host.
     """
     sob_id: str
     dwg_path: Optional[str]
     database_fingerprint: Optional[str]
     project_root: Path
-    revision_id: str = "REV-01"
-    origin: str = "oxcad.palette"
-    operator: str = "operador"
+    revision_id: Optional[str] = None
+    origin: Optional[str] = None
+    operator: Optional[str] = None
     correlation_id: Optional[str] = None
     execution_id: Optional[str] = None
 
@@ -66,10 +73,14 @@ class ProjectContext:
         """Indica se o contexto possui SOB vinculada."""
         return bool(self.sob_id and self.sob_id.strip())
 
-    def to_validation_context(self, host_verified: bool = True) -> ValidationContext:
+    def to_validation_context(
+        self,
+        host_verified: bool = True,
+        default_origin: str = "workspace.cli",
+    ) -> ValidationContext:
         """Projeta para ValidationContext consumido por revisão e reconciliação."""
         exec_id = self.execution_id or uuid.uuid4().hex
-        corr_id = self.correlation_id or uuid.uuid4().hex
+        corr_id = self.correlation_id or exec_id
         fp = self.database_fingerprint or ""
 
         return ValidationContext(
@@ -82,12 +93,15 @@ class ProjectContext:
             project_root=self.project_root,
             cqt_path=None,
             revision=self.revision_id,
-            origin=self.origin,
+            origin=self.origin or default_origin,
             host_verified=host_verified,
         )
 
     def to_integration_context(self) -> IntegrationContext:
-        """Projeta para IntegrationContext consumido por gateways e provedores externos."""
+        """
+        Projeta para IntegrationContext consumido por gateways e provedores externos.
+        Rejeita categoricamente contextos parciais ou desprovidos de autoridade DWG.
+        """
         if not self.is_bound:
             raise ValueError("sob_id obrigatorio e nao pode ser vazio para IntegrationContext.")
         if not self.dwg_path or not str(self.dwg_path).strip():
@@ -105,11 +119,11 @@ class ProjectContext:
 
 def parse_project_context(
     args: argparse.Namespace,
-    default_origin: str = "oxcad.palette",
-    default_revision: str = "REV-01",
+    default_origin: Optional[str] = None,
 ) -> ProjectContext:
     """
-    Analisa argumentos CLI e monta o ProjectContext normalizado sem duplicar lógica.
+    Analisa argumentos CLI e monta o ProjectContext normalizado sem duplicar lógica
+    e sem criar identidades sintéticas.
     """
     root_arg = getattr(args, "project_root", None)
     dwg_arg = getattr(args, "dwg", None)
@@ -133,11 +147,11 @@ def parse_project_context(
         root = Path.cwd().resolve()
 
     sob = normalize_sob_id(sob_arg)
-    fp = str(fp_arg).strip() if fp_arg else ""
-    rev = str(rev_arg).strip() if rev_arg else default_revision
+    fp = str(fp_arg).strip() if fp_arg else None
+    rev = str(rev_arg).strip() if rev_arg else None
     origin = str(orig_arg).strip() if orig_arg else default_origin
-    corr = str(corr_arg).strip() if corr_arg else uuid.uuid4().hex
-    execution = str(exec_arg).strip() if exec_arg else uuid.uuid4().hex
+    corr = str(corr_arg).strip() if corr_arg else None
+    execution = str(exec_arg).strip() if exec_arg else None
     operator = extract_operator(args)
 
     return ProjectContext(
@@ -156,12 +170,11 @@ def parse_project_context(
 def build_validation_context(
     args: argparse.Namespace,
     default_origin: str = "oxcad.palette",
-    default_revision: str = "REV-01",
     host_verified: bool = True,
 ) -> ValidationContext:
     """Gera um ValidationContext a partir dos argumentos CLI de forma centralizada."""
-    ctx = parse_project_context(args, default_origin=default_origin, default_revision=default_revision)
-    return ctx.to_validation_context(host_verified=host_verified)
+    ctx = parse_project_context(args, default_origin=default_origin)
+    return ctx.to_validation_context(host_verified=host_verified, default_origin=default_origin)
 
 
 def build_integration_context(args: argparse.Namespace) -> IntegrationContext:
