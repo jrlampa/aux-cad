@@ -1311,6 +1311,147 @@ namespace OxCad
                 }
             });
         }
+
+        /// <summary>
+        /// P3: Execução de comandos de integração externa via CLI dedicado (workspace_integration_cli.py).
+        /// Conecta a paleta WPF e o harness ao executor de integrações externas com soberania estrita de identidade DWG.
+        /// </summary>
+        public static async Task<string> ExecutarComandoIntegracaoAsync(
+            string? projectRoot,
+            string? dwgPath,
+            string? sobId,
+            string? fingerprint,
+            string acao,
+            string? syncId = null,
+            bool forceReexec = false)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    string rootDir = ObterDiretorioRaizProjeto(projectRoot ?? dwgPath);
+                    string scriptPath = Path.Combine(rootDir, "workspace", "workspace_integration_cli.py");
+
+                    if (!File.Exists(scriptPath))
+                    {
+                        return "{\"sucesso\": false, \"erro\": \"Script workspace_integration_cli.py não localizado.\"}";
+                    }
+
+                    string pythonExe = ObterExecutavelPython();
+                    int timeout = ObterTimeoutMilissegundos();
+
+                    var sbArgs = new StringBuilder();
+                    sbArgs.Append($"\"{scriptPath}\" --action {acao}");
+
+                    if (!string.IsNullOrWhiteSpace(projectRoot) && Directory.Exists(projectRoot))
+                    {
+                        sbArgs.Append($" --project-root \"{projectRoot}\"");
+                    }
+                    else if (!string.IsNullOrWhiteSpace(rootDir) && Directory.Exists(rootDir))
+                    {
+                        sbArgs.Append($" --project-root \"{rootDir}\"");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(dwgPath))
+                    {
+                        sbArgs.Append($" --dwg \"{dwgPath}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(sobId) && sobId != "-")
+                    {
+                        sbArgs.Append($" --sob \"{sobId}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(fingerprint) && fingerprint != "-")
+                    {
+                        sbArgs.Append($" --fingerprint \"{fingerprint}\"");
+                    }
+                    if (!string.IsNullOrWhiteSpace(syncId))
+                    {
+                        sbArgs.Append($" --sync-id \"{syncId}\"");
+                    }
+                    if (forceReexec)
+                    {
+                        sbArgs.Append(" --force-reexec");
+                    }
+
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = pythonExe,
+                        Arguments = sbArgs.ToString(),
+                        WorkingDirectory = rootDir,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        StandardOutputEncoding = Encoding.UTF8,
+                        StandardErrorEncoding = Encoding.UTF8
+                    };
+
+                    using var proc = new Process { StartInfo = psi };
+                    var outputBuilder = new StringBuilder();
+                    var errorBuilder = new StringBuilder();
+
+                    proc.OutputDataReceived += (s, e) => { if (e.Data != null) outputBuilder.AppendLine(e.Data); };
+                    proc.ErrorDataReceived += (s, e) => { if (e.Data != null) errorBuilder.AppendLine(e.Data); };
+
+                    proc.Start();
+                    proc.BeginOutputReadLine();
+                    proc.BeginErrorReadLine();
+
+                    bool finished = proc.WaitForExit(timeout);
+                    if (!finished)
+                    {
+                        EncerrarProcessoETodosOsFilhos(proc);
+                        return "{\"sucesso\": false, \"erro\": \"Tempo limite excedido na operação de integração.\"}";
+                    }
+
+                    string saidaLimpa = ExtrairJsonValido(outputBuilder.ToString());
+                    if (string.IsNullOrWhiteSpace(saidaLimpa))
+                    {
+                        string err = errorBuilder.ToString().Trim();
+                        return $"{{\"sucesso\": false, \"erro\": \"{(string.IsNullOrWhiteSpace(err) ? "Falha ao obter resposta JSON da integração." : err.Replace("\"", "'"))}\"}}";
+                    }
+
+                    return saidaLimpa;
+                }
+                catch (Exception ex)
+                {
+                    return $"{{\"sucesso\": false, \"erro\": \"Exceção na operação de integração: {ex.Message.Replace("\"", "'")}\"}}";
+                }
+            });
+        }
+
+        public static async Task<string> ExecutarComandoIntegracaoAsync(
+            MapaCadPaleta.OxCadProjectContext context,
+            string acao,
+            string? syncId = null,
+            bool forceReexec = false)
+        {
+            return await ExecutarComandoIntegracaoAsync(
+                context.ProjectRoot,
+                context.DwgPath,
+                context.SobId,
+                context.DatabaseFingerprint,
+                acao,
+                syncId,
+                forceReexec);
+        }
+
+        public static async Task<string> ExecutarComandoIntegracaoAsync(
+            OxCadVerifiedDwgContext context,
+            string acao,
+            string? syncId = null,
+            bool forceReexec = false)
+        {
+            string? projectRoot = string.IsNullOrWhiteSpace(context.DwgPath) ? null : Path.GetDirectoryName(context.DwgPath);
+            return await ExecutarComandoIntegracaoAsync(
+                projectRoot,
+                context.DwgPath,
+                context.SobId,
+                context.DwgIdentity,
+                acao,
+                syncId,
+                forceReexec);
+        }
     }
 
 
