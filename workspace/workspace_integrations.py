@@ -14,6 +14,7 @@ Regras Fundamentais:
 from __future__ import annotations
 
 import uuid
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -63,6 +64,7 @@ class AuthenticationScheme(str, Enum):
     SERVICE_ACCOUNT = "SERVICE_ACCOUNT"
     API_KEY = "API_KEY"
     BASIC_AUTH = "BASIC_AUTH"
+    NTLM = "NTLM"
 
 
 @dataclass(frozen=True)
@@ -192,6 +194,23 @@ class IntegrationResult:
 
 
 @dataclass(frozen=True)
+class WorkOrderQuery:
+    """Explicit query identity, independent of DWG/project scope."""
+    grupo: str
+    sob: str
+
+    def to_dict(self) -> Dict[str, str]:
+        return {"grupo": self.grupo, "sob": self.sob}
+
+    def is_valid(self) -> bool:
+        return (
+            isinstance(self.grupo, str) and self.grupo in ("A", "B")
+            and isinstance(self.sob, str)
+            and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", self.sob) is not None
+        )
+
+
+@dataclass(frozen=True)
 class IntegrationContext:
     """Contexto de execucao com soberania estrita de identidade DWG/SOB."""
     sob_id: str
@@ -311,6 +330,14 @@ class IWorkOrderProvider(IIntegrationProvider):
     @abstractmethod
     def get_work_order_status(self, context: IntegrationContext, order_id: str) -> IntegrationResult:
         pass
+
+    def query_work_order(
+        self, context: IntegrationContext, query: WorkOrderQuery,
+        *, independent_query: bool = False,
+    ) -> IntegrationResult:
+        return IntegrationResult.not_supported(
+            "Consulta com identidade composta nao suportada."
+        )
 
 
 class IBusinessSystemProvider(IIntegrationProvider):

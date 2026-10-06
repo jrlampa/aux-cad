@@ -1,5 +1,127 @@
 using OxCad;
 using System.IO;
+using System.Text.Json;
+using OxCad.Integration;
+
+if (args.Length == 7 && args[0] == "--oxcad-universalizacao-process")
+{
+    string root = Path.GetFullPath(args[1]);
+    string activeSob = args[4];
+    var verified = new OxCadVerifiedDwgContext(
+        activeSob, Path.Combine(root, "synthetic-project.dwg"),
+        "synthetic-fingerprint", 7,
+        "synthetic-execution", "synthetic-correlation");
+    var query = new WorkOrderQuery(args[3], args[5]);
+    var result = await UniversalizacaoOxCadCaller.ConsultarAsync(
+        verified, args[2], query, bool.Parse(args[6]));
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        status = result.Status.ToString(), data = result.Data,
+        error_code = result.ErrorCode, active_sob = verified.SobId,
+        scope_unchanged = verified.ProjectScopeStatus == "Bound"
+    }));
+    return;
+}
+
+if (args.Length == 7 && args[0] == "--oxcad-universalizacao-caller")
+{
+    var verified = new OxCadVerifiedDwgContext(
+        args[3], "C:/synthetic/project.dwg", "synthetic-fingerprint", 7,
+        "synthetic-execution", "synthetic-correlation");
+    var query = new WorkOrderQuery(args[2], args[4]);
+    bool independentQuery = bool.Parse(args[5]);
+    bool returnMismatch = args[6] == "mismatch";
+    MapaCadPaleta.ProjectScope scope = MapaCadPaleta.ProjectScopeContract.Bound(args[3]);
+    int dispatchCalls = 0;
+    IntegrationContext? dispatchedContext = null;
+    WorkOrderQuery? dispatchedQuery = null;
+    bool dispatchedIndependent = false;
+
+    var result = await UniversalizacaoOxCadCaller.ConsultarAsync(
+        verified, args[1], query, independentQuery,
+        (context, forwarded, independent) =>
+        {
+            dispatchCalls++;
+            dispatchedContext = context;
+            dispatchedQuery = forwarded;
+            dispatchedIndependent = independent;
+            string returnedGroup = returnMismatch ? "A" : forwarded.Grupo!;
+            var data = new UniversalizacaoQueryData
+            {
+                Identity = new WorkOrderQuery(returnedGroup, forwarded.Sob),
+                RequestedGrupo = forwarded.Grupo,
+                RequestedSob = forwarded.Sob,
+                ReturnedGrupo = returnedGroup,
+                ReturnedSob = forwarded.Sob,
+                CorrelationId = context.CorrelationId,
+                ExecutionId = context.ExecutionId,
+            };
+            return Task.FromResult(IntegrationResult<UniversalizacaoQueryData>.Success(data));
+        });
+
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        status = result.Status.ToString(),
+        calls = dispatchCalls,
+        active_sob = verified.SobId,
+        project_scope_unchanged = scope.Equals(
+            MapaCadPaleta.ProjectScopeContract.Bound(args[3])),
+        requested = new
+        {
+            grupo = dispatchedQuery?.Grupo,
+            sob = dispatchedQuery?.Sob,
+        },
+        context_sob = dispatchedContext?.SobId,
+        correlation_id = result.Data?.CorrelationId,
+        execution_id = result.Data?.ExecutionId,
+        independent = dispatchedIndependent,
+    }));
+    return;
+}
+
+if (args.Length == 2 && args[0] == "--invalid-context-id")
+{
+    var context = new IntegrationContext(
+        "SYNTHETIC_001", "C:/synthetic", "C:/synthetic/project.dwg",
+        "synthetic-fp", args[1], "synthetic-exec");
+    var query = new WorkOrderQuery("B", "SYNTHETIC_001");
+    int calls = 0;
+    var result = await WorkspaceService.ConsultarUniversalizacaoAsync(
+        context, query, () =>
+        {
+            calls++;
+            return Task.FromResult("{}");
+        });
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        status = result.Status.ToString(), calls
+    }));
+    return;
+}
+
+if (args.Length == 4 && (args[0] == "--universalizacao" || args[0] == "--universalizacao-process"))
+{
+    bool realProcess = args[0] == "--universalizacao-process";
+    var context = new IntegrationContext(
+        "SYNTHETIC_001", realProcess ? args[1] : Path.GetDirectoryName(args[1])!,
+        "C:/synthetic/project.dwg", "synthetic-fp",
+        "synthetic-corr", "synthetic-exec");
+    var query = new WorkOrderQuery(args[2], args[3]);
+    int calls = 0;
+    var result = realProcess
+        ? await WorkspaceService.ConsultarUniversalizacaoAsync(context, query)
+        : await WorkspaceService.ConsultarUniversalizacaoAsync(context, query, () =>
+        {
+            calls++;
+            return Task.FromResult(File.ReadAllText(args[1]));
+        });
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        status = result.Status.ToString(), data = result.Data,
+        error_code = result.ErrorCode, calls, active_sob = context.SobId
+    }));
+    return;
+}
 
 static void Assert(bool condition, string message)
 {

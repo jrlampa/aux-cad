@@ -11,5 +11,11 @@
     <Compile Include="../../mapa_cad_paleta/ProjectScope.cs" Link="ProjectScope.cs" />
     <Compile Include="../../oxcad/governance/ReviewContracts.cs" Link="ReviewContracts.cs" />
     <Compile Include="../../oxcad/offline/SyncQueueContracts.cs" Link="SyncQueueContracts.cs" />
+    <Compile Include="../../oxcad/WorkspaceService.cs" Link="WorkspaceService.cs" />
+    <Compile Include="../../oxcad/OxCadLogger.cs" Link="OxCadLogger.cs" />
+    <Compile Include="../../oxcad/integration/IntegrationContext.cs" Link="IntegrationContext.cs" />
+    <Compile Include="../../oxcad/integration/IntegrationResult.cs" Link="IntegrationResult.cs" />
+    <Compile Include="../../oxcad/integration/UniversalizacaoQueryContracts.cs" Link="UniversalizacaoQueryContracts.cs" />
+    <Compile Include="../../oxcad/integration/UniversalizacaoOxCadCaller.cs" Link="UniversalizacaoOxCadCaller.cs" />
   </ItemGroup>
 </Project>

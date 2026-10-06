@@ -444,22 +444,71 @@
                 <TextBlock Text="INTEGRAÇÕES" FontSize="10" FontWeight="SemiBold" Foreground="#7E7E94" Margin="0,4,0,6" />
 
                 <Border Background="#20202A" CornerRadius="6" Padding="10" BorderBrush="#353548" BorderThickness="1" Margin="0,0,0,10">
-                    <ItemsControl x:Name="ListaIntegracoes">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="0,2">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding DisplayName}" FontSize="10" Foreground="#C5C5D2" VerticalAlignment="Center"/>
-                                    <Border Grid.Column="1" Background="{Binding StatusBackground}" CornerRadius="3" Padding="6,2">
-                                        <TextBlock Text="{Binding StatusText}" FontSize="9" FontWeight="SemiBold" Foreground="{Binding StatusForeground}"/>
-                                    </Border>
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <StackPanel>
+                        <ItemsControl x:Name="ListaIntegracoes">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding DisplayName}" FontSize="10" Foreground="#C5C5D2" VerticalAlignment="Center"/>
+                                        <Border Grid.Column="1" Background="{Binding StatusBackground}" CornerRadius="3" Padding="6,2">
+                                            <TextBlock Text="{Binding StatusText}" FontSize="9" FontWeight="SemiBold" Foreground="{Binding StatusForeground}"/>
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Border Height="1" Background="#353548" Margin="0,8"/>
+                        <TextBlock Text="CONSULTA UNIVERSALIZAÇÃO · READ-ONLY" FontSize="9" FontWeight="SemiBold" Foreground="#9E9EB0" Margin="0,0,0,6"/>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,4,0">
+                                <TextBlock Text="GRUPO DE REFERÊNCIA" FontSize="8" Foreground="#85859B" Margin="0,0,0,3"/>
+                                <ComboBox x:Name="ComboGrupoReferencia" SelectedIndex="-1" Height="26">
+                                    <ComboBoxItem Content="A"/>
+                                    <ComboBoxItem Content="B"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                <TextBlock Text="GRUPO DA CONSULTA" FontSize="8" Foreground="#85859B" Margin="0,0,0,3"/>
+                                <ComboBox x:Name="ComboGrupoConsulta" SelectedIndex="-1" Height="26">
+                                    <ComboBoxItem Content="A"/>
+                                    <ComboBoxItem Content="B"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+                        <CheckBox x:Name="ChkConsultaIndependente"
+                                  Content="Consulta independente do par ativo"
+                                  Foreground="#C5C5D2" FontSize="9" Margin="0,0,0,4"
+                                  Checked="ChkConsultaIndependente_Changed"
+                                  Unchecked="ChkConsultaIndependente_Changed"/>
+                        <TextBlock x:Name="LblSobConsultaIndependente"
+                                   Text="SOB DA CONSULTA INDEPENDENTE"
+                                   FontSize="8" Foreground="#85859B"
+                                   Margin="0,0,0,3" Visibility="Collapsed"/>
+                        <TextBox x:Name="TxtSobConsultaIndependente"
+                                 IsEnabled="False" Height="26" Margin="0,0,0,6"
+                                 ToolTip="SOB obrigatória para consulta independente"
+                                 AutomationProperties.Name="SOB da consulta independente"/>
+                        <Button x:Name="BtnConsultarUniversalizacao"
+                                Content="Consultar Universalização" Height="28"
+                                Background="#315442" Foreground="#FFFFFF"
+                                FontWeight="SemiBold" FontSize="10" BorderThickness="0"
+                                Cursor="Hand" Click="BtnConsultarUniversalizacao_Click"/>
+                        <TextBlock x:Name="TxtUniversalizacaoResultado" Text=""
+                                   FontSize="9" Foreground="#C5C5D2" TextWrapping="Wrap"
+                                   Margin="0,6,0,0"/>
+                        <TextBlock x:Name="TxtUniversalizacaoDados" Text=""
+                                   FontSize="9" Foreground="#E2E2EC" TextWrapping="Wrap"
+                                   Margin="0,3,0,0"/>
+                    </StackPanel>
                 </Border>
 
                 <!-- SEÇÃO VALIDAÇÃO DE CAMPO (P2.5) -->

@@ -19,7 +19,7 @@ import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from workspace.workspace_integrations import (
     IBusinessSystemProvider,
@@ -29,6 +29,7 @@ from workspace.workspace_integrations import (
     IntegrationRegistry,
     IntegrationResult,
     IntegrationStatus,
+    WorkOrderQuery,
 )
 from workspace.workspace_sync_queue import SyncItem, SyncQueue, SyncStatus
 
@@ -84,6 +85,64 @@ class IntegrationExecutor:
     @property
     def registry(self) -> IntegrationRegistry:
         return self._registry
+
+    def execute_query(
+        self, provider_id: str, query: WorkOrderQuery,
+        context: IntegrationContext, *, independent_query: bool = False,
+    ) -> IntegrationResult:
+        """Execute one transient read: no queue, persistence or retry."""
+        if not isinstance(query, WorkOrderQuery) or not query.is_valid():
+            return IntegrationResult.invalid_request(
+                "Grupo A/B e SOB devem ser informados explicitamente."
+            )
+        if not isinstance(context, IntegrationContext) or (
+            not independent_query and context.sob_id != query.sob
+        ):
+            return IntegrationResult.identity_mismatch(
+                "Consulta nao corresponde ao contexto ativo; "
+                "contexto preservado."
+            )
+        provider = self._registry.get(provider_id)
+        if not isinstance(provider, IWorkOrderProvider):
+            return IntegrationResult.not_supported(
+                "Provedor nao suporta consulta de ordem."
+            )
+        try:
+            result = provider.query_work_order(
+                context, query, independent_query=independent_query
+            )
+        except TimeoutError:
+            return IntegrationResult.timeout()
+        except OSError:
+            return IntegrationResult.unavailable()
+        except Exception:
+            return IntegrationResult.remote_error("Falha de consulta externa.")
+        if not isinstance(result, IntegrationResult):
+            return IntegrationResult.remote_error(
+                "Resultado invalido do provedor."
+            )
+        if result.is_success:
+            data = result.data
+            if not isinstance(data, dict):
+                return IntegrationResult.remote_error(
+                    "Resultado sem identidade composta."
+                )
+            payload = cast(Dict[str, Any], data)
+            identity_data = payload.get("identity")
+            if not isinstance(identity_data, dict):
+                return IntegrationResult.remote_error(
+                    "Resultado sem identidade composta."
+                )
+            identity = cast(Dict[str, Any], identity_data)
+            if (
+                identity != query.to_dict()
+                or payload.get("returned_sob") != query.sob
+                or payload.get("returned_grupo") != query.grupo
+            ):
+                return IntegrationResult.identity_mismatch(
+                    "Identidade retornada difere da consulta."
+                )
+        return result
 
     def execute_sync_id(
         self,

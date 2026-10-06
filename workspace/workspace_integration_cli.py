@@ -14,12 +14,19 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import os
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from workspace.workspace_context import ProjectContext
 from workspace.workspace_integration_executor import IntegrationExecutor
-from workspace.workspace_integrations import IntegrationContext
+from workspace.workspace_integrations import (
+    IntegrationContext, IntegrationRegistry, IntegrationResult, WorkOrderQuery,
+)
 from workspace.workspace_sync_queue import SyncQueue, SyncStatus
 
 
@@ -30,7 +37,7 @@ def _montar_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--action",
-        choices=["status", "executar"],
+        choices=["status", "executar", "consultar"],
         required=True,
         help="Acao a executar: 'status' para inspecionar fila ou 'executar' para processar item.",
     )
@@ -69,7 +76,66 @@ def _montar_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Forca a tentativa de execucao de item em estado terminal.",
     )
+    parser.add_argument("--grupo", default=None)
+    parser.add_argument("--query-sob", default=None)
+    parser.add_argument("--independent-query", action="store_true")
+    parser.add_argument("--correlation-id", default=None)
+    parser.add_argument("--execution-id", default=None)
     return parser
+
+
+def _query_credentials():
+    from dotenv import dotenv_values
+
+    values = dotenv_values(
+        Path(__file__).resolve().parents[1] / ".env", interpolate=False
+    )
+    username = os.environ.get("UNIVERSA_ID") or values.get("UNIVERSA_ID")
+    password = os.environ.get("UNIVERSA_SENHA") or values.get("UNIVERSA_SENHA")
+    values.clear()
+    return username, password
+
+
+def _query_executor() -> IntegrationExecutor:
+    from workspace.workspace_universalizacao_provider import (
+        UniversalizacaoProvider,
+    )
+
+    registry = IntegrationRegistry.create_default()
+    provider = UniversalizacaoProvider(
+        credential_supplier=_query_credentials
+    )
+    registry.register(provider)
+    return IntegrationExecutor(registry)
+
+
+def handle_consultar(
+    project_context: ProjectContext, query: WorkOrderQuery,
+    executor: IntegrationExecutor | None = None,
+    independent_query: bool = False,
+) -> Dict[str, Any]:
+    if not query.is_valid():
+        result = IntegrationResult.invalid_request(
+            "Grupo A/B e SOB obrigatorios."
+        )
+    else:
+        try:
+            context = project_context.to_integration_context()
+        except ValueError:
+            result = IntegrationResult.invalid_request(
+                "Contexto de integracao invalido."
+            )
+        else:
+            result = (executor or _query_executor()).execute_query(
+                "universalizacao", query, context,
+                independent_query=independent_query,
+            )
+    payload = asdict(result)
+    payload["status"] = result.status.value
+    return {
+        "sucesso": result.is_success, "query_identity": query.to_dict(),
+        "resultado": payload,
+    }
 
 
 def handle_status(queue: SyncQueue, sync_id: str | None, sob: str | None) -> Dict[str, Any]:
@@ -129,7 +195,20 @@ def main() -> int:
     args = parser.parse_args()
 
     project_root = Path(args.project_root).resolve()
+    if args.action == "consultar":
+        context = ProjectContext(
+            sob_id=args.sob or "", dwg_path=args.dwg,
+            database_fingerprint=args.fingerprint, project_root=project_root,
+            correlation_id=args.correlation_id, execution_id=args.execution_id,
+        )
+        query_out = handle_consultar(
+            context, WorkOrderQuery(args.grupo, args.query_sob),
+            independent_query=args.independent_query,
+        )
+        sys.stdout.write(json.dumps(query_out, ensure_ascii=True) + "\n")
+        return 0 if query_out["sucesso"] else 1
     queue = SyncQueue(project_root)
+    out: Dict[str, Any]
 
     if args.action == "status":
         out = handle_status(queue, args.sync_id, args.sob)

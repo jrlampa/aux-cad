@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace OxCad
@@ -1323,8 +1324,25 @@ namespace OxCad
             string? fingerprint,
             string acao,
             string? syncId = null,
-            bool forceReexec = false)
+            bool forceReexec = false,
+            string? grupo = null,
+            string? querySob = null,
+            string? correlationId = null,
+            string? executionId = null,
+            bool independentQuery = false)
         {
+            if (acao == "consultar")
+            {
+                var query = new Integration.WorkOrderQuery(grupo, querySob);
+                if (!query.IsValid)
+                    return FalhaConsultaIntegracao("INVALID_REQUEST", query);
+                if (!independentQuery &&
+                    !string.Equals(sobId, querySob, StringComparison.Ordinal))
+                    return FalhaConsultaIntegracao("IDENTITY_MISMATCH", query);
+                if (!IsSafeQueryProcessId(correlationId) ||
+                    !IsSafeQueryProcessId(executionId))
+                    return FalhaConsultaIntegracao("INVALID_REQUEST", query);
+            }
             return await Task.Run(() =>
             {
                 try
@@ -1334,6 +1352,8 @@ namespace OxCad
 
                     if (!File.Exists(scriptPath))
                     {
+                        if (acao == "consultar")
+                            return FalhaConsultaIntegracao("UNAVAILABLE", new Integration.WorkOrderQuery(grupo, querySob));
                         return "{\"sucesso\": false, \"erro\": \"Script workspace_integration_cli.py não localizado.\"}";
                     }
 
@@ -1372,6 +1392,16 @@ namespace OxCad
                     {
                         sbArgs.Append(" --force-reexec");
                     }
+                    if (acao == "consultar")
+                    {
+                        sbArgs.Append($" --grupo {grupo} --query-sob {querySob}");
+                        if (independentQuery)
+                            sbArgs.Append(" --independent-query");
+                        if (!string.IsNullOrWhiteSpace(correlationId))
+                            sbArgs.Append($" --correlation-id \"{correlationId}\"");
+                        if (!string.IsNullOrWhiteSpace(executionId))
+                            sbArgs.Append($" --execution-id \"{executionId}\"");
+                    }
 
                     var psi = new ProcessStartInfo
                     {
@@ -1401,12 +1431,16 @@ namespace OxCad
                     if (!finished)
                     {
                         EncerrarProcessoETodosOsFilhos(proc);
+                        if (acao == "consultar")
+                            return FalhaConsultaIntegracao("TIMEOUT", new Integration.WorkOrderQuery(grupo, querySob));
                         return "{\"sucesso\": false, \"erro\": \"Tempo limite excedido na operação de integração.\"}";
                     }
 
                     string saidaLimpa = ExtrairJsonValido(outputBuilder.ToString());
                     if (string.IsNullOrWhiteSpace(saidaLimpa))
                     {
+                        if (acao == "consultar")
+                            return FalhaConsultaIntegracao("REMOTE_ERROR", new Integration.WorkOrderQuery(grupo, querySob));
                         string err = errorBuilder.ToString().Trim();
                         return $"{{\"sucesso\": false, \"erro\": \"{(string.IsNullOrWhiteSpace(err) ? "Falha ao obter resposta JSON da integração." : err.Replace("\"", "'"))}\"}}";
                     }
@@ -1415,9 +1449,55 @@ namespace OxCad
                 }
                 catch (Exception ex)
                 {
+                    if (acao == "consultar")
+                        return FalhaConsultaIntegracao("REMOTE_ERROR", new Integration.WorkOrderQuery(grupo, querySob));
                     return $"{{\"sucesso\": false, \"erro\": \"Exceção na operação de integração: {ex.Message.Replace("\"", "'")}\"}}";
                 }
             });
+        }
+
+        private static string FalhaConsultaIntegracao(string status, Integration.WorkOrderQuery query) =>
+            JsonSerializer.Serialize(new
+            {
+                sucesso = false,
+                query_identity = query,
+                resultado = new { status, data = (object?)null, error_code = status,
+                    error_message = "Consulta de integracao nao concluida." }
+            });
+
+        private static bool IsSafeQueryProcessId(string? value) =>
+            !string.IsNullOrWhiteSpace(value) &&
+            Regex.IsMatch(value, @"\A[A-Za-z0-9_-]{1,128}\z");
+
+        public static Task<Integration.IntegrationResult<Integration.UniversalizacaoQueryData>> ConsultarUniversalizacaoAsync(
+            Integration.IntegrationContext context, Integration.WorkOrderQuery query,
+            bool independentQuery = false)
+        {
+            return ConsultarUniversalizacaoAsync(context, query, () => ExecutarComandoIntegracaoAsync(
+                context.ProjectRoot, context.DwgPath, context.SobId, context.DatabaseFingerprint,
+                "consultar", grupo: query.Grupo, querySob: query.Sob,
+                correlationId: context.CorrelationId, executionId: context.ExecutionId,
+                independentQuery: independentQuery), independentQuery);
+        }
+
+        internal static async Task<Integration.IntegrationResult<Integration.UniversalizacaoQueryData>> ConsultarUniversalizacaoAsync(
+            Integration.IntegrationContext context, Integration.WorkOrderQuery query,
+            Func<Task<string>> invoke, bool independentQuery = false)
+        {
+            if (context == null || query == null || !query.IsValid)
+                return Integration.IntegrationResult<Integration.UniversalizacaoQueryData>.InvalidRequest();
+            if (!independentQuery &&
+                !string.Equals(context.SobId, query.Sob, StringComparison.Ordinal))
+                return Integration.IntegrationResult<Integration.UniversalizacaoQueryData>.IdentityMismatch();
+            if (!IsSafeQueryProcessId(context.CorrelationId) ||
+                !IsSafeQueryProcessId(context.ExecutionId))
+                return Integration.IntegrationResult<Integration.UniversalizacaoQueryData>.InvalidRequest();
+            string json = await invoke();
+            var result = Integration.UniversalizacaoQueryContract.Parse(json, query);
+            if (result.IsSuccess && (result.Data?.CorrelationId != context.CorrelationId ||
+                result.Data?.ExecutionId != context.ExecutionId))
+                return Integration.IntegrationResult<Integration.UniversalizacaoQueryData>.IdentityMismatch("Correlacao da consulta divergente.");
+            return result;
         }
 
         public static async Task<string> ExecutarComandoIntegracaoAsync(

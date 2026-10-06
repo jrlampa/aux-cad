@@ -109,11 +109,17 @@ class ProjectContext:
         if not self.database_fingerprint or not str(self.database_fingerprint).strip():
             raise ValueError("database_fingerprint obrigatorio para IntegrationContext.")
 
+        identifiers: dict[str, str] = {}
+        if self.correlation_id is not None:
+            identifiers["correlation_id"] = self.correlation_id
+        if self.execution_id is not None:
+            identifiers["execution_id"] = self.execution_id
         return IntegrationContext(
             sob_id=self.sob_id,
             project_root=str(self.project_root.resolve()),
             dwg_path=self.dwg_path,
             database_fingerprint=self.database_fingerprint,
+            **identifiers,
         )
 
 
