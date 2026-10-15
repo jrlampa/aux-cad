@@ -465,14 +465,16 @@
           (setq ja-existe-mesma-op
             (vl-some '(lambda (it)
                         (and (= (car it) handle)
+                             (= (strcase (nth 0 (cdr it))) key)
                              (= (strcase (nth 2 (cdr it))) (strcase operation))))
                      items))
           (cond
-            ;; Prevenção de dupla contabilização na mesma operação
+            ;; Prevenção de dupla contabilização na mesma operação para o mesmo condutor
             (ja-existe-mesma-op
              (setq duplicate-count (1+ duplicate-count))
              (princ (strcat "\n[LEVANTAMENTO][IGNORADO] Handle #" handle
-                            " motivo=entidade já contabilizada nesta operação (" (strcase operation) ")")))
+                            " motivo=entidade já contabilizada nesta operação (" (strcase operation)
+                            ") para o condutor " conductor)))
             ;; Nova medição válida
             (amount
              (setq items (append items

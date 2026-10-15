@@ -1352,3 +1352,14 @@ A versão 0.5.3 consolida o fechamento do ciclo de controle operacional de tempo
       - Documentação detalhada em `UNIVERSALIZACAO_DISCOVERY.md`.
     - **P3 — Continuidade Real do Executor**:
       - Lacuna sanada: Adicionada a ponte `ExecutarComandoIntegracaoAsync` em `WorkspaceService.cs` suportando `OxCadProjectContext` e `OxCadVerifiedDwgContext`.
+
+27. **Decisão Arquitetural — Levantamentos de Campo: Condutores Multicircuito em Mesmo Vão e Renumeração Estável de Postes (2026-10-15)**:
+    - **Multicircuito e Vãos Compartilhados (`orcamento/levantamento_condutores.lsp`)**:
+      - **Contexto de Engenharia**: Na distribuição elétrica, um único vão geométrico (cota/handle no CAD) frequentemente comporta múltiplos circuitos/condutores (ex: fase `53A`, neutro `53AA`, BT multiplexada, etc.).
+      - **Decisão**: A chave de unicidade de uma medição foi refinada de `(handle, operation)` para `(handle, key, operation)`.
+      - **Efeito**: Elimina o falso-positivo que ignorava entidades legítimas ao alternar entre condutores na mesma operação, preservando a proteção contra cliques duplicados acidentais para o mesmo condutor.
+      - **Validação**: 17 testes em `tests/test_levantamento_condutores.py` cobrindo cenários com 7 vãos compartilhados entre `53A` e `53AA`.
+    - **Renumeração Estável e Sequencial (`orcamento/levantamento_postes.lsp`)**:
+      - **Decisão**: Isolamento das rotinas `lp-renumerar-pontos`, `lp-excluir-ponto` e `lp-precisa-renumerar-p` eliminando o bug de índice estático `idx = 1`.
+      - **Auto-Cura**: Normalização sequencial $1 \dots N$ automática na leitura do LData para desenhos legados.
+      - **Validação**: 23 testes em `tests/test_levantamento_postes.py`.

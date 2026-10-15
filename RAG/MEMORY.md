@@ -1289,3 +1289,17 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Pytest completo: 635 passed, 0 failed na suite OXCAD/SOB.
   - C# Test Harness (`OxCadContextGateHarness.csproj`): 100% PASS.
   - Compilação .NET de `MapaCadPaleta.csproj` (net48 + net8.0-windows) e `OxCadPaleta.csproj`: 0 erros.
+
+### 29. Correções Operacionais em Levantamentos de Campo: Condutores Multicircuito e Renumeração de Postes (2026-10-15)
+
+- **Compartilhamento de Vão por Múltiplos Condutores (`LEVANTAR_CONDUTORES`)**:
+  - `orcamento/levantamento_condutores.lsp`: Correção na regra de desduplicação de cotas (`ja-existe-mesma-op`). Anteriormente, a rotina verificava apenas o `handle` da entidade e a `operation`, rejeitando indevidamente a mesma cota quando selecionada para condutores diferentes (ex: `53A` e `53AA` compartilhando o mesmo vão).
+  - Regra Corrigida: A desduplicação agora valida a tupla estrita `(handle, key, operation)` (`(= (car it) handle)`, `(= (strcase (nth 0 (cdr it))) key)`, `(= (strcase (nth 2 (cdr it))) (strcase operation))`).
+  - Suporte total a vãos multicircuito/multifásicos no DWG mantendo prevenção de cliques duplicados acidentais no mesmo condutor.
+  - Testes: `tests/test_levantamento_condutores.py` expandido para 17 testes (100% PASS).
+
+- **Renumeração Estável e Sequencial de Postes (`LEVANTAR_POSTES`)**:
+  - `orcamento/levantamento_postes.lsp`: Correção na reindexação após exclusão de pontos no menu `Revisar/Excluir`. A implementação anterior mantinha `idx = 1` estático sem incremento, forçando todos os registros remanescentes a exibirem `PONTO = 1`.
+  - Modularização: Criadas as funções `lp-renumerar-pontos` (incremento estrito $1 \dots N$), `lp-excluir-ponto` (exclusão atômica de ponto único por índice ordinal/SEQ) e `lp-precisa-renumerar-p` (auto-cura de estados legados corrompidos no LData).
+  - Preservação estrita de ramais, luminárias, total de clientes, posições, CS, demandas e coordenadas.
+  - Testes: `tests/test_levantamento_postes.py` com 23 testes (100% PASS).

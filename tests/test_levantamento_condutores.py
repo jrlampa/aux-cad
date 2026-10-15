@@ -177,3 +177,109 @@ def test_pause_retomada_e_limpeza_somente_apos_sucesso():
     assert "(lc-db-salvar-estado items rows)" in source
     assert "(lc-db-limpar-estado)" in source
     assert source.index("(lc-db-limpar-estado)") > source.index("(if table-ok")
+
+
+# ==============================================================================
+# Testes de Regressão: Múltiplos Condutores no Mesmo Vão (Compartilhamento de Cota/Handle)
+# ==============================================================================
+
+def py_coletar_item(items: list, rows: list, handle: str, conductor: str, operation: str, amount: float):
+    """Modelo Python fiel à regra de deduplicação e agregação de c:LEVANTAR_CONDUTORES."""
+    key = conductor.strip().upper()
+    col = 4 if operation.upper() == "REAPROVEITAR" else (3 if operation.upper() == "RETIRAR" else 2)
+
+    ja_existe = any(
+        it[0] == handle and it[1][0].upper() == key and it[1][2].upper() == operation.upper()
+        for it in items
+    )
+    if ja_existe:
+        return False, items, rows
+
+    item = (handle, [key, conductor, operation, amount, "MEASUREMENT", f"{amount}m"])
+    new_items = items + [item]
+
+    new_rows = []
+    found = False
+    for r in rows:
+        if r[0] == key:
+            updated = list(r)
+            updated[col] += amount
+            new_rows.append(updated)
+            found = True
+        else:
+            new_rows.append(r)
+    if not found:
+        new_row = [key, conductor, 0.0, 0.0, 0.0]
+        new_row[col] = amount
+        new_rows.append(new_row)
+
+    return True, new_items, new_rows
+
+
+def test_multiplos_condutores_no_mesmo_vao_compartilham_handle():
+    """Reproduz o cenário real reportado:
+    Um vão de rede (cota com determinado Handle) pode conter N tipos de condutores (ex: 53A e 53AA).
+    A seleção do mesmo Handle para um condutor diferente NÃO deve ser ignorada como duplicada."""
+    handles = ["346D4", "35174", "346CE", "346CB", "346D1", "34E31", "35159"]
+    items = []
+    rows = []
+
+    # 1. Coleta dos 7 vãos para o condutor 53A (RETIRAR)
+    for h in handles:
+        ok, items, rows = py_coletar_item(items, rows, handle=h, conductor="53A", operation="RETIRAR", amount=24.0)
+        assert ok is True
+
+    assert len(items) == 7
+    row_53a = next(r for r in rows if r[0] == "53A")
+    assert row_53a[3] == 24.0 * 7  # 168.0m
+
+    # 2. Coleta dos mesmos 7 vãos para o condutor 53AA (RETIRAR)
+    # Anteriormente eram ignorados como 'já contabilizada nesta operação (RETIRAR)'.
+    for h in handles:
+        ok, items, rows = py_coletar_item(items, rows, handle=h, conductor="53AA", operation="RETIRAR", amount=24.0)
+        assert ok is True, f"Handle #{h} deveria ser aceito para condutor 53AA mesmo já existindo para 53A"
+
+    assert len(items) == 14
+    row_53aa = next(r for r in rows if r[0] == "53AA")
+    assert row_53aa[3] == 24.0 * 7  # 168.0m
+
+    # Total de 53A permaneceu inalterado
+    assert row_53a[3] == 168.0
+
+
+def test_prevencao_dupla_contabilizacao_apenas_para_mesmo_condutor_e_operacao():
+    """Valida que a desduplicação ocorre estritamente se o mesmo Handle for clicado mais de uma vez
+    para o MESMO condutor e MESMA operação."""
+    items = []
+    rows = []
+
+    # Primeira adição: 53A / RETIRAR
+    ok, items, rows = py_coletar_item(items, rows, handle="346D4", conductor="53A", operation="RETIRAR", amount=24.0)
+    assert ok is True
+
+    # Duplicata na mesma operação e mesmo condutor: deve ser rejeitado
+    ok_dup, items, rows = py_coletar_item(items, rows, handle="346D4", conductor="53A", operation="RETIRAR", amount=24.0)
+    assert ok_dup is False
+    assert len(items) == 1
+
+    # Mesmo handle, mesmo condutor, mas operação DIFERENTE (INSTALAR): deve ser aceito
+    ok_inst, items, rows = py_coletar_item(items, rows, handle="346D4", conductor="53A", operation="INSTALAR", amount=24.0)
+    assert ok_inst is True
+    assert len(items) == 2
+
+    # Mesmo handle, operação RETIRAR, mas condutor DIFERENTE (53AA): deve ser aceito
+    ok_outro_cond, items, rows = py_coletar_item(items, rows, handle="346D4", conductor="53AA", operation="RETIRAR", amount=24.0)
+    assert ok_outro_cond is True
+    assert len(items) == 3
+
+
+def test_lisp_ast_deduplicacao_por_condutor_e_operacao():
+    """Valida estaticamente no código AutoLISP que a verificação de duplicidade
+    considera simultaneamente o Handle, a chave do condutor (key) e a operação."""
+    source = LISP_PATH.read_text(encoding="utf-8")
+
+    assert "(= (car it) handle)" in source
+    assert '(= (strcase (nth 0 (cdr it))) key)' in source
+    assert '(= (strcase (nth 2 (cdr it))) (strcase operation))' in source
+    assert "motivo=entidade já contabilizada nesta operação" in source
+    assert "para o condutor" in source
