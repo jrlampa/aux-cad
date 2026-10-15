@@ -63,6 +63,11 @@ def test_levantamento_postes_contract_and_commands():
     assert "(defun lp-calc-posicoes" in source
     assert "(defun lp-calc-cs" in source
 
+    # Manipulação, Exclusão e Reindexação Sequencial
+    assert "(defun lp-renumerar-pontos" in source
+    assert "(defun lp-excluir-ponto" in source
+    assert "(defun lp-precisa-renumerar-p" in source
+
     # Persistência DWG via LData
     assert "(vlax-ldata-get" in source
     assert "(vlax-ldata-put" in source
@@ -228,6 +233,72 @@ def py_calc_cs(posicoes: str | int) -> str | int:
     if not isinstance(posicoes, int) or posicoes <= 0:
         return "-"
     return (posicoes + 8) // 9
+
+
+def py_process_point_texts(raw_texts_list: list[str], seq: int, coords: str = "-") -> dict:
+    """Modelo Python fiel a lp-process-point-texts para testes de persistência e integridade."""
+    lines = []
+    for txt in raw_texts_list:
+        lines.extend(py_strip_mtext(txt).split("\n"))
+    poste = py_parse_poste(lines)
+    ramal_str, clientes, mono, bi, tri = py_parse_ramais_e_clientes(lines)
+    lum = py_parse_luminaria(lines)
+    pos = py_calc_posicoes(mono, bi, tri)
+    cs = py_calc_cs(pos)
+    dem = py_parse_demanda(lines)
+    acum = py_parse_acumulada(lines)
+    return {
+        "SEQ": seq,
+        "POSTE": poste,
+        "RAMAIS": ramal_str,
+        "LUM": lum,
+        "CLIENTES": clientes,
+        "POSICOES": pos,
+        "CS": cs,
+        "DEMANDA": dem,
+        "ACUMULADA": acum,
+        "COORDENADAS": coords or "-",
+        "RAW": raw_texts_list,
+    }
+
+
+def py_renumerar_pontos(pontos: list[dict]) -> list[dict]:
+    """Modelo Python fiel a lp-renumerar-pontos: renumera de 1 a N preservando atributos."""
+    resultado = []
+    for idx, p in enumerate(pontos, start=1):
+        item = p.copy()
+        item["SEQ"] = idx
+        resultado.append(item)
+    return resultado
+
+
+def py_excluir_ponto(pontos: list[dict], idx_alvo: int) -> list[dict]:
+    """Modelo Python fiel a lp-excluir-ponto: remove o ponto 1 a N e renumera sequencialmente."""
+    if not pontos or idx_alvo < 1 or idx_alvo > len(pontos):
+        return pontos
+    removido = False
+    remanescentes = []
+    for i, p in enumerate(pontos, start=1):
+        if not removido and (p.get("SEQ") == idx_alvo or i == idx_alvo):
+            removido = True
+        else:
+            remanescentes.append(p)
+    return py_renumerar_pontos(remanescentes)
+
+
+def py_formata_linha_revisao(p: dict) -> str:
+    """Simula a formatação de uma linha de revisão em lp-exibir-revisao."""
+    seq = str(p.get("SEQ", "-"))
+    poste = str(p.get("POSTE", "-"))
+    ramais = str(p.get("RAMAIS", "-"))
+    lum = str(p.get("LUM", "-"))
+    cli = str(p.get("CLIENTES", "-"))
+    pos = str(p.get("POSICOES", "-"))
+    cs = str(p.get("CS", "-"))
+    dem = str(p.get("DEMANDA", "-"))
+    acum = str(p.get("ACUMULADA", "-"))
+    coords = str(p.get("COORDENADAS", "-")).replace("\n", " | ")
+    return f"{seq} | {poste} | {ramais} | {lum} | {cli} | {pos} | {cs} | {dem} | {acum} | {coords}"
 
 
 # ==============================================================================
@@ -447,3 +518,230 @@ def test_menu_interativo_revisao_e_exclusao_com_reindexacao():
     assert "(defun lp-exibir-revisao" in source
     assert "(subst (cons \"SEQ\" idx) (assoc \"SEQ\" p) p)" in source
     assert "Deseja realmente descartar todos os pontos coletados?" in source
+
+
+# ==============================================================================
+# Testes de Regressão: Defeito de Numeração (PONTO = 1) no LEVANTAR_POSTES
+# ==============================================================================
+
+def test_regressao_reproducao_defeito_antigo_vs_correcao():
+    """Demonstra que a lógica antiga com idx estático causava PONTO = 1 para todos,
+    e valida que a correção renumera sequencialmente mantendo identidades e dados."""
+    # 4 pontos iniciais conforme reprodução manual do usuário
+    pts = [
+        {"SEQ": 1, "POSTE": "-", "RAMAIS": "14x%%C1 | 2x%%C3", "CLIENTES": 16, "POSICOES": 20, "CS": 3, "DEMANDA": "31,79", "ACUMULADA": "198,34", "COORDENADAS": "N: 7450100.10\nE: 678100.10"},
+        {"SEQ": 2, "POSTE": "-", "RAMAIS": "13x%%C1 | 4x%%C3", "CLIENTES": 17, "POSICOES": 25, "CS": 3, "DEMANDA": "33,52", "ACUMULADA": "103,32", "COORDENADAS": "N: 7450200.20\nE: 678200.20"},
+        {"SEQ": 3, "POSTE": "-", "RAMAIS": "15x%%C1 | 3x%%C3", "CLIENTES": 18, "POSICOES": 24, "CS": 3, "DEMANDA": "35,25", "ACUMULADA": "82,18", "COORDENADAS": "N: 7450300.30\nE: 678300.30"},
+        {"SEQ": 4, "POSTE": "-", "RAMAIS": "7x%%C1 | 2x%%C2", "CLIENTES": 9, "POSICOES": 11, "CS": 2, "DEMANDA": "19,27", "ACUMULADA": "58,92", "COORDENADAS": "N: 7450400.40\nE: 678400.40"},
+    ]
+
+    # Reprodução exata do defeito da implementação anterior (idx = 1 estático):
+    remanescentes_bug = [p.copy() for p in pts if p["SEQ"] != 2]
+    idx_bug = 1
+    pontos_defeito = []
+    for p in remanescentes_bug:
+        item = p.copy()
+        item["SEQ"] = idx_bug  # sem incremento!
+        pontos_defeito.append(item)
+    # Todos os pontos assumiam SEQ = 1 (defeito reportado)
+    assert [p["SEQ"] for p in pontos_defeito] == [1, 1, 1]
+
+    # Com a correção:
+    pontos_corrigidos = py_excluir_ponto(pts, 2)
+    assert [p["SEQ"] for p in pontos_corrigidos] == [1, 2, 3]
+    # Garante categoricamente que os pontos restantes NÃO assumem 1
+    assert pontos_corrigidos[1]["SEQ"] == 2
+    assert pontos_corrigidos[2]["SEQ"] == 3
+
+
+def test_coleta_quatro_pontos_exclusao_segundo_ponto_e_revisao_consecutiva():
+    """Valida o fluxo completo especificado:
+    1. Coleta de 4 pontos (numeração 1, 2, 3, 4);
+    2. Exclusão do 2º ponto (remanescentes 1, 2, 3);
+    3. Nova revisão confirmando que a numeração permanece correta;
+    4. Exclusão de outro ponto com renumeração imediata;
+    5. Associação correta dos dados e preservação de coordenadas e cálculos."""
+    # 1. Coleta de 4 pontos com dados reais
+    p1 = py_process_point_texts(
+        ["14x1ø | 2x3ø", "DEM.: 31,79kVA", "ACUM.: 198,34kVA"],
+        seq=1,
+        coords="N: 7450100.10\nE: 678100.10"
+    )
+    p1["BLOCO_POSTE_HANDLE"] = "101"
+
+    p2 = py_process_point_texts(
+        ["13x1ø | 4x3ø", "DEM.: 33,52kVA", "ACUM.: 103,32kVA"],
+        seq=2,
+        coords="N: 7450200.20\nE: 678200.20"
+    )
+    p2["BLOCO_POSTE_HANDLE"] = "102"
+
+    p3 = py_process_point_texts(
+        ["15x1ø | 3x3ø", "DEM.: 35,25kVA", "ACUM.: 82,18kVA"],
+        seq=3,
+        coords="N: 7450300.30\nE: 678300.30"
+    )
+    p3["BLOCO_POSTE_HANDLE"] = "103"
+
+    p4 = py_process_point_texts(
+        ["7x1ø | 2x2ø", "DEM.: 19,27kVA", "ACUM.: 58,92kVA"],
+        seq=4,
+        coords="N: 7450400.40\nE: 678400.40"
+    )
+    p4["BLOCO_POSTE_HANDLE"] = "104"
+
+    pontos = [p1, p2, p3, p4]
+
+    # Confirmar numeração inicial 1, 2, 3, 4
+    assert [p["SEQ"] for p in pontos] == [1, 2, 3, 4]
+    assert pontos[0]["CLIENTES"] == 16
+    assert pontos[0]["POSICOES"] == 20
+    assert pontos[0]["CS"] == 3
+
+    assert pontos[1]["CLIENTES"] == 17
+    assert pontos[1]["POSICOES"] == 25
+    assert pontos[1]["CS"] == 3
+
+    assert pontos[2]["CLIENTES"] == 18
+    assert pontos[2]["POSICOES"] == 24
+    assert pontos[2]["CS"] == 3
+
+    assert pontos[3]["CLIENTES"] == 9
+    assert pontos[3]["POSICOES"] == 11
+    assert pontos[3]["CS"] == 2
+
+    # 2. Excluir o segundo ponto (ponto 2)
+    pontos = py_excluir_ponto(pontos, idx_alvo=2)
+
+    # Confirmar que restaram 3 registros com numeração sequencial 1, 2, 3
+    assert len(pontos) == 3
+    assert [p["SEQ"] for p in pontos] == [1, 2, 3]
+
+    # 3. Solicitar nova revisão: a numeração e linhas formatadas devem ser 1, 2, 3
+    rev_linhas = [py_formata_linha_revisao(p) for p in pontos]
+    assert rev_linhas[0].startswith("1 |")
+    assert rev_linhas[1].startswith("2 |")
+    assert rev_linhas[2].startswith("3 |")
+    assert not any(l.startswith("1 |") for l in rev_linhas[1:])
+
+    # Validar integridade dos dados dos 3 pontos restantes:
+    # Registro 1 é o P1 original
+    assert pontos[0]["RAMAIS"] == "14x%%C1 | 2x%%C3"
+    assert pontos[0]["CLIENTES"] == 16
+    assert pontos[0]["POSICOES"] == 20
+    assert pontos[0]["CS"] == 3
+    assert pontos[0]["DEMANDA"] == "31,79"
+    assert pontos[0]["ACUMULADA"] == "198,34"
+    assert pontos[0]["COORDENADAS"] == "N: 7450100.10\nE: 678100.10"
+    assert pontos[0]["BLOCO_POSTE_HANDLE"] == "101"
+
+    # Registro 2 é o P3 original (renumerado para 2)
+    assert pontos[1]["RAMAIS"] == "15x%%C1 | 3x%%C3"
+    assert pontos[1]["CLIENTES"] == 18
+    assert pontos[1]["POSICOES"] == 24
+    assert pontos[1]["CS"] == 3
+    assert pontos[1]["DEMANDA"] == "35,25"
+    assert pontos[1]["ACUMULADA"] == "82,18"
+    assert pontos[1]["COORDENADAS"] == "N: 7450300.30\nE: 678300.30"
+    assert pontos[1]["BLOCO_POSTE_HANDLE"] == "103"
+
+    # Registro 3 é o P4 original (renumerado para 3)
+    assert pontos[2]["RAMAIS"] == "7x%%C1 | 2x%%C2"
+    assert pontos[2]["CLIENTES"] == 9
+    assert pontos[2]["POSICOES"] == 11
+    assert pontos[2]["CS"] == 2
+    assert pontos[2]["DEMANDA"] == "19,27"
+    assert pontos[2]["ACUMULADA"] == "58,92"
+    assert pontos[2]["COORDENADAS"] == "N: 7450400.40\nE: 678400.40"
+    assert pontos[2]["BLOCO_POSTE_HANDLE"] == "104"
+
+    # 4. Excluir outro ponto: excluir o novo ponto 2 (que era o P3 original)
+    pontos = py_excluir_ponto(pontos, idx_alvo=2)
+
+    # Confirmar renumeração dos restantes para 1, 2
+    assert len(pontos) == 2
+    assert [p["SEQ"] for p in pontos] == [1, 2]
+
+    # Verificar que os pontos restantes são P1 (SEQ=1) e P4 (SEQ=2)
+    assert pontos[0]["BLOCO_POSTE_HANDLE"] == "101"
+    assert pontos[0]["DEMANDA"] == "31,79"
+    assert pontos[1]["BLOCO_POSTE_HANDLE"] == "104"
+    assert pontos[1]["DEMANDA"] == "19,27"
+    assert pontos[1]["RAMAIS"] == "7x%%C1 | 2x%%C2"
+
+    # Segunda revisão consecutiva mantém 1 e 2 perfeitamente
+    rev_linhas_2 = [py_formata_linha_revisao(p) for p in pontos]
+    assert rev_linhas_2[0].startswith("1 |")
+    assert rev_linhas_2[1].startswith("2 |")
+
+
+def test_persistencia_recuperacao_estado_dwg_e_auto_cura():
+    """Valida o mecanismo de persistência no DWG (LData) e a capacidade de auto-cura
+    caso o estado anterior tenha sido persistido com defeito de numeração."""
+    # Dicionário mock do DWG (LData)
+    dwg_ldata = {}
+
+    pts = [
+        {"SEQ": 1, "POSTE": "P01", "RAMAIS": "8x%%C1", "CLIENTES": 8, "POSICOES": 8, "CS": 1, "DEMANDA": "10,0", "ACUMULADA": "20,0", "COORDENADAS": "N: 100\nE: 200"},
+        {"SEQ": 2, "POSTE": "P02", "RAMAIS": "6x%%C1", "CLIENTES": 6, "POSICOES": 6, "CS": 1, "DEMANDA": "8,0", "ACUMULADA": "18,0", "COORDENADAS": "N: 150\nE: 250"},
+        {"SEQ": 3, "POSTE": "P03", "RAMAIS": "4x%%C1", "CLIENTES": 4, "POSICOES": 4, "CS": 1, "DEMANDA": "5,0", "ACUMULADA": "10,0", "COORDENADAS": "N: 200\nE: 300"},
+    ]
+
+    # Exclusão do ponto 2 e persistência
+    pts_restantes = py_excluir_ponto(pts, 2)
+    dwg_ldata["OXCAD_LEVANTAMENTO"] = {"PONTOS": pts_restantes}
+
+    # Simulação de pausa, fechamento e reabertura do DWG
+    pts_recuperados = dwg_ldata["OXCAD_LEVANTAMENTO"]["PONTOS"]
+    assert len(pts_recuperados) == 2
+    assert [p["SEQ"] for p in pts_recuperados] == [1, 2]
+    assert pts_recuperados[0]["POSTE"] == "P01"
+    assert pts_recuperados[1]["POSTE"] == "P03"
+
+    # Teste de auto-cura: simula estado corrompido herdado onde todos possuem SEQ = 1
+    pontos_corrompidos = [
+        {"SEQ": 1, "POSTE": "P1", "RAMAIS": "1x%%C1"},
+        {"SEQ": 1, "POSTE": "P2", "RAMAIS": "2x%%C1"},
+        {"SEQ": 1, "POSTE": "P3", "RAMAIS": "3x%%C1"},
+        {"SEQ": 1, "POSTE": "P4", "RAMAIS": "4x%%C1"},
+    ]
+    curados = py_renumerar_pontos(pontos_corrompidos)
+    assert [p["SEQ"] for p in curados] == [1, 2, 3, 4]
+    assert curados[0]["POSTE"] == "P1"
+    assert curados[1]["POSTE"] == "P2"
+    assert curados[2]["POSTE"] == "P3"
+    assert curados[3]["POSTE"] == "P4"
+
+    # Exclusão no estado corrompido remove apenas o ponto alvo e normaliza os demais
+    restantes_apos_cura = py_excluir_ponto(pontos_corrompidos, idx_alvo=2)
+    assert len(restantes_apos_cura) == 3
+    assert [p["SEQ"] for p in restantes_apos_cura] == [1, 2, 3]
+    assert restantes_apos_cura[0]["POSTE"] == "P1"
+    assert restantes_apos_cura[1]["POSTE"] == "P3"
+    assert restantes_apos_cura[2]["POSTE"] == "P4"
+
+
+def test_lisp_ast_renumeracao_estavel_e_sem_hardcoded_um():
+    """Valida estaticamente no código AutoLISP que a renumeração incrementa o índice
+    e que o antigo bug de atribuição estática foi completamente removido."""
+    source = LISP_PATH.read_text(encoding="utf-8")
+
+    # Funções modulares implementadas
+    assert "(defun lp-renumerar-pontos (pontos / idx)" in source
+    assert "(defun lp-excluir-ponto (pontos idx-alvo / i removido remanescentes)" in source
+    assert "(defun lp-precisa-renumerar-p (pontos / idx precisa)" in source
+
+    # O incremento real deve existir
+    assert "(setq idx (1+ idx))" in source
+
+    # O trecho defeituoso com idx estático em 1 NÃO deve mais existir
+    assert "(setq idx 1\n                     pontos (mapcar '(lambda (p)\n                                       (subst (cons \"SEQ\" idx)" not in source
+    assert "(setq idx 1\r\n                     pontos (mapcar '(lambda (p)\r\n                                       (subst (cons \"SEQ\" idx)" not in source
+
+    # lp-excluir-ponto deve ser invocado no comando principal
+    assert "(setq pontos (lp-excluir-ponto pontos idx))" in source
+    assert "(lp-db-salvar-pontos pontos)" in source
+
+    # Revisão e Tabela usam exatamente a mesma fonte de numeração ("SEQ")
+    assert '(lp-format-val (cdr (assoc "SEQ" p)))' in source
+    assert '(vla-SetText table row-idx 0 (lp-format-val (cdr (assoc "SEQ" p))))' in source

@@ -602,6 +602,43 @@
           (setq ocorrencias (append ocorrencias (list (cdr (assoc "SEQ" p)))))))))
   ocorrencias)
 
+(defun lp-renumerar-pontos (pontos / idx)
+  "Renumera sequencialmente os registros de 1 a N preservando todos os atributos originais."
+  (setq idx 0)
+  (mapcar '(lambda (p)
+             (setq idx (1+ idx))
+             (if (assoc "SEQ" p)
+               (subst (cons "SEQ" idx) (assoc "SEQ" p) p)
+               (append p (list (cons "SEQ" idx)))))
+          pontos))
+
+(defun lp-excluir-ponto (pontos idx-alvo / i removido remanescentes)
+  "Remove exatamente o ponto selecionado (1 a N) e renumera sequencialmente os restantes."
+  (if (or (null pontos) (null idx-alvo) (< idx-alvo 1) (> idx-alvo (length pontos)))
+    pontos
+    (progn
+      (setq i 0
+            removido nil
+            remanescentes '())
+      (foreach p pontos
+        (setq i (1+ i))
+        (if (and (not removido)
+                 (or (= (cdr (assoc "SEQ" p)) idx-alvo)
+                     (= i idx-alvo)))
+          (setq removido t)
+          (setq remanescentes (cons p remanescentes))))
+      (lp-renumerar-pontos (reverse remanescentes)))))
+
+(defun lp-precisa-renumerar-p (pontos / idx precisa)
+  "Verifica se a lista de pontos necessita de normalização sequencial."
+  (setq idx 0
+        precisa nil)
+  (foreach p pontos
+    (setq idx (1+ idx))
+    (if (/= (cdr (assoc "SEQ" p)) idx)
+      (setq precisa t)))
+  precisa)
+
 ;;; ----------------------------------------------------------------------------
 ;;; 9. COMANDO PRINCIPAL: LEVANTAR_POSTES (LP)
 ;;; ----------------------------------------------------------------------------
@@ -621,10 +658,18 @@
   (setvar "PICKADD" 2)
 
   (setq pontos (lp-db-obter-pontos))
+  (if (lp-precisa-renumerar-p pontos)
+    (progn
+      (setq pontos (lp-renumerar-pontos pontos))
+      (lp-db-salvar-pontos pontos)))
   (setq looping t)
 
   (while looping
     (setq pontos (lp-db-obter-pontos))
+    (if (lp-precisa-renumerar-p pontos)
+      (progn
+        (setq pontos (lp-renumerar-pontos pontos))
+        (lp-db-salvar-pontos pontos)))
     (if (> (length pontos) 0)
       (progn
         (princ (strcat "\n[LEVANTAR_POSTES] " (itoa (length pontos))
@@ -703,12 +748,7 @@
                                      (itoa (length pontos)) "): ")))
            (if (and idx (>= idx 1) (<= idx (length pontos)))
              (progn
-               (setq pontos (vl-remove-if '(lambda (p) (= (cdr (assoc "SEQ" p)) idx)) pontos))
-               ;; Reindexação estável
-               (setq idx 1
-                     pontos (mapcar '(lambda (p)
-                                       (subst (cons "SEQ" idx) (assoc "SEQ" p) p))
-                                    pontos))
+               (setq pontos (lp-excluir-ponto pontos idx))
                (lp-db-salvar-pontos pontos)
                (princ "\nPonto removido e sequência atualizada."))
              (princ "\nNúmero de ponto inválido.")))
