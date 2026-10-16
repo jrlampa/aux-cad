@@ -104,6 +104,9 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `orcamento_gui.py` (390 linhas): Interface gráfica moderna em Tkinter com seletores de Empreiteira (Engelmig, Indica, Dínamo, Progen), Território (A, B, C), Salinidade, KPIs em tempo real e alternância entre visualização de Materiais e Mão de Obra.
 - `orcamento_manager.py` (97 linhas): Orquestrador CLI/GUI atualizado com suporte a `--empreiteira`, `--territorio` e `--ambiente`.
 - `orcamento_cad_extractor.lsp`: Rotina AutoLISP com comandos **`ORCAD`** (varredura inteligente de postes, cabos e equipamentos) e **`ORCUI`** (disparo da interface gráfica).
+- levantamento_postes.lsp (997 linhas): Comando **LEVANTAR_POSTES** (ou **LP**) para coleta interativa de textos TEXT/MTEXT de postes e ramais no DWG, calculo de clientes mono/bi/tri, posicoes, CS e geracao de tabela nativa do AutoCAD (ACAD_TABLE) de 10 colunas com persistencia isolada em LData e sincronizacao bidirecional automatica.
+- clandestino_light.lsp (300 linhas): Modulo de regras normativas oficiais da LIGHT extraidas da planilha CQTS_ZNA853248_ATUAL.xlsx (tabelas TAB_CLAN_DMDI para areas de 20 a 400 m2 e AUX_CLAN para diversificacao de 1 a 300 clientes), persistencia de configuracao e motor analitico de acumulacao topologica a jusante em grafos.
+- clandestino_topologia.lsp (251 linhas): Wizard e editor interativo CAD para cadastro de topologia explicita da rede clandestina com selecao de Transformador (TR), sequenciamento de multiplos lados (LADO 1, LADO 2, etc.), derivacoes partindo de nos existentes e aplicacao fail-safe com recalculo instantaneo de demandas acumuladas.
 - `Abrir_Orcamento.bat`: Atalho local na pasta do projeto e na raiz.
 
 ### 7. `mapa_postes/` (Estúdio Web de Satélite, Coordenadas e Clientes)
@@ -1303,3 +1306,49 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
   - Modularização: Criadas as funções `lp-renumerar-pontos` (incremento estrito $1 \dots N$), `lp-excluir-ponto` (exclusão atômica de ponto único por índice ordinal/SEQ) e `lp-precisa-renumerar-p` (auto-cura de estados legados corrompidos no LData).
   - Preservação estrita de ramais, luminárias, total de clientes, posições, CS, demandas e coordenadas.
   - Testes: `tests/test_levantamento_postes.py` com 23 testes (100% PASS).
+
+### 30. Modo Opcional CLANDESTINO (LIGHT) e Sincronização Dinâmica em `LEVANTAR_POSTES` (2026-10-15)
+
+- **Engenharia Reversa Normativa LIGHT (`CQTS_ZNA853248_ATUAL.xlsx`)**:
+  - Descoberta e comprovação das fórmulas normativas da Light S.A. para redes clandestinas e invertidas a partir da aba `DB` (`DB!A35:B416` e `DB!C35:F335`) e circuito real `ZNA 31232 - RUA IRINEIA VERCOSA` (`PROJ1`):
+    - $\text{DMDI} = \text{TAB\_CLAN\_DMDI}[\text{Área}]$, onde área varia de 20 a 400 m². Piso fixado em $1,62\text{ kVA}$ para $\text{área} \le 42\text{ m}^2$ e teto de $12,13\text{ kVA}$ para $\text{área} \ge 400\text{ m}^2$.
+    - $\text{Demanda Posto} = \text{DMDI} \times F_{\text{div}}(\text{Clientes Posto})$.
+    - $\text{Demanda Acumulada} = \text{DMDI} \times F_{\text{div}}(\text{Clientes Acumulados a Jusante})$. Natureza estritamente não-linear (não soma demandas dos postes!).
+- **Módulo Dedicado `orcamento/clandestino_light.lsp` (256 linhas)**:
+  - Constantes completas e fiéis: `*lp-clan-dmdi-43-399*` (357 valores) e `*lp-clan-fdiv-5-278*` (274 valores).
+  - Funções de cálculo e lookup: `lp-clan-obter-dmdi`, `lp-clan-obter-fator-div`, `lp-clan-calcular-demanda`, `lp-clan-calcular-acumulada`, `lp-clan-format-num`.
+  - Parser de anotações de área em textos: `lp-clan-parse-area`.
+  - Recalculador topológico de cadeia: `lp-clan-recalcular-pontos` com suporte aos sentidos `PONTA->FONTE` e `FONTE->PONTA`.
+  - Configuração interativa no CAD: `lp-configurar-modo` (permite alternar entre `NORMAL` e `CLANDESTINO`, definir área média padrão em m² e sentido de acumulação).
+  - Persistência das configurações por DWG via LData (`OXCAD_LEVANTAMENTO`: chaves `MODO`, `AREA_CLANDESTINO`, `SENTIDO_ACUMULACAO`).
+- **Integração em `orcamento/levantamento_postes.lsp` (995 linhas)**:
+  - Carregamento seguro de `clandestino_light.lsp`.
+  - Respeito ao limite estrito de 1.000 linhas do projeto (995 linhas atuais).
+  - Novo item `Configurar` no menu interativo do comando `LEVANTAR_POSTES` / `LP`.
+  - Preservação total do comportamento dos projetos normais (leitura literal de `DEM.:` e `ACUM.:`).
+  - Sincronização automática entre os textos do desenho e a tabela AutoCAD vinculada via `TEXT_HANDLES` e `TABELA_HANDLE`.
+- **Validação e Testes**:
+  - Adicionado carregador global em `acaddoc.lsp`: `(load-aux-safe "orcamento\\clandestino_light.lsp")`.
+  - Atualização do `.dockerignore` garantindo isolamento de binários CAD (`*.dwg`).
+  - Suíte `tests/test_levantamento_postes.py` expandida com espelhos Python e 9 novos testes (total de 62 testes passando, 100% PASS).
+  - Validação do circuito real ZNA 31232: 0 discrepâncias com a planilha oficial da Light.
+
+### 31. Topologia Explícita em Árvore e Resolução de `fixnump: T` no AutoLISP (2026-10-16)
+
+- **Correção da Semântica de Booleano em AutoLISP (`bad argument type: fixnump: T`)**:
+  - **Causa Raiz**: No AutoLISP, a função `(or expr1 expr2 ...)` é um operador lógico estrito que retorna `T` ou `nil`, nunca o valor da expressão verdadeira como em outras linguagens Lisp/Python. Expressões como `(or (lp-db-obter-area) 50)` resultavam em `T`, que ao ser passado para `(itoa a)` disparava a exceção no AutoCAD.
+  - **Solução Arquitetural**: Blindagem de `lp-db-obter-area` para validar se o valor armazenado no LData é um inteiro numérico válido entre 20 e 400 (`lp-db-area-configurada-p`), retornando o fixnum ou 50 por padrão com fallback seguro. Remoção de todos os padrões `(or (lp-db-obter-area) 50)` em favor da chamada direta e segura `(lp-db-obter-area)`.
+  - **Alinhamento do Test Harness**: `tests/autolisp_harness.py` restaurado para a semântica rigorosa do AutoLISP, onde `_sf_and` e `_sf_or` retornam apenas `T` ou `None`.
+- **Módulo de Topologia Interativa (`orcamento/clandestino_topologia.lsp` - 251 linhas)**:
+  - Cadastro de topologia explícita em árvore partindo do Transformador (TR), com suporte a múltiplos Lados (`LADO 1`, `LADO 2`, etc.) e Derivações vinculadas ao poste de origem.
+  - Cálculo de clientes acumulados a jusante por propagação em árvore orientada (DAG), imune à ordem cronológica de coleta ou numeração dos postes no DWG.
+  - Suporte transacional: validação prévia de nós, rejeição em caso de ciclos ou limites normativos excedidos sem corrupção do DWG.
+- **Suíte de Testes e Conformidade**:
+  - `tests/test_levantamento_postes.py`: 70 testes automatizados passando (100% PASS).
+  - Suíte completa do projeto: 1407 testes passando (100% PASS).
+  - Limites de linhas rigorosamente mantidos:
+    - `orcamento/levantamento_postes.lsp`: 997 linhas (limite <= 1.000 linhas).
+    - `orcamento/clandestino_light.lsp`: 300 linhas (limite <= 500 linhas).
+    - `orcamento/clandestino_topologia.lsp`: 251 linhas (limite <= 500 linhas).
+
+

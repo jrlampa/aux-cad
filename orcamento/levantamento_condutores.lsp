@@ -539,5 +539,15 @@
   (if (numberp old-pickadd) (setvar "PICKADD" old-pickadd))
   (princ))
 
-(princ "\n[LEVANTAMENTO] Módulo carregado. Use LEVANTAR_CONDUTORES.")
+(defun c:RECARREGAR_CONDUTORES (/ _path)
+  (setq _path (findfile "orcamento\\levantamento_condutores.lsp"))
+  (if (null _path) (setq _path (findfile "levantamento_condutores.lsp")))
+  (if _path
+    (progn
+      (load _path)
+      (princ "\n[SUCESSO] Módulo LEVANTAR_CONDUTORES recarregado na sessão."))
+    (princ "\n[ERRO] Arquivo levantamento_condutores.lsp não encontrado."))
+  (princ))
+
+(princ "\n[LEVANTAMENTO] Módulo carregado. Use LEVANTAR_CONDUTORES ou RECARREGAR_CONDUTORES.")
 (princ)

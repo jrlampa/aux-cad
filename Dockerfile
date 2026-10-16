@@ -21,11 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalação de dependências Python
+# Instalação de dependências Python (BEFORE copying source for layer caching)
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Cópia do código-fonte do projeto
+# Cópia do código-fonte do projeto (AFTER requirements for better cache invalidation)
 COPY . /app/
 
 # Exposição de porta para o servidor do estúdio de satélite/postes

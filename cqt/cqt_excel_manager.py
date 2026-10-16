@@ -191,6 +191,18 @@ class CQTManagerGUI:
             filetypes=[("Planilha com Macros do Excel", "*.xlsm"), ("Todos os Arquivos", "*.*")]
         )
         if chosen:
+            # Validate path is within safe directories (project or user home)
+            chosen_abs = os.path.abspath(chosen)
+            allowed_roots = [os.path.abspath(_root_dir), os.path.expanduser("~")]
+            is_safe = any(chosen_abs.startswith(os.path.abspath(root)) for root in allowed_roots)
+            
+            if not is_safe:
+                messagebox.showwarning(
+                    "Caminho Inválido",
+                    "Por favor, salve a planilha na pasta do projeto ou em sua pasta de usuário."
+                )
+                return
+            
             self.ent_dest_path.delete(0, tk.END)
             self.ent_dest_path.insert(0, chosen)
 
@@ -204,7 +216,22 @@ class CQTManagerGUI:
         if not file_path or not os.path.exists(file_path):
             return
 
-        dados = load_all_scenarios_from_excel(file_path)
+        try:
+            dados = load_all_scenarios_from_excel(file_path)
+        except Exception as e:
+            messagebox.showerror(
+                "Erro ao Importar Planilha",
+                f"Falha ao ler o arquivo Excel:\n\n{type(e).__name__}: {e}\n\n"
+                f"Verifique se o arquivo não está corrompido ou já aberto em outro programa."
+            )
+            return
+        if not dados:
+            messagebox.showwarning(
+                "Aviso de Importação",
+                f"Falha ao processar a planilha ou arquivo vazio:\n{os.path.basename(file_path)}"
+            )
+            return
+        
         cenarios = dados.get("cenarios", {})
         if not cenarios:
             messagebox.showwarning(
@@ -241,13 +268,16 @@ class CQTManagerGUI:
                 resumo_cenarios.append(f"• {cid}: {len(tr_list)} trechos carregados")
 
         # Recarrega e mescla cabos homologados a partir da planilha importada
-        novos_cabos = load_cables_from_database(file_path)
-        if novos_cabos:
-            for c in novos_cabos:
-                if c not in self.cables_list:
-                    self.cables_list.append(c)
-            for tab in self.tabs.values():
-                tab.update_cables_list(self.cables_list)
+        try:
+            novos_cabos = load_cables_from_database(file_path)
+            if novos_cabos:
+                for c in novos_cabos:
+                    if c not in self.cables_list:
+                        self.cables_list.append(c)
+                for tab in self.tabs.values():
+                    tab.update_cables_list(self.cables_list)
+        except Exception as e:
+            print(f"Aviso ao carregar cabos da planilha: {e}")
 
         self._recalcular_todas_abas()
 

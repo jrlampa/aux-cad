@@ -56,6 +56,7 @@ class AuxCadHubApp:
 
         self.branch_git = obter_branch_git()
         self.acad_rodando = verificar_processo_autocad()
+        self._test_running = False  # Flag to prevent concurrent test execution
 
         self._criar_estilos()
         self._construir_interface()
@@ -421,7 +422,9 @@ class AuxCadHubApp:
     def _abrir_mapa_web(self):
         bat = os.path.join(BASE_DIR, "Abrir_Mapa_Postes.bat")
         if os.path.exists(bat):
-            self._lancar_subprocesso([bat], shell=True)
+            # Quote bat path on Windows
+            cmd = f'"{bat}"' if platform.system() == "Windows" else bat
+            self._lancar_subprocesso([cmd], shell=True)
         else:
             script = os.path.join(BASE_DIR, "mapa_postes", "mapa_servidor.py")
             self._lancar_subprocesso([sys.executable, script])
@@ -447,20 +450,30 @@ class AuxCadHubApp:
         self._lancar_subprocesso([sys.executable, script, "--json"])
 
     def _executar_testes(self):
+        if self._test_running:
+            messagebox.showwarning("Aviso", "Testes já estão em execução. Aguarde a conclusão antes de iniciar novamente.")
+            return
+
         def _run():
+            self._test_running = True
             try:
                 res = subprocess.run(
                     [sys.executable, "-m", "pytest", "tests/", "-q"],
                     cwd=BASE_DIR,
                     capture_output=True,
-                    text=True
+                    text=True,
+                    timeout=300  # 5 minute timeout
                 )
                 if res.returncode == 0:
                     messagebox.showinfo("Sucesso nos Testes (QA)", f"✓ Todos os testes passaram com sucesso!\n\n{res.stdout.strip()}")
                 else:
                     messagebox.showwarning("Aviso nos Testes", f"Alguns testes falharam:\n\n{res.stdout or res.stderr}")
+            except subprocess.TimeoutExpired:
+                messagebox.showerror("Erro ao Executar Testes", "Timeout: testes levaram mais de 5 minutos para completar.")
             except Exception as ex:
                 messagebox.showerror("Erro ao Executar Testes", f"Falha ao rodar pytest: {ex}")
+            finally:
+                self._test_running = False
 
         threading.Thread(target=_run, daemon=True).start()
         messagebox.showinfo("Executando Testes", "A suíte de testes está sendo executada em segundo plano...\nO resultado será exibido em instantes.")
@@ -481,11 +494,24 @@ class AuxCadHubApp:
         messagebox.showinfo("Diagnóstico Atualizado", f"AutoCAD em execução: {'Sim' if self.acad_rodando else 'Não'}\nBranch Git: {self.branch_git}")
 
     def _lancar_subprocesso(self, cmd, shell=False):
+        """Launch subprocess safely with proper resource cleanup."""
         try:
-            if platform.system() == "Windows" and not shell:
-                subprocess.Popen(cmd, cwd=BASE_DIR, creationflags=subprocess.DETACHED_PROCESS)
-            else:
-                subprocess.Popen(cmd, cwd=BASE_DIR, shell=shell)
+            # Quote paths on Windows to handle spaces and unicode
+            if platform.system() == "Windows" and not shell and isinstance(cmd, list):
+                cmd = [f'"{arg}"' if " " in str(arg) else arg for arg in cmd]
+            
+            creationflags = subprocess.DETACHED_PROCESS if platform.system() == "Windows" else 0
+            proc = subprocess.Popen(
+                cmd,
+                cwd=BASE_DIR,
+                shell=shell,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=creationflags
+            )
+            # Detach from parent process to allow it to run independently
+            if hasattr(proc, 'detach'):
+                proc.detach()
         except Exception as ex:
             messagebox.showerror("Erro de Execução", f"Não foi possível iniciar o módulo:\n{ex}")
 

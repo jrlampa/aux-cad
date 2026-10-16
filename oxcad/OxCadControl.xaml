@@ -93,11 +93,16 @@
                                 Background="#2A3B4C" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
                                 Cursor="Hand" Click="BtnAcao_Click" Tag="sob" />
 
-                        <!-- Levantamento genérico de condutores -->
-                        <Button x:Name="BtnLevantamentoCondutores" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
-                            Content="📏 Levantar Condutores" Height="30" Margin="2"
+                        <!-- Levantamento de condutores e postes -->
+                        <Button x:Name="BtnLevantamentoCondutores" Grid.Row="3" Grid.Column="0"
+                            Content="📏 Condutores" Height="30" Margin="2"
                             Background="#315442" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
                             Cursor="Hand" Click="BtnLevantarCondutores_Click" />
+
+                        <Button x:Name="BtnLevantamentoPostes" Grid.Row="3" Grid.Column="1"
+                            Content="📋 Postes &amp; Cli" Height="30" Margin="2"
+                            Background="#315442" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11" BorderThickness="0"
+                            Cursor="Hand" Click="BtnLevantarPostes_Click" />
 
                         <Button x:Name="BtnValidar" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
                             Content="✓ Validar Entregáveis" Height="30" Margin="2"

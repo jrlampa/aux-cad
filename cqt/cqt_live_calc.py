@@ -4,7 +4,7 @@ Permite cálculo instantâneo na interface gráfica sem depender da abertura do 
 Inclui verificação normativa com limite de Queda de Tensão máxima de 6,00%.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 
 # Constantes de Queda de Tensão por tipo de condutor (VLOOKUP da BASE DE DADOS da planilha oficial Enel/HBT)
 CONDUTORES_K = {
@@ -178,7 +178,16 @@ def get_fator_condutor(cabo_str: str) -> float:
 
 
 def calcular_dmdi(total_clientes: int, classe: str = "CLASSE C") -> float:
-    """Calcula a Demanda Média Diversificada Individual (DMDI) com base na Tabela 16."""
+    """
+    Calcula a Demanda Média Diversificada Individual (DMDI) com base na Tabela 16.
+    
+    Args:
+        total_clientes: Número total de clientes
+        classe: Classe de consumo (default: CLASSE C)
+    
+    Returns:
+        DMDI em kVA
+    """
     if total_clientes <= 0:
         return 1.30
     elif total_clientes < 6:
@@ -197,13 +206,35 @@ def calcular_dmdi(total_clientes: int, classe: str = "CLASSE C") -> float:
         return 1.30
 
 
-def calcular_cqt_topologia(trechos: List[Dict], potencia_trafo: float = 150.0, dmdi: float = 1.30) -> Dict:
+def calcular_cqt_topologia(trechos: List[Dict], potencia_trafo: float = 150.0, dmdi: float = 1.30) -> Dict[str, Any]:
     """
     Executa o cálculo topológico de Queda de Tensão para uma lista de trechos.
     Cada trecho contém:
       letra, montante, comprimento_m, condutor, mono, bi, tri, esp_carga, ip70, ip125, ip250
     Retorna resultados detalhados por trecho e resumo geral do circuito.
+    
+    Args:
+        trechos: Lista de dicionários com dados dos trechos
+        potencia_trafo: Potência do transformador em kVA (default: 150.0)
+        dmdi: Demanda Média Diversificada Individual em kVA (default: 1.30)
+    
+    Returns:
+        Dict com trechos calculados e resumo de queda de tensão
+    
+    Raises:
+        TypeError: Se trechos não é uma lista
+        ValueError: Se dados de entrada são inválidos
     """
+    # Input validation
+    if not isinstance(trechos, list):
+        raise TypeError(f"trechos deve ser uma lista, recebido {type(trechos).__name__}")
+    
+    if potencia_trafo <= 0:
+        raise ValueError(f"potencia_trafo deve ser positiva, recebido {potencia_trafo}")
+    
+    if dmdi < 0:
+        raise ValueError(f"dmdi deve ser não-negativa, recebido {dmdi}")
+    
     if not trechos:
         return {
             "trechos_resultado": [],
@@ -215,6 +246,31 @@ def calcular_cqt_topologia(trechos: List[Dict], potencia_trafo: float = 150.0, d
             "carregamento_trafo": 0.0,
             "total_clientes": 0,
         }
+
+    # Validate and parse input data
+    validation_errors = []
+    for idx, t in enumerate(trechos):
+        if not isinstance(t, dict):
+            validation_errors.append(f"Trecho {idx}: deve ser dicionário, recebido {type(t).__name__}")
+            continue
+        
+        try:
+            comp_m = float(t.get("comprimento_m", 0) or 0)
+            if comp_m < 0:
+                validation_errors.append(f"Trecho {idx}: comprimento_m não pode ser negativo ({comp_m})")
+        except (ValueError, TypeError) as e:
+            validation_errors.append(f"Trecho {idx}: comprimento_m inválido: {e}")
+        
+        for field in ["mono", "bi", "tri", "ip70", "ip125", "ip250"]:
+            try:
+                val = int(t.get(field, 0) or 0)
+                if val < 0:
+                    validation_errors.append(f"Trecho {idx}: {field} não pode ser negativo ({val})")
+            except (ValueError, TypeError):
+                pass  # Will default to 0 in calculation
+    
+    if validation_errors:
+        raise ValueError("Dados de entrada inválidos:\n" + "\n".join(validation_errors))
 
     # 1. Totaliza clientes e cargas próprias de cada trecho
     tot_clientes = 0

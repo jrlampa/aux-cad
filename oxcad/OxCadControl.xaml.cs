@@ -504,6 +504,7 @@ namespace OxCad
             BtnPrancha.IsEnabled = habilitadoComProjectScope;
             BtnSob.IsEnabled = enabled;
             BtnLevantamentoCondutores.IsEnabled = enabled;
+            BtnLevantamentoPostes.IsEnabled = enabled;
             BtnTempoAcaoPrincipal.IsEnabled = habilitadoComProjectScope;
             BtnTempoConcluir.IsEnabled = habilitadoComProjectScope &&
                 _currentTempo != null &&
@@ -536,6 +537,42 @@ namespace OxCad
                     execution,
                     "LEVANTAR_CONDUTORES");
                 doc.SendStringToExecute("_.LEVANTAR_CONDUTORES ", true, false, false);
+            }
+            catch (Exception ex)
+            {
+                _nativeCommandExecutionId = null;
+                _isActionRunning = false;
+                FinalizarExecucaoPaleta(execution, null, ex);
+                HabilitarBotoesAcao(true);
+                TxtAcaoMensagem.Text = ex.Message;
+            }
+        }
+
+        private void BtnLevantarPostes_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isActionRunning)
+                return;
+
+            Document? doc = acApp.DocumentManager.MdiActiveDocument;
+            if (doc == null)
+            {
+                TxtAcaoEstado.Text = "Indisponível";
+                TxtAcaoMensagem.Text = "Abra um desenho no AutoCAD antes de iniciar o levantamento de postes.";
+                return;
+            }
+
+            OxCadExecutionRecord execution = IniciarExecucaoPaleta(
+                "LEVANTAR_POSTES",
+                doc);
+            _nativeCommandExecutionId = execution.ExecutionId;
+            _isActionRunning = true;
+            HabilitarBotoesAcao(false);
+            try
+            {
+                OxCadExecutionRegistry.RegistrarComandoNativo(
+                    execution,
+                    "LEVANTAR_POSTES");
+                doc.SendStringToExecute("_.LEVANTAR_POSTES ", true, false, false);
             }
             catch (Exception ex)
             {
