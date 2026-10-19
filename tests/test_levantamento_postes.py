@@ -1192,6 +1192,7 @@ def test_lisp_ast_sincronizacao_e_rastreabilidade():
 
 CLAN_LISP_PATH = ROOT / "orcamento" / "clandestino_light.lsp"
 TOPO_LISP_PATH = ROOT / "orcamento" / "clandestino_topologia.lsp"
+CQT_CLAN_LISP_PATH = ROOT / "orcamento" / "clandestino_cqt.lsp"
 
 
 def _load_clan_lisp_list(var_name: str) -> list[float]:
@@ -1928,6 +1929,7 @@ def _criar_harness_com_modulos(dwg=None, inputs=None):
     interp = AutoLisp(search_dirs=[ROOT, ROOT / "orcamento"], dwg=dwg, inputs=inputs)
     interp.load(CLAN_LISP_PATH)
     interp.load(TOPO_LISP_PATH)
+    interp.load(CQT_CLAN_LISP_PATH)
     interp.load(LISP_PATH)
     return interp
 
@@ -1969,22 +1971,36 @@ def test_fluxo_interativo_topologia_tr_lados_derivacoes_e_concluir():
     inputs = [
         # TR
         "H_TR",
-        # LADO 1
+        # LADO 1 (P4 é o nó TR raiz - sem vão TR->P4)
         "H_P4",
         "H_P5",
+        "",    # Comp P4->P5 (Enter aceita sugestão)
+        None,  # Cabo P4->P5 (Enter aceita Auto)
         "H_P6",
+        "",    # Comp P5->P6 (Enter aceita sugestão)
+        None,  # Cabo P5->P6 (Enter aceita Auto)
         "H_P7",
+        "",    # Comp P6->P7 (Enter aceita sugestão)
+        None,  # Cabo P6->P7 (Enter aceita Auto)
         None,  # Enter fecha LADO 1
         # Menu opção -> Lado (LADO 2)
         "Lado",
         "H_P8",
+        "",    # Comp TR->P8 (Enter aceita sugestão)
+        None,  # Cabo TR->P8 (Enter aceita Auto)
         "H_P9",
+        "",    # Comp P8->P9 (Enter aceita sugestão)
+        None,  # Cabo P8->P9 (Enter aceita Auto)
         None,  # Enter fecha LADO 2
         # Menu opção -> Derivacao
         "Derivacao",
         "H_P5",  # Poste de partida da derivação
         "H_P10",
+        "",    # Comp P5->P10 (Enter aceita sugestão)
+        None,  # Cabo P5->P10 (Enter aceita Auto)
         "H_P11",
+        "",    # Comp P10->P11 (Enter aceita sugestão)
+        None,  # Cabo P10->P11 (Enter aceita Auto)
         None,  # Enter fecha derivação
         # Menu opção -> Concluir
         "Concluir",
@@ -2157,6 +2173,1176 @@ def test_resiliencia_area_ldata_e_status_modo_str():
     assert area_80 == 80
     status_80 = interp.call("lp-clan-status-modo-str")
     assert "CLANDESTINO | Área: 80 m²" in status_80
+
+
+def test_clandestino_cqt_lookup_e_selecao_condutores():
+    """Valida a tabela de condutores DB!A1:I32 e a regra de seleção de cabos da Light."""
+    from tests.autolisp_harness import Sym
+    interp = _criar_harness_com_modulos()
+
+    # Todos os 31 condutores da tabela DB!A1:I32 devem estar carregados
+    cabos = interp.env.get(Sym("*LP-CLAN-CABOS*"))
+    assert len(cabos) == 31
+
+    # Lookup de propriedades do cabo 70 Al - MX: (Nome Iz R X Alpha Div_R Temp_Lim Delta_T K_Term)
+    cabo_70 = interp.call("lp-cqt-obter-cabo", "70 Al - MX")
+    assert cabo_70 is not None
+    assert cabo_70[0] == "70 Al - MX"
+    assert cabo_70[1] == 202.0
+    assert cabo_70[2] == 0.5697
+    assert cabo_70[3] == 0.126
+    assert cabo_70[4] == 0.00403
+    assert cabo_70[5] == 1.2821
+    assert cabo_70[6] == 90.0
+    assert cabo_70[7] == 60.0
+    assert abs(cabo_70[8] - 3.366667) < 0.001
+
+    # Lookup de propriedades do cabo 240 Cu (descida do trafo)
+    cabo_240 = interp.call("lp-cqt-obter-cabo", "240 Cu")
+    assert cabo_240 is not None
+    assert cabo_240[0] == "240 Cu"
+    assert cabo_240[1] == 430.0
+    assert cabo_240[2] == 0.1035
+    assert cabo_240[3] == 0.0897
+    assert cabo_240[5] == 1.2751
+
+    # Seleção de condutor:
+    # 1. Descida do transformador (tr-flag = T) -> sempre 240 Cu
+    assert interp.call("lp-cqt-selecionar-condutor", 25.46, True) == "240 Cu"
+    assert interp.call("lp-cqt-selecionar-condutor", 140.0, True) == "240 Cu"
+
+    # 2. Rede BT: Ib <= 202 A (Demanda <= 76.97 kVA) -> 70 Al - MX
+    assert interp.call("lp-cqt-selecionar-condutor", 25.46, False) == "70 Al - MX"
+    assert interp.call("lp-cqt-selecionar-condutor", 76.90, False) == "70 Al - MX"
+
+    # 3. Rede BT: 202 A < Ib <= 355 A (76.97 < Demanda <= 135.27 kVA) -> 185 Al - MX
+    assert interp.call("lp-cqt-selecionar-condutor", 80.0, False) == "185 Al - MX"
+    assert interp.call("lp-cqt-selecionar-condutor", 135.0, False) == "185 Al - MX"
+
+    # 4. Rede BT: Ib > 355 A (Demanda > 135.27 kVA) -> 240 Al - MX
+    assert interp.call("lp-cqt-selecionar-condutor", 136.0, False) == "240 Al - MX"
+
+
+def test_clandestino_cqt_comparacao_numerica_exata_lado2_light():
+    """Valida correspondência numérica exata dos cálculos de CQT contra a planilha real CQTS_ZNA853248_ATUAL.xlsx (Aba LADO 2)."""
+    interp = _criar_harness_com_modulos()
+
+    # Trecho TR -> LID (Descida do Trafo, Row 8 da planilha):
+    # L=4.0m, S=157.013176 kVA, 240 Cu, tr_p=True, v_ant=0.0
+    r_tr = interp.call("lp-cqt-calcular-trecho", 157.01317647058823, 4.0, "240 Cu", "TRI", True, 0.0)
+    d_tr = _alist_para_dict(r_tr)
+    assert abs(d_tr["QT_PERC"] - 6.89) < 0.01
+    assert abs(d_tr["V_127"] - 118.26) < 0.02
+    assert abs(d_tr["QT_TRECHO_V"] - 8.75) < 0.02
+    v_acum_tr = d_tr["V_ACUM"]
+
+    # Trecho LID -> P8 (Row 9 da planilha):
+    # L=19.0m, S=62.228 kVA, 240 Al, tr_p=False, v_ant=v_acum_tr
+    r_p8 = interp.call("lp-cqt-calcular-trecho", 62.228, 19.0, "240 Al", "TRI", False, v_acum_tr)
+    d_p8 = _alist_para_dict(r_p8)
+    assert abs(d_p8["QT_PERC"] - 7.31) < 0.01
+    assert abs(d_p8["V_127"] - 117.73) < 0.02
+    assert abs(d_p8["QT_TRECHO_V"] - 0.53) < 0.02
+    v_acum_p8 = d_p8["V_ACUM"]
+
+    # Trecho P8 -> P9 (Row 10 da planilha):
+    # L=31.0m, S=56.6632 kVA, 240 Al, tr_p=False, v_ant=v_acum_p8
+    r_p9 = interp.call("lp-cqt-calcular-trecho", 56.6632, 31.0, "240 Al", "TRI", False, v_acum_p8)
+    d_p9 = _alist_para_dict(r_p9)
+    assert abs(d_p9["QT_PERC"] - 7.93) < 0.01
+    assert abs(d_p9["V_127"] - 116.95) < 0.02
+    assert abs(d_p9["QT_TRECHO_V"] - 0.78) < 0.02
+    v_acum_p9 = d_p9["V_ACUM"]
+
+    # Trecho P9 -> P10 (Row 11 da planilha):
+    # L=27.0m, S=45.3832 kVA, 70 Al - MX, tr_p=False, v_ant=v_acum_p9
+    r_p10 = interp.call("lp-cqt-calcular-trecho", 45.3832, 27.0, "70 Al - MX", "TRI", False, v_acum_p9)
+    d_p10 = _alist_para_dict(r_p10)
+    assert abs(d_p10["QT_PERC"] - 9.30) < 0.01
+    assert abs(d_p10["V_127"] - 115.21) < 0.02
+    assert abs(d_p10["QT_TRECHO_V"] - 1.74) < 0.02
+
+
+def test_clandestino_cqt_enriquecimento_pontos_e_modo_normal():
+    """Valida enriquecimento com CQT no modo CLANDESTINO e ausência no modo NORMAL."""
+    interp = _criar_harness_com_modulos()
+
+    arestas = [
+        ["TR-01", "P8"],
+        ["P8", "P9"],
+        ["P9", "P10"],
+    ]
+
+    dados = [
+        {"SEQ": 1, "POSTE": "P8", "CLIENTES": 7, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P9", "CLIENTES": 8, "COORDENADAS": "X: 30,00 | Y: 0,00"},
+        {"SEQ": 3, "POSTE": "P10", "CLIENTES": 5, "COORDENADAS": "X: 60,00 | Y: 0,00"},
+    ]
+    pontos = [_dict_para_alist(d) for d in dados]
+
+    # 1. No modo NORMAL: recalcular mantém estrutura sem colunas CQT
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "NORMAL"
+    res_normal = interp.call("lp-recalcular-demandas-acumuladas", pontos)
+    d_norm = _alist_para_dict(res_normal[0])
+    assert "CONDUTOR_PREVISTO" not in d_norm
+    assert "CQT_PREVISTO" not in d_norm
+
+    # 2. No modo CLANDESTINO: recalcular gera CONDUTOR_PREVISTO, CQT_PREVISTO e TENSAO_PREVISTA
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR-01"
+
+    res_clan = interp.call("lp-recalcular-demandas-acumuladas", pontos)
+    d_p8 = _alist_para_dict(res_clan[0])
+    d_p9 = _alist_para_dict(res_clan[1])
+    d_p10 = _alist_para_dict(res_clan[2])
+
+    # P8 ligado diretamente ao TR: cabo 240 Cu
+    assert d_p8["CONDUTOR_PREVISTO"] == "240 Cu"
+    assert "%" in d_p8["CQT_PREVISTO"]
+    assert "V" in d_p8["TENSAO_PREVISTA"]
+
+    # P9 e P10 na rede BT: cabo 70 Al - MX
+    assert d_p9["CONDUTOR_PREVISTO"] == "70 Al - MX"
+    assert d_p10["CONDUTOR_PREVISTO"] == "70 Al - MX"
+
+    # CQT é estritamente crescente ao longo do circuito
+    q_p8 = float(d_p8["CQT_PREVISTO"].replace("%", ""))
+    q_p9 = float(d_p9["CQT_PREVISTO"].replace("%", ""))
+    q_p10 = float(d_p10["CQT_PREVISTO"].replace("%", ""))
+    assert q_p8 < q_p9 < q_p10
+
+
+def test_clandestino_cqt_resiliencia_geometria_e_tabela():
+    """Valida o parser de coordenadas, cálculo de vãos reais, fallback para 30m e colunas da tabela."""
+    interp = _criar_harness_com_modulos()
+
+    # 1. Parser de coordenadas nos formatos padrão OXCAD
+    c1 = interp.call("lp-cqt-parse-coords", "X: 681200,00 | Y: 7456700,00")
+    assert c1 == [681200.0, 7456700.0]
+
+    c2 = interp.call("lp-cqt-parse-coords", "X: 681240,00 | Y: 7456730,00")
+    assert c2 == [681240.0, 7456730.0]
+
+    c_inv = interp.call("lp-cqt-parse-coords", "-")
+    assert c_inv is None
+
+    # 2. Distância euclidiana entre dois pontos: sqrt(40^2 + 30^2) = 50.0m
+    p1 = _dict_para_alist({"POSTE": "P1", "COORDENADAS": "X: 681200,00 | Y: 7456700,00"})
+    p2 = _dict_para_alist({"POSTE": "P2", "COORDENADAS": "X: 681240,00 | Y: 7456730,00"})
+    dist = interp.call("lp-cqt-distancia-pontos", p1, p2)
+    assert abs(dist - 50.0) < 0.01
+
+    # 3. Fallback para vão padrão de 30.0m quando sem coordenadas
+    p_sem_coord = _dict_para_alist({"POSTE": "P3", "COORDENADAS": "-"})
+    dist_fallback = interp.call("lp-cqt-distancia-pontos", p1, p_sem_coord)
+    assert dist_fallback == 30.0
+
+    # 4. Predicado de colunas adicionais
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "NORMAL"
+    assert interp.call("lp-cqt-colunas-adicionais-p") is None
+
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    assert interp.call("lp-cqt-colunas-adicionais-p") in (True, "T")
+
+
+def test_clandestino_cqt_identificacao_e_aliases_condutores():
+    """Valida identificação de condutores por alias, contexto e seleção interativa."""
+    interp = _criar_harness_com_modulos()
+
+    # 1. 185AMX -> 185 Al - MX
+    c185 = interp.call("lp-cqt-resolver-cabo", "185AMX", None)
+    assert c185 == "185 Al - MX"
+    reg185 = interp.call("lp-cqt-obter-cabo", "185AMX")
+    assert reg185[0] == "185 Al - MX"
+    assert reg185[1] == 355.0  # Capacidade de condução
+
+    # 2. 53 Al - QX com contexto RAMAL -> 53 Al - QX (63 A)
+    c53_ramal = interp.call("lp-cqt-resolver-cabo", "53 Al - QX", "RAMAL")
+    assert c53_ramal == "53 Al - QX"
+    reg53_ramal = interp.call("lp-cqt-obter-cabo-contexto", "53 Al - QX", "RAMAL")
+    assert reg53_ramal[0] == "53 Al - QX"
+    assert reg53_ramal[1] == 63.0
+
+    # 3. 53 Al - QX com contexto BT / REDE -> 53 AA (163 A)
+    c53_bt = interp.call("lp-cqt-resolver-cabo", "53 Al - QX", "BT")
+    assert c53_bt == "53 AA"
+    reg53_bt = interp.call("lp-cqt-obter-cabo-contexto", "53 Al - QX", "BT")
+    assert reg53_bt[0] == "53 AA"
+    assert reg53_bt[1] == 163.0
+
+    # 4. Ambiguidade sem contexto: prompt interativo (getkword)
+    interp.inputs = ["Ramal"]
+    c53_inter_ramal = interp.call("lp-cqt-resolver-cabo", "53 Al - QX", None)
+    assert c53_inter_ramal == "53 Al - QX"
+
+    interp.inputs = ["BT"]
+    c53_inter_bt = interp.call("lp-cqt-resolver-cabo", "53 Al - QX", None)
+    assert c53_inter_bt == "53 AA"
+
+
+def test_clandestino_cqt_limites_dimensionamento_e_ampacidade():
+    """Valida transições de condutor nos limites de ampacidade 202A e 355A e robustez com nil."""
+    interp = _criar_harness_com_modulos()
+    # V_base_tri = 220 * sqrt(3) / 1000 = 0.381051177665153
+    # Ib = S_acum / V_base_tri
+    # S(202A) = 202.0 * 0.38105118 = 76.972338 kVA
+    # S(355A) = 355.0 * 0.38105118 = 135.273168 kVA
+
+    v_base = 220.0 * (3.0 ** 0.5) / 1000.0
+
+    # Ponto no TR sempre recebe 240 Cu
+    assert interp.call("lp-cqt-selecionar-condutor", 100.0, True) == "240 Cu"
+
+    # Ib <= 202 A -> 70 Al - MX
+    assert interp.call("lp-cqt-selecionar-condutor", (201.99 * v_base), False) == "70 Al - MX"
+    assert interp.call("lp-cqt-selecionar-condutor", (202.00 * v_base), False) == "70 Al - MX"
+
+    # 202 A < Ib <= 355 A -> 185 Al - MX
+    assert interp.call("lp-cqt-selecionar-condutor", (202.01 * v_base), False) == "185 Al - MX"
+    assert interp.call("lp-cqt-selecionar-condutor", (354.99 * v_base), False) == "185 Al - MX"
+    assert interp.call("lp-cqt-selecionar-condutor", (355.00 * v_base), False) == "185 Al - MX"
+
+    # Ib > 355 A -> 240 Al - MX
+    assert interp.call("lp-cqt-selecionar-condutor", (355.01 * v_base), False) == "240 Al - MX"
+
+    # Valores limites/inválidos: nil ou <= 0.0 assumem 70 Al - MX sem erro
+    assert interp.call("lp-cqt-selecionar-condutor", None, False) == "70 Al - MX"
+    assert interp.call("lp-cqt-selecionar-condutor", 0.0, False) == "70 Al - MX"
+    assert interp.call("lp-cqt-selecionar-condutor", -15.0, False) == "70 Al - MX"
+
+
+def test_clandestino_cqt_sinalizacao_vao_estimado():
+    """Valida sinalização com '*' e '(EST)' quando faltam coordenadas na rede."""
+    interp = _criar_harness_com_modulos()
+
+    arestas = [
+        ["TR-01", "P1"],
+        ["P1", "P2"],
+    ]
+
+    # Caso 1: Ambos com coordenadas reais
+    dados_reais = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 10, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 10, "COORDENADAS": "X: 35,00 | Y: 0,00"},
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR-01"
+
+    res_reais = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados_reais])
+    d_p2_real = _alist_para_dict(res_reais[1])
+    assert d_p2_real["COMPRIMENTO_VÃO"] == "35.0"
+    assert "*" not in d_p2_real["CQT_PREVISTO"]
+    assert "*" not in d_p2_real["TENSAO_PREVISTA"]
+    assert d_p2_real["STATUS_CQT"] == "PREVISTO (COORDENADAS REAIS)"
+
+    # Caso 2: P2 sem coordenadas -> vão estimado de 30.0 (EST) e CQT com '*'
+    dados_est = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 10, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 10, "COORDENADAS": "-"},
+    ]
+    res_est = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados_est])
+    d_p2_est = _alist_para_dict(res_est[1])
+    assert "(EST)" in d_p2_est["COMPRIMENTO_VÃO"]
+    assert d_p2_est["COMPRIMENTO_VÃO"] == "30.0 (EST)"
+    assert d_p2_est["CQT_PREVISTO"].endswith("*")
+    assert d_p2_est["TENSAO_PREVISTA"].endswith("*")
+    assert d_p2_est["STATUS_CQT"] == "PREVISTO (VÃO ESTIMADO - PENDENTE CONFIRMAÇÃO)"
+
+
+# ==============================================================================
+# Suíte de Testes: Suporte a Postes Passantes sem Textos no LEVANTAR_POSTES
+# ==============================================================================
+
+def test_lisp_ast_suporte_poste_passante():
+    """Valida estaticamente no código AutoLISP a presença do fluxo de poste passante."""
+    source = LISP_PATH.read_text(encoding="utf-8")
+
+    # Prompt informativo indicando possibilidade de poste passante
+    assert "Enter se for poste passante sem textos" in source
+    # Fluxo B de poste passante
+    assert "[POSTE PASSANTE]" in source
+    assert r'getstring t "\nDigite o identificador do poste passante' in source
+    assert '(cons "PASSANTE" "SIM")' in source
+    assert '(cons "TEXT_HANDLES" \'())' in source
+    assert r'getpoint "\nClique no ponto geométrico do poste' in source
+
+
+def test_poste_passante_criacao_e_valores_zerados():
+    """Valida que o poste passante é criado com zero clientes locais, sem ruído, e flags adequadas."""
+    ponto_passante = {
+        "SEQ": 5,
+        "POSTE": "P5",
+        "RAMAIS": "-",
+        "LUM": "-",
+        "CLIENTES": 0,
+        "POSICOES": "-",
+        "CS": "-",
+        "DEMANDA": "0,00",
+        "ACUMULADA": "0,00",
+        "COORDENADAS": "N: 7456720.00\nE: 681220.00",
+        "RAW": [],
+        "PASSANTE": "SIM",
+        "TEXT_HANDLES": []
+    }
+    assert ponto_passante["CLIENTES"] == 0
+    assert ponto_passante["DEMANDA"] == "0,00"
+    assert ponto_passante["PASSANTE"] == "SIM"
+    assert ponto_passante["TEXT_HANDLES"] == []
+
+
+def test_propagacao_topologica_com_poste_passante():
+    """Valida que o poste passante intermediário (P4 -> P5 -> P6) recebe os acumulados a jusante
+    e calcula CQT adequadamente para os trechos."""
+    interp = _criar_harness_com_modulos()
+
+    # Topologia em cadeia: TR-01 -> P4 -> P5 -> P6
+    arestas = [
+        ["TR-01", "P4"],
+        ["P4", "P5"],
+        ["P5", "P6"]
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR-01"
+
+    # P4: 10 clientes locais, P5: passante (0 clientes), P6: 15 clientes locais
+    # No sentido TR -> P4 -> P5 -> P6:
+    # A jusante de P5 está P6 (15 clientes). Portanto, P5 deve carregar os 15 clientes de P6!
+    # A jusante de P4 estão P5 e P6 (0 + 15 = 15) + seus próprios clientes (10) = 25 clientes!
+    dados = [
+        {"SEQ": 1, "POSTE": "P4", "CLIENTES": 10, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P5", "CLIENTES": 0, "PASSANTE": "SIM", "COORDENADAS": "X: 30,00 | Y: 0,00"},
+        {"SEQ": 3, "POSTE": "P6", "CLIENTES": 15, "COORDENADAS": "X: 60,00 | Y: 0,00"},
+    ]
+
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p4_calc = _alist_para_dict(res[0])
+    p5_calc = _alist_para_dict(res[1])
+    p6_calc = _alist_para_dict(res[2])
+
+    demanda_15_cli = interp.call("lp-clan-calcular-demanda", 50, 15)
+    demanda_25_cli = interp.call("lp-clan-calcular-demanda", 50, 25)
+
+    # Demanda de P5 no cálculo topológico reflete os 15 clientes acumulados a jusante
+    assert p5_calc["POSTE"] == "P5"
+    assert p5_calc["PASSANTE"] == "SIM"
+    assert p5_calc["DEMANDA"] == "0,00"
+    assert abs(float(p5_calc["ACUMULADA"].replace(",", ".")) - demanda_15_cli) < 0.05
+    assert abs(float(p4_calc["ACUMULADA"].replace(",", ".")) - demanda_25_cli) < 0.05
+
+    # CQT deve ter sido calculado em todos os trechos
+    assert "CQT_PREVISTO" in p5_calc
+    assert "CONDUTOR_PREVISTO" in p5_calc
+    assert float(p5_calc["CQT_PREVISTO"].replace("*", "").replace(",", ".").replace("%", "")) >= 0.0
+
+
+def test_poste_passante_derivacao_lateral():
+    """Valida ramificação lateral a partir de um poste passante:
+    TR -> P1 -> P_PASSANTE -> {P_LATERAL1, P_LATERAL2}"""
+    interp = _criar_harness_com_modulos()
+
+    arestas = [
+        ["TR", "P1"],
+        ["P1", "P_PASSANTE"],
+        ["P_PASSANTE", "P_LAT1"],
+        ["P_PASSANTE", "P_LAT2"],
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 40
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR"
+
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 5, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P_PASSANTE", "CLIENTES": 0, "PASSANTE": "SIM", "COORDENADAS": "X: 30,00 | Y: 0,00"},
+        {"SEQ": 3, "POSTE": "P_LAT1", "CLIENTES": 8, "COORDENADAS": "X: 30,00 | Y: 30,00"},
+        {"SEQ": 4, "POSTE": "P_LAT2", "CLIENTES": 12, "COORDENADAS": "X: 60,00 | Y: 0,00"},
+    ]
+
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p_pass = _alist_para_dict(res[1])
+
+    # P_PASSANTE soma jusante de LAT1 (8) e LAT2 (12) = 20 clientes
+    demanda_20_cli = interp.call("lp-clan-calcular-demanda", 40, 20)
+    assert abs(float(p_pass["ACUMULADA"].replace(",", ".")) - demanda_20_cli) < 0.05
+
+
+def test_poste_passante_isolado_sem_jusante():
+    """Valida poste passante ponta de linha (sem clientes a jusante)."""
+    interp = _criar_harness_com_modulos()
+
+    arestas = [
+        ["TR", "P1"],
+        ["P1", "P_FIM"],
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR"
+
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 10, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P_FIM", "CLIENTES": 0, "PASSANTE": "SIM", "COORDENADAS": "X: 30,00 | Y: 0,00"},
+    ]
+
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p_fim = _alist_para_dict(res[1])
+
+    # No poste final passante, demanda local e a jusante são 0
+    assert float(p_fim["ACUMULADA"].replace(",", ".")) == 0.0
+    # O CQT acumulado na barra final reflete a queda de tensão herdada do trecho a montante
+    cqt_val = float(p_fim["CQT_PREVISTO"].replace("*", "").replace(",", ".").replace("%", ""))
+    assert cqt_val > 0.0
+
+
+# ==============================================================================
+# Suíte de Testes: Coleta de Vãos, Conexão P1=TR e Precedência de Condutores
+# ==============================================================================
+
+def test_cqt_p1_como_no_raiz_trafo_4m_240cu():
+    """Valida regra de domínio P1 = TR raiz:
+    - Conexão interna de 4m com condutor obrigatório 240 Cu
+    - Queda QT_MT+TR (~6.71485% / 8.529V) somada à queda do trecho de 4m
+    - Comprimento fixado em 4.0m e VAO_ESTIMADO = nil (sem '*' ou '(EST)')
+    """
+    interp = _criar_harness_com_modulos()
+
+    arestas = [
+        ["TR-01", "P1"],
+        ["P1", "P2"],
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR-01"
+
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 10, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 10, "COORDENADAS": "X: 35,00 | Y: 0,00"},
+    ]
+
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p1 = _alist_para_dict(res[0])
+
+    # P1 representa o TR
+    assert p1["POSTE"] == "P1"
+    assert p1["CONDUTOR_PREVISTO"] == "240 Cu"
+    assert p1["COMPRIMENTO_VÃO"] == "4.0"
+    assert "*" not in p1["CQT_PREVISTO"]
+    assert "(EST)" not in p1["COMPRIMENTO_VÃO"]
+
+    # CQT em P1 é maior que 6.71% (pois soma QT_MTTR de 6.71% + queda dos 4m de 240 Cu)
+    cqt_p1 = float(p1["CQT_PREVISTO"].replace("%", "").replace(",", "."))
+    assert cqt_p1 > 6.71
+    # Tensão em 127V é menor que 118.50V
+    v127_p1 = float(p1["TENSAO_PREVISTA"].replace("V", "").replace(",", "."))
+    assert v127_p1 < 118.50
+
+
+def test_cqt_primeiro_vao_real_p1_p2_independente():
+    """Valida que o primeiro vão real P1 -> P2 é independente dos 4m internos do Trafo:
+    - P1 -> P2 não duplica QT_MT+TR
+    - Os 4m de P1 não são somados ao comprimento do vão de P2
+    - Tensão base de P2 herda diretamente a queda de P1
+    """
+    interp = _criar_harness_com_modulos()
+
+    arestas = [
+        ["TR-01", "P1"],
+        ["P1", "P2"],
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR-01"
+
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 5, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 15, "COORDENADAS": "X: 42,00 | Y: 0,00"},
+    ]
+
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p1 = _alist_para_dict(res[0])
+    p2 = _alist_para_dict(res[1])
+
+    # P2 tem seu comprimento real medido no CAD (42.0m), sem os 4m somados
+    assert p2["COMPRIMENTO_VÃO"] == "42.0"
+    assert "*" not in p2["CQT_PREVISTO"]
+
+    # CQT de P2 é estritamente maior que CQT de P1
+    cqt_p1 = float(p1["CQT_PREVISTO"].replace("%", "").replace(",", "."))
+    cqt_p2 = float(p2["CQT_PREVISTO"].replace("%", "").replace(",", "."))
+    assert cqt_p2 > cqt_p1
+
+    # Delta de CQT entre P1 e P2 reflete apenas o vão de 42m com carga de P2 (15 cli)
+    delta_cqt = cqt_p2 - cqt_p1
+    assert 0.1 < delta_cqt < 5.0
+
+
+def test_cqt_multiplos_lados_partindo_de_p1():
+    """Valida ramificações em múltiplos lados partindo do mesmo poste TR (P1):
+    LADO 1: P1 -> P2 -> P3
+    LADO 2: P1 -> P4 -> P5
+    Ambos os circuitos herdam a tensão base de P1 e calculam vãos independentes.
+    """
+    interp = _criar_harness_com_modulos()
+
+    topo = [
+        Pair("TR", "P1"),
+        Pair("LADOS", [
+            ["LADO 1", "P1", "P2", "P3"],
+            ["LADO 2", "P1", "P4", "P5"],
+        ]),
+        Pair("DERIVACOES", []),
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 45
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = topo
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "P1"
+
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 2, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 10, "COORDENADAS": "X: 30,00 | Y: 0,00"},
+        {"SEQ": 3, "POSTE": "P3", "CLIENTES": 10, "COORDENADAS": "X: 60,00 | Y: 0,00"},
+        {"SEQ": 4, "POSTE": "P4", "CLIENTES": 8, "COORDENADAS": "X: 0,00 | Y: 35,00"},
+        {"SEQ": 5, "POSTE": "P5", "CLIENTES": 8, "COORDENADAS": "X: 0,00 | Y: 70,00"},
+    ]
+
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p1 = _alist_para_dict(res[0])
+    p2 = _alist_para_dict(res[1])
+    p3 = _alist_para_dict(res[2])
+    p4 = _alist_para_dict(res[3])
+    p5 = _alist_para_dict(res[4])
+
+    cqt_p1 = float(p1["CQT_PREVISTO"].replace("%", "").replace(",", "."))
+    cqt_p2 = float(p2["CQT_PREVISTO"].replace("%", "").replace(",", "."))
+    cqt_p3 = float(p3["CQT_PREVISTO"].replace("%", "").replace(",", "."))
+    cqt_p4 = float(p4["CQT_PREVISTO"].replace("%", "").replace(",", "."))
+    cqt_p5 = float(p5["CQT_PREVISTO"].replace("%", "").replace(",", "."))
+
+    # P1 é a raiz comum
+    assert p1["COMPRIMENTO_VÃO"] == "4.0"
+    assert p1["CONDUTOR_PREVISTO"] == "240 Cu"
+
+    # LADO 1: P1 -> P2 -> P3 cresce monotonamente
+    assert cqt_p1 < cqt_p2 < cqt_p3
+    # LADO 2: P1 -> P4 -> P5 cresce monotonamente
+    assert cqt_p1 < cqt_p4 < cqt_p5
+
+
+def test_cqt_precedencia_condutor_manual_em_trechos():
+    """Valida precedência de condutor manual salvo em TRECHOS sobrepondo o condutor automático."""
+    interp = _criar_harness_com_modulos()
+
+    arestas = [["TR", "P1"], ["P1", "P2"]]
+    # Registra no LData TRECHOS o condutor manual '185 Al - MX' para o vão P1 -> P2
+    trechos = [
+        ["P2", "P1", 30.0, "185 Al - MX", "MANUAL", None]
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TRECHOS")] = trechos
+
+    # Carga baixa (5 clientes) faria a seleção automática adotar 70 Al - MX
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 5, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 5, "COORDENADAS": "X: 30,00 | Y: 0,00"},
+    ]
+
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p2 = _alist_para_dict(res[1])
+
+    # Condutor manual 185 Al - MX deve prevalecer sobre o automático 70 Al - MX
+    assert p2["CONDUTOR_PREVISTO"] == "185 Al - MX"
+
+
+def test_cqt_alerta_sobrecarga_ampacidade_manual_ib_maior_iz():
+    """Valida que condutor manual insuficiente (Ib > Iz) emite alerta e sinaliza sobrecarga,
+    sem substituir silenciosamente o condutor selecionado pelo usuário."""
+    interp = _criar_harness_com_modulos()
+
+    arestas = [["TR", "P1"], ["P1", "P2"]]
+    # Condutor '25 Al' tem Iz = 90.0 A
+    trechos = [
+        ["P2", "P1", 30.0, "25 Al", "MANUAL", None]
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 70
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TRECHOS")] = trechos
+
+    # 40 clientes com área 70m² gera demanda ~90 kVA -> Ib ~236 A (> Iz 90A)
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 5, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 40, "COORDENADAS": "X: 30,00 | Y: 0,00"},
+    ]
+
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p2 = _alist_para_dict(res[1])
+
+    # O condutor NÃO foi substituído silenciosamente
+    assert p2["CONDUTOR_PREVISTO"] == "25 Al"
+    # Status registra SOBRECARGA
+    assert "SOBRECARGA" in p2["STATUS_CQT"]
+    # Mensagem de aviso foi emitida no prompt
+    assert "[AVISO][SOBRECARGA]" in interp.output
+
+
+def test_cqt_precedencia_comprimento_manual_em_trechos():
+    """Valida que comprimento manual em TRECHOS tem precedência e remove flag de vão estimado."""
+    interp = _criar_harness_com_modulos()
+
+    arestas = [["TR", "P1"], ["P1", "P2"]]
+    # P2 não tem coordenadas CAD, mas tem vão manual de 48.5m em TRECHOS
+    trechos = [
+        ["P2", "P1", 48.5, "AUTO", "MANUAL", None]
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TRECHOS")] = trechos
+
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 10, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 10, "COORDENADAS": "-"},
+    ]
+
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p2 = _alist_para_dict(res[1])
+
+    # Comprimento deve ser exatamente 48.5m, sem flag '(EST)' e sem '*'
+    assert p2["COMPRIMENTO_VÃO"] == "48.5"
+    assert "(EST)" not in p2["COMPRIMENTO_VÃO"]
+    assert "*" not in p2["CQT_PREVISTO"]
+    assert p2["STATUS_CQT"] == "PREVISTO (COORDENADAS REAIS)"
+
+
+def test_cqt_poste_passante_com_vao_manual_e_acumulada():
+    """Valida integração completa de poste passante (P2) com vão e condutor manuais:
+    P1 -> P2 (passante) -> P3
+    P2 recebe acumulada de P3 e CQT é calculado nos vãos confirmados."""
+    interp = _criar_harness_com_modulos()
+
+    arestas = [["TR", "P1"], ["P1", "P2"], ["P2", "P3"]]
+    trechos = [
+        ["P2", "P1", 35.0, "185 Al - MX", "MANUAL", None],
+        ["P3", "P2", 40.0, "70 Al - MX", "MANUAL", None],
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TRECHOS")] = trechos
+
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 5, "COORDENADAS": "-"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 0, "PASSANTE": "SIM", "COORDENADAS": "-"},
+        {"SEQ": 3, "POSTE": "P3", "CLIENTES": 12, "COORDENADAS": "-"},
+    ]
+
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p1 = _alist_para_dict(res[0])
+    p2 = _alist_para_dict(res[1])
+    p3 = _alist_para_dict(res[2])
+
+    # P2 carrega 12 clientes de P3
+    assert p2["PASSANTE"] == "SIM"
+    assert p2["CLIENTES"] == 0
+    demanda_12_cli = interp.call("lp-clan-calcular-demanda", 50, 12)
+    assert abs(float(p2["ACUMULADA"].replace(",", ".")) - demanda_12_cli) < 0.05
+
+    # Vãos e condutores manuais confirmados
+    assert p2["COMPRIMENTO_VÃO"] == "35.0"
+    assert p2["CONDUTOR_PREVISTO"] == "185 Al - MX"
+    assert p3["COMPRIMENTO_VÃO"] == "40.0"
+    assert p3["CONDUTOR_PREVISTO"] == "70 Al - MX"
+
+    # CQT cresce ao longo dos trechos
+    cqt_p1 = float(p1["CQT_PREVISTO"].replace("%", "").replace(",", "."))
+    cqt_p2 = float(p2["CQT_PREVISTO"].replace("%", "").replace(",", "."))
+    cqt_p3 = float(p3["CQT_PREVISTO"].replace("%", "").replace(",", "."))
+    assert cqt_p1 < cqt_p2 < cqt_p3
+
+
+def test_coleta_topologia_com_medicao_vaos_e_condutor_interativo():
+    """Valida a persistência em TRECHOS através da coleta interativa de topologia."""
+    dwg = {
+        "H_TR": {"0": "TEXT", "1": "TR-01", "5": "H_TR"},
+        "H_P1": {"0": "TEXT", "1": "P1", "5": "H_P1"},
+        "H_P2": {"0": "TEXT", "1": "P2", "5": "H_P2"},
+    }
+
+    inputs = [
+        # TR
+        "H_TR",
+        # LADO 1
+        "H_P1",    # Nó raiz TR
+        "H_P2",    # Vão P1 -> P2
+        "38.5",    # Comp digitado manualmente
+        "Manual",  # Condutor Manual
+        "70AMX",   # Alias de cabo
+        None,      # Enter encerra LADO 1
+        # Concluir
+        "Concluir",
+    ]
+
+    interp = _criar_harness_com_modulos(dwg=dwg, inputs=inputs)
+    res = interp.call("lp-clan-cadastrar-topologia")
+    assert res is not None
+
+    # Verifica se TRECHOS foi salvo no LData
+    trechos_salvos = interp.call("lp-cqt-obter-trechos-salvos")
+    assert trechos_salvos is not None
+    assert len(trechos_salvos) == 1
+
+    t0 = trechos_salvos[0]
+    # Formato: (filho pai comp condutor origem handle)
+    assert t0[0] == "P2"
+    assert t0[1] == "P1"
+    assert abs(t0[2] - 38.5) < 0.01
+    assert t0[3] == "70 Al - MX"
+    assert t0[4] == "MANUAL"
+
+    # lp-cqt-obter-trecho-dados encontra os dados
+    dado = interp.call("lp-cqt-obter-trecho-dados", "P2", "P1")
+    dado_dict = _alist_para_dict(dado)
+    assert dado_dict["FILHO"] == "P2"
+    assert dado_dict["PAI"] == "P1"
+    assert abs(dado_dict["COMP"] - 38.5) < 0.01
+    assert dado_dict["CONDUTOR"] == "70 Al - MX"
+
+
+def test_cqt_safeguard_no_desconectado():
+    """Valida que nó sem conexão topológica com o trafo é sinalizado com erro explícito."""
+    interp = _criar_harness_com_modulos()
+    arestas = [["TR", "P1"], ["P1", "P2"]]  # P3 desconectado
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR"
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 5, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 5, "COORDENADAS": "X: 30,00 | Y: 0,00"},
+        {"SEQ": 3, "POSTE": "P3", "CLIENTES": 5, "COORDENADAS": "X: 60,00 | Y: 0,00"},
+    ]
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p3 = _alist_para_dict(res[2])
+    assert "ERRO: DESCONECTADO DO TRAFO" in p3["STATUS_CQT"]
+    assert p3["CQT_PREVISTO"] == "- (ERRO)"
+    assert p3["CONDUTOR_PREVISTO"] == "-"
+
+
+def test_cqt_safeguard_montante_inexistente():
+    """Valida que nó apontando para montante inexistente na lista de pontos é sinalizado com erro."""
+    interp = _criar_harness_com_modulos()
+    arestas = [["TR", "P1"], ["P99", "P2"]]  # P99 inexistente nos pontos
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR"
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 5, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 5, "COORDENADAS": "X: 30,00 | Y: 0,00"},
+    ]
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p2 = _alist_para_dict(res[1])
+    assert "ERRO: MONTANTE INEXISTENTE" in p2["STATUS_CQT"]
+    assert p2["CQT_PREVISTO"] == "- (ERRO)"
+    assert p2["CONDUTOR_PREVISTO"] == "-"
+
+
+def test_cqt_safeguard_ciclo_detectado():
+    """Valida que ciclos topológicos são interceptados sem estouro de pilha/recursão infinita."""
+    interp = _criar_harness_com_modulos()
+    # P4 -> P2, P2 -> P3, P3 -> P4 forma ciclo fechado
+    arestas = [["TR", "P1"], ["P4", "P2"], ["P2", "P3"], ["P3", "P4"]]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR"
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 5, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 5, "COORDENADAS": "X: 30,00 | Y: 0,00"},
+        {"SEQ": 3, "POSTE": "P3", "CLIENTES": 5, "COORDENADAS": "X: 60,00 | Y: 0,00"},
+        {"SEQ": 4, "POSTE": "P4", "CLIENTES": 5, "COORDENADAS": "X: 90,00 | Y: 0,00"},
+    ]
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    p2 = _alist_para_dict(res[1])
+    p3 = _alist_para_dict(res[2])
+    p4 = _alist_para_dict(res[3])
+    assert "ERRO: CICLO DETECTADO" in p2["STATUS_CQT"]
+    assert "ERRO: CICLO DETECTADO" in p3["STATUS_CQT"]
+    assert "ERRO: CICLO DETECTADO" in p4["STATUS_CQT"]
+
+
+def test_cqt_safeguard_endpoint_mismatch_trecho_invalido():
+    """Valida que lp-cqt-obter-trecho-dados invalida vãos com pontas incompatíveis."""
+    interp = _criar_harness_com_modulos()
+    trechos = [["P2", "P1", 30.0, "70 Al - MX", "MANUAL", None]]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TRECHOS")] = trechos
+
+    # Montante incompatível deve retornar nil
+    assert interp.call("lp-cqt-obter-trecho-dados", "P2", "P99") is None
+    # Filho inexistente deve retornar nil
+    assert interp.call("lp-cqt-obter-trecho-dados", "P3", "P1") is None
+    # Par correto retorna alist com os dados
+    dado = interp.call("lp-cqt-obter-trecho-dados", "P2", "P1")
+    assert dado is not None
+    d = _alist_para_dict(dado)
+    assert d["FILHO"] == "P2"
+    assert d["PAI"] == "P1"
+
+
+def test_cqt_perguntar_vao_comp_dimension_e_invalido():
+    """Valida que seleção de DIMENSION extrai cota DXF 42 e texto inválido emite aviso."""
+    dwg = {
+        "H_DIM": {"0": "DIMENSION", "42": 34.25, "1": "", "5": "H_DIM"},
+        "H_TXT": {"0": "TEXT", "1": "Texto Nao Numerico", "5": "H_TXT"},
+    }
+    # Seleção de DIMENSION via opção 'E'
+    interp1 = _criar_harness_com_modulos(dwg=dwg, inputs=["E", "H_DIM"])
+    res1 = interp1.call("lp-clan-perguntar-vao-comp", "P1", "P2")
+    assert abs(res1[0] - 34.25) < 0.01
+    assert res1[1] == "CAD_ENTIDADE"
+    assert res1[2] == "H_DIM"
+
+    # Seleção de texto inválido via 'E' avisa e recai na sugestão (sem inventar dado arbitrário)
+    interp2 = _criar_harness_com_modulos(dwg=dwg, inputs=["E", "H_TXT"])
+    res2 = interp2.call("lp-clan-perguntar-vao-comp", "P1", "P2")
+    assert res2[0] == 30.0
+    assert "Não foi possível extrair distância da entidade" in interp2.output
+
+    # Digitação numérica manual
+    interp3 = _criar_harness_com_modulos(dwg=dwg, inputs=["42.8"])
+    res3 = interp3.call("lp-clan-perguntar-vao-comp", "P1", "P2")
+    assert abs(res3[0] - 42.8) < 0.01
+    assert res3[1] == "MANUAL"
+
+
+# ==============================================================================
+# Suíte de Testes: Tabela CQT de 11 Colunas e Exportação Excel (Modo Clandestino)
+# ==============================================================================
+
+def test_cqt_tabela_11_colunas_valores_linha_e_enriquecimento():
+    """Valida que em modo CLANDESTINO os pontos são enriquecidos com as 11 colunas
+    e lp-cqt-obter-valores-linha retorna a lista de 11 valores na ordem exata."""
+    interp = _criar_harness_com_modulos()
+
+    arestas = [
+        ["TR-01", "P1"],
+        ["P1", "P2"],
+        ["P1", "P3"]
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "MODO")] = "CLANDESTINO"
+    interp.ldata[("OXCAD_LEVANTAMENTO", "AREA_CLANDESTINO")] = 50
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TOPOLOGIA")] = arestas
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TR_ID")] = "TR-01"
+
+    trechos = [
+        ["P2", "P1", 35.0, "70 Al - MX", "CAD_ENTIDADE", "H1"],
+        ["P3", "P1", 28.0, "70 Al - MX", "MANUAL", None]
+    ]
+    interp.ldata[("OXCAD_LEVANTAMENTO", "TRECHOS")] = trechos
+
+    dados = [
+        {"SEQ": 1, "POSTE": "P1", "CLIENTES": 4, "COORDENADAS": "X: 0,00 | Y: 0,00"},
+        {"SEQ": 2, "POSTE": "P2", "CLIENTES": 3, "COORDENADAS": "X: 35,00 | Y: 0,00"},
+        {"SEQ": 3, "POSTE": "P3", "CLIENTES": 2, "COORDENADAS": "X: 0,00 | Y: 28,00"},
+    ]
+
+    res = interp.call("lp-recalcular-demandas-acumuladas", [_dict_para_alist(d) for d in dados])
+    assert len(res) == 3
+
+    p1 = _alist_para_dict(res[0])
+    p2 = _alist_para_dict(res[1])
+    p3 = _alist_para_dict(res[2])
+
+    # 1. P1 (Nó Raiz / Trafo)
+    assert p1["POSTE"] == "P1"
+    assert p1["TRECHO"] == "TR, P1"
+    assert int(p1["SEQ"]) == 1
+    assert int(p1["TRECHO_JUSANTE"]) == 0
+    assert float(p1["COMPRIMENTO_VÃO"]) == 4.0
+    assert p1["CLIENTES"] == 4
+    assert p1["CLIENTES_ACUMULADOS"] == 9  # 4 + 3 + 2
+    assert p1["LADO"] == "TRAFO"
+    assert p1["CONDUTOR_PREVISTO"] == "240 Cu"
+    assert ("✔" in p1["CQT_NO_PONTO"]) or ("✖" in p1["CQT_NO_PONTO"])
+
+    vals_p1 = interp.call("lp-cqt-obter-valores-linha", res[0])
+    assert len(vals_p1) == 11
+    assert vals_p1[0] == "TR, P1"       # TRECHO
+    assert int(vals_p1[1]) == 1         # PONTO
+    assert int(vals_p1[2]) == 0         # TRECHO jusante (pai)
+    assert float(vals_p1[3]) == 4.0     # M
+    assert int(vals_p1[4]) == 4         # CLIENTES
+    assert int(vals_p1[5]) == 9         # CLT ACUMULAD
+    assert vals_p1[8] == "TRAFO"        # LADO
+    assert vals_p1[9] == "240 Cu"       # CONDUTOR
+    assert vals_p1[10] == p1["CQT_NO_PONTO"]
+
+    # 2. P2 (Filho LADO 1)
+    assert p2["POSTE"] == "P2"
+    assert p2["TRECHO"] == "P1, P2"
+    assert int(p2["SEQ"]) == 2
+    assert int(p2["TRECHO_JUSANTE"]) == 1    # Pai é P1 (SEQ 1)
+    assert float(p2["COMPRIMENTO_VÃO"]) == 35.0
+    assert p2["CLIENTES"] == 3
+    assert p2["CLIENTES_ACUMULADOS"] == 3
+    assert p2["LADO"] == "LADO 1"
+    assert p2["CONDUTOR_PREVISTO"] == "70 Al - MX"
+
+    vals_p2 = interp.call("lp-cqt-obter-valores-linha", res[1])
+    assert len(vals_p2) == 11
+    assert vals_p2[0] == "P1, P2"
+    assert int(vals_p2[1]) == 2
+    assert int(vals_p2[2]) == 1
+    assert float(vals_p2[3]) == 35.0
+    assert int(vals_p2[4]) == 3
+    assert int(vals_p2[5]) == 3
+    assert vals_p2[8] == "LADO 1"
+    assert vals_p2[9] == "70 Al - MX"
+
+    # 3. P3 (Ramificação - herda circuito BT)
+    assert p3["POSTE"] == "P3"
+    assert p3["TRECHO"] == "P1, P3"
+    assert int(p3["SEQ"]) == 3
+    assert int(p3["TRECHO_JUSANTE"]) == 1    # Pai é P1 (SEQ 1)
+    assert float(p3["COMPRIMENTO_VÃO"]) == 28.0
+    assert p3["CLIENTES"] == 2
+    assert p3["CLIENTES_ACUMULADOS"] == 2
+    assert p3["LADO"] == "LADO 1"
+
+    vals_p3 = interp.call("lp-cqt-obter-valores-linha", res[2])
+    assert len(vals_p3) == 11
+    assert vals_p3[0] == "P1, P3"
+    assert int(vals_p3[1]) == 3
+    assert int(vals_p3[2]) == 1
+    assert float(vals_p3[3]) == 28.0
+    assert int(vals_p3[4]) == 2
+    assert int(vals_p3[5]) == 2
+    assert vals_p3[8] == "LADO 1"
+
+
+def test_cqt_tabela_nativa_cad_dwg_11_colunas():
+    """Valida estrutura de 11 colunas, cabeçalhos, larguras e delegações em AutoLISP."""
+    src_cqt = (Path(__file__).parent.parent / "orcamento" / "clandestino_cqt.lsp").read_text(encoding="utf-8")
+    src_lp = LISP_PATH.read_text(encoding="utf-8")
+
+    # 1. Verificações no módulo clandestino_cqt.lsp
+    assert "col-count 11" in src_cqt
+    assert "(vla-MergeCells table 0 0 0 10)" in src_cqt
+
+    # Ordem exata dos 11 cabeçalhos
+    assert 'headers \'("TRECHO" "PONTO" "TRECHO jusante" "M" "CLIENTES" "CLT ACUMULAD" "TOTAL DO TRECHO" "ACUMULADA" "LADO" "CONDUTOR" "CQT NO PONTO")' in src_cqt
+
+    # Larguras das 11 colunas mapeadas
+    assert "widths  '(28.0 20.0 28.0 18.0 24.0 28.0 34.0 32.0 26.0 30.0 32.0)" in src_cqt
+    assert "(vla-SetText table 1 col-idx h)" in src_cqt
+    assert "(vla-SetColumnWidth table col-idx w)" in src_cqt
+
+    # 2. Verificações de delegação condicional em levantamento_postes.lsp
+    assert "(lp-cqt-colunas-adicionais-p)" in src_lp
+    assert "(lp-cqt-gerar-tabela-cad pontos pt)" in src_lp
+    assert "(lp-cqt-atualizar-celulas-tabela table pontos)" in src_lp
+
+
+def test_cqt_exportacao_excel_11_colunas_openpyxl(tmp_path):
+    """Valida a exportação completa para planilha Excel com o layout CQT de 11 colunas da Light."""
+    import openpyxl
+    from orcamento.clandestino_excel import exportar_cqt_excel
+
+    pontos_teste = [
+        {
+            "TRECHO": "TR, P1",
+            "SEQ": 1,
+            "TRECHO_JUSANTE": 0,
+            "COMPRIMENTO_VÃO": 4.0,
+            "CLIENTES": 4,
+            "CLT_ACUMULADO": 12,
+            "DEMANDA": 9.08,
+            "ACUMULADA": 22.50,
+            "LADO": "TRAFO",
+            "CONDUTOR_PREVISTO": "240 Cu",
+            "CQT_NO_PONTO": "✔ 118,59",
+        },
+        {
+            "TRECHO": "P1, P2",
+            "SEQ": 2,
+            "TRECHO_JUSANTE": 1,
+            "COMPRIMENTO_VÃO": 35.0,
+            "CLIENTES": 5,
+            "CLT_ACUMULADO": 8,
+            "DEMANDA": 11.20,
+            "ACUMULADA": 13.42,
+            "LADO": "LADO 1",
+            "CONDUTOR_PREVISTO": "70 Al - MX",
+            "CQT_NO_PONTO": "✔ 117,80",
+        },
+        {
+            "TRECHO": "P2, P3",
+            "SEQ": 3,
+            "TRECHO_JUSANTE": 2,
+            "COMPRIMENTO_VÃO": 40.0,
+            "CLIENTES": 3,
+            "CLT_ACUMULADO": 3,
+            "DEMANDA": 7.14,
+            "ACUMULADA": 7.14,
+            "LADO": "LADO 1",
+            "CONDUTOR_PREVISTO": "70 Al - MX",
+            "CQT_NO_PONTO": "✖ 116,22",
+        }
+    ]
+
+    xlsx_path = tmp_path / "cqt_saida_teste.xlsx"
+    res = exportar_cqt_excel(pontos_teste, str(xlsx_path), abrir_arquivo=False)
+    assert res == str(xlsx_path)
+    assert xlsx_path.exists()
+
+    wb = openpyxl.load_workbook(str(xlsx_path))
+    assert "CQT CLANDESTINO" in wb.sheetnames
+    ws = wb["CQT CLANDESTINO"]
+
+    # 1. Cabeçalhos na Linha 1 (11 colunas exatas)
+    raw_headers = [ws.cell(row=1, column=col).value for col in range(1, 12)]
+    headers = [str(h).replace("\n", " ").strip() for h in raw_headers]
+    assert headers == [
+        "TRECHO", "PONTO", "TRECHO jusante", "M", "CLIENTES",
+        "CLT ACUMULAD", "TOTAL DO TRECHO", "ACUMULADA",
+        "LADO", "CONDUTOR", "CQT NO PONTO"
+    ]
+
+    # Preenchimento preto do cabeçalho
+    for col in range(1, 12):
+        cell = ws.cell(row=1, column=col)
+        assert cell.font.bold is True
+        assert cell.font.color.rgb in ("FFFFFFFF", "00FFFFFF", "FFFFFF")
+        assert cell.fill.fill_type == "solid"
+        assert cell.fill.start_color.rgb in ("00000000", "FF000000", "000000")
+
+    # 2. Linha 2 (P1 / TRAFO): destaque vermelho nas fontes das colunas principais
+    row2_vals = [ws.cell(row=2, column=col).value for col in range(1, 12)]
+    assert row2_vals[0] == "TR, P1"
+    assert row2_vals[1] == 1
+    assert row2_vals[2] == 0
+    assert row2_vals[3] == 4.0
+    assert row2_vals[4] == 4
+    assert row2_vals[5] == 12
+    assert row2_vals[8] == "TRAFO"
+    assert row2_vals[9] == "240 Cu"
+    assert "✔ 118,59" in row2_vals[10]
+
+    # Fonte vermelha (C00000) na linha TRAFO para LADO, CONDUTOR e demandas
+    for col_idx in [5, 6, 7, 8, 9, 10]:
+        cell = ws.cell(row=2, column=col_idx)
+        assert cell.font.color.rgb in ("FFC00000", "00C00000", "C00000")
+
+    # 3. Linha 3 (P2 / LADO 1)
+    row3_vals = [ws.cell(row=3, column=col).value for col in range(1, 12)]
+    assert row3_vals[0] == "P1, P2"
+    assert row3_vals[1] == 2
+    assert row3_vals[2] == 1
+    assert row3_vals[3] == 35.0
+    assert row3_vals[8] == "LADO 1"
+    assert row3_vals[9] == "70 Al - MX"
+
+    # 4. Linha 4 (P3 / LADO 1 com violação CQT)
+    row4_vals = [ws.cell(row=4, column=col).value for col in range(1, 12)]
+    assert row4_vals[0] == "P2, P3"
+    assert row4_vals[1] == 3
+    assert row4_vals[2] == 2
+    assert "✖ 116,22" in row4_vals[10]
+    # Célula CQT com violação tem cor de texto vermelha
+    assert ws.cell(row=4, column=11).font.color.rgb in ("FFC00000", "00C00000", "C00000")
+
+
+def test_cqt_exportacao_excel_cli(tmp_path):
+    """Valida a execução por linha de comando de clandestino_excel.py."""
+    import json
+    import subprocess
+    import sys
+
+    pontos_teste = [
+        {
+            "TRECHO": "TR, P1",
+            "SEQ": 1,
+            "TRECHO_JUSANTE": 0,
+            "COMPRIMENTO_VÃO": 4.0,
+            "CLIENTES": 2,
+            "CLT_ACUMULADO": 2,
+            "DEMANDA": 4.54,
+            "ACUMULADA": 4.54,
+            "LADO": "TRAFO",
+            "CONDUTOR_PREVISTO": "240 Cu",
+            "CQT_NO_PONTO": "✔ 119,00",
+        }
+    ]
+
+    json_path = tmp_path / "pontos.json"
+    xlsx_path = tmp_path / "saida_cli.xlsx"
+    json_path.write_text(json.dumps(pontos_teste, ensure_ascii=False), encoding="utf-8")
+
+    script_path = Path(__file__).parent.parent / "orcamento" / "clandestino_excel.py"
+    proc = subprocess.run(
+        [sys.executable, str(script_path), "--json", str(json_path), "--out", str(xlsx_path)],
+        capture_output=True,
+        text=True
+    )
+    assert proc.returncode == 0
+    assert xlsx_path.exists()
+
+
+def test_clandestino_excel_funcoes_auxiliares_e_cobertura(tmp_path, monkeypatch):
+    """Cobre funções utilitárias e ramos defensivos de clandestino_excel.py para meta de alta cobertura."""
+    from orcamento.clandestino_excel import (
+        exportar_cqt_excel,
+        formatar_cqt_ponto,
+        parse_float_safe,
+        parse_int_safe,
+    )
+
+    # 1. parse_float_safe
+    assert parse_float_safe(None) == 0.0
+    assert parse_float_safe(12) == 12.0
+    assert parse_float_safe(" 15,75 kVA ") == 15.75
+    assert parse_float_safe("inválido") == 0.0
+
+    # 2. parse_int_safe
+    assert parse_int_safe(None) == 0
+    assert parse_int_safe(5) == 5
+    assert parse_int_safe(" 7,0 ") == 7
+    assert parse_int_safe("nao_numero") == 0
+
+    # 3. formatar_cqt_ponto
+    assert "ERRO" in formatar_cqt_ponto(0.0, 5.0, "ERRO")
+    assert "✔" in formatar_cqt_ponto(118.5, 6.5)
+    assert "✖" in formatar_cqt_ponto(115.0, 8.5)
+
+    # 4. Fallback de trecho e mock de abertura automática
+    pontos_borda = [
+        {"POSTE": "P1", "SEQ": 1, "V_127": 118.5, "QT_PERC": 6.5},  # Sem TRECHO -> gera TR, P1
+        {"POSTE": "P2", "SEQ": 2, "TRECHO_JUSANTE": 1, "V_127": 115.0, "QT_PERC": 8.0},
+    ]
+    out_borda = tmp_path / "borda.xlsx"
+
+    # Mock de abertura para não disparar processo externo real
+    abriu = []
+    monkeypatch.setattr("os.startfile", lambda p: abriu.append(p), raising=False)
+    monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: abriu.append(args), raising=False)
+
+    res = exportar_cqt_excel(pontos_borda, str(out_borda), abrir_arquivo=True)
+    assert res == str(out_borda)
+    assert len(abriu) == 1
 
 
 

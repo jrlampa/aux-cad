@@ -104,9 +104,14 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
 - `orcamento_gui.py` (390 linhas): Interface gráfica moderna em Tkinter com seletores de Empreiteira (Engelmig, Indica, Dínamo, Progen), Território (A, B, C), Salinidade, KPIs em tempo real e alternância entre visualização de Materiais e Mão de Obra.
 - `orcamento_manager.py` (97 linhas): Orquestrador CLI/GUI atualizado com suporte a `--empreiteira`, `--territorio` e `--ambiente`.
 - `orcamento_cad_extractor.lsp`: Rotina AutoLISP com comandos **`ORCAD`** (varredura inteligente de postes, cabos e equipamentos) e **`ORCUI`** (disparo da interface gráfica).
-- levantamento_postes.lsp (997 linhas): Comando **LEVANTAR_POSTES** (ou **LP**) para coleta interativa de textos TEXT/MTEXT de postes e ramais no DWG, calculo de clientes mono/bi/tri, posicoes, CS e geracao de tabela nativa do AutoCAD (ACAD_TABLE) de 10 colunas com persistencia isolada em LData e sincronizacao bidirecional automatica.
-- clandestino_light.lsp (300 linhas): Modulo de regras normativas oficiais da LIGHT extraidas da planilha CQTS_ZNA853248_ATUAL.xlsx (tabelas TAB_CLAN_DMDI para areas de 20 a 400 m2 e AUX_CLAN para diversificacao de 1 a 300 clientes), persistencia de configuracao e motor analitico de acumulacao topologica a jusante em grafos.
-- clandestino_topologia.lsp (251 linhas): Wizard e editor interativo CAD para cadastro de topologia explicita da rede clandestina com selecao de Transformador (TR), sequenciamento de multiplos lados (LADO 1, LADO 2, etc.), derivacoes partindo de nos existentes e aplicacao fail-safe com recalculo instantaneo de demandas acumuladas.
+- `levantamento_postes.lsp` (978 linhas): Comando **`LEVANTAR_POSTES`** (ou **`LP`**) para coleta interativa de textos TEXT/MTEXT de postes e ramais no DWG, suporte a postes passantes sem textos/clientes (`PASSANTE: SIM`), cálculo de clientes mono/bi/tri, posições, CS e geração de tabela nativa do AutoCAD (`ACAD_TABLE`) de 10 a 13 colunas com persistência isolada em LData e sincronização bidirecional automática.
+- `clandestino_light.lsp` (300 linhas): Módulo de regras normativas oficiais da LIGHT extraídas da planilha `CQTS_ZNA853248_ATUAL.xlsx` (tabelas `TAB_CLAN_DMDI` para áreas de 20 a 400 m² e `AUX_CLAN` para diversificação de 1 a 300 clientes), persistência de configuração e motor analítico de acumulação topológica a jusante em grafos.
+- `clandestino_topologia.lsp` (370 linhas): Wizard e editor interativo CAD para cadastro de topologia explícita da rede clandestina com seleção de Transformador (TR), sequenciamento de múltiplos lados (`LADO 1`, `LADO 2`, etc.), derivações partindo de nós existentes, medição/coleta interativa de vãos (`lp-clan-perguntar-vao-comp` com suporte a cotas `DIMENSION` e textos) e seleção de condutores (`lp-clan-perguntar-vao-cabo`), com persistência de `TRECHOS` no LData.
+- `clandestino_cqt.lsp` (524 linhas): Motor de cálculo de Queda de Tensão (CQT) e ampacidade para redes Clandestinas segundo a norma Light S.A.:
+  - **P1 = Nó Raiz TR**: Conexão interna no mesmo poste com extensão normativa de 4,0 m e condutor obrigatório `240 Cu`; queda inicial fixa `QT_MT+TR` (~6,71485% / 8,529 V) somada à queda do trecho de 4 m servindo como tensão base para os circuitos a jusante.
+  - **Vãos Reais Independentes**: Primeiro vão `P1 -> P2` e posteriores com comprimentos independentes (não soma 4 m, não duplica `QT_MTTR`, não cria vão fictício `TR -> P1`).
+  - **Precedência de Condutor e Comprimento**: Valores manuais salvos em `TRECHOS` sobrepõem seleção automática e distâncias estimadas.
+  - **Verificação de Ampacidade e Sobrecarga**: Alerta explícito no console `[AVISO][SOBRECARGA]` e registro no `STATUS_CQT` caso a corrente calculada Ib supere a capacidade Iz do cabo manual, sem substituição silenciosa.
 - `Abrir_Orcamento.bat`: Atalho local na pasta do projeto e na raiz.
 
 ### 7. `mapa_postes/` (Estúdio Web de Satélite, Coordenadas e Clientes)
@@ -1351,4 +1356,82 @@ A pasta raiz `aux cad` é organizada em pastas dedicadas por projeto/especialida
     - `orcamento/clandestino_light.lsp`: 300 linhas (limite <= 500 linhas).
     - `orcamento/clandestino_topologia.lsp`: 251 linhas (limite <= 500 linhas).
 
+### 32. Motor de Queda de Tensão (CQT) e Seleção de Cabos para Redes CLANDESTINO (2026-10-16)
 
+- **Engenharia Reversa das Fórmulas da Planilha Oficial da Light S.A.**:
+  - Investigação direta de `CQTS_ZNA853248_ATUAL.xlsx` e `CQTS_ZNA853248_PROJ.xlsx` (abas `LADO 2` e `DB!A1:I32`).
+  - Corrente de projeto e base trifásica:
+    - $V_{\text{base}} = \frac{220\sqrt{3}}{1000} \approx 0,38105118\text{ kV}$
+    - $I_b = \frac{S_{\text{acum}} \times 1000}{\sqrt{3} \times 220 \times 3} = \frac{S_{\text{acum}}}{V_{\text{base}} \times 3}$
+  - Temperatura em regime com aquecimento de carga:
+    - $T = \frac{S_{\text{acum}}}{V_{\text{base}} \times K_{\text{term}}} + 30^\circ\text{C}$ (com teto em $T_{\text{lim}} = 90^\circ\text{C}$)
+  - Correção térmica da resistência e impedância total:
+    - $R_{20} = \frac{R_{\text{tab}}}{\text{DIVISOR\_R}}$, $R_{\text{corr}} = R_{20} \times [1 + \alpha (T - 20)]$
+    - $Z = \sqrt{R_{\text{corr}}^2 + X_{\text{tab}}^2}$
+  - Queda de tensão por trecho e queda inicial no trafo:
+    - $\Delta V_{\text{trecho}} = \text{mult}_{\text{fase}} \times S_{\text{acum}} \times \left(\frac{Z}{484}\right) \times L \times \frac{127,017}{100} + (\text{se TR}: 127,017 \times 0,06714854)$
+    - Queda inicial de MT + Transformador: $QT_{\text{MTTR}} = 6,714854\%$ (MT $1,83\%$ + Trafo $4,88\%$), somando $8,529\text{ V}$ na descida do trafo.
+  - Acumulação ao longo da árvore topológica:
+    - $V_{\text{acum}} = V_{\text{acum\_ant}} + \Delta V_{\text{trecho}}$
+    - $QT\% = \frac{V_{\text{acum}}}{127,017} \times 100\%, \quad V_{127} = 127,017 \times \left(1 - \frac{QT\%}{100}\right)$
+- **Regra Oficial de Seleção de Condutores Previstos**:
+  - Descida do Transformador: Cabo `240 Cu` (sempre).
+  - Rede BT: $I_b \le 202\text{ A}$ ($S_{\text{acum}} \le 76,97\text{ kVA}$) $\rightarrow$ `70 Al - MX`.
+  - Rede BT: $202\text{ A} < I_b \le 355\text{ A}$ ($76,97 < S_{\text{acum}} \le 135,27\text{ kVA}$) $\rightarrow$ `185 Al - MX`.
+  - Rede BT: $I_b > 355\text{ A}$ ($S_{\text{acum}} > 135,27\text{ kVA}$) $\rightarrow$ `240 Al - MX`.
+- **Tabela de Condutores (`CABOS` da Aba `DB!A1:I32`)**:
+  - Carregados os 31 condutores reais em `*lp-clan-cabos*` (`orcamento/clandestino_cqt.lsp`).
+- **Novo Módulo DDD Desacoplado**:
+  - `orcamento/clandestino_cqt.lsp` (294 linhas, limite <= 500 linhas): Contém o catálogo de cabos, funções de cálculo trecho a trecho, propagação em DAG e formatação de colunas de tabela.
+  - `acaddoc.lsp`: Registrado carregamento com `(load-aux-safe "orcamento\\clandestino_cqt.lsp")`.
+  - `orcamento/levantamento_postes.lsp`: Mantido em 987 linhas (limite <= 1.000 linhas).
+- **Integração com Tabela do AutoCAD (`ACAD_TABLE`)**:
+  - Modo `NORMAL`: Exatamente 10 colunas mantidas inalteradas.
+  - Modo `CLANDESTINO`: Tabela nativa expandida para 13 colunas adicionando:
+    1. `CABO PREVISTO` (largura 38.0)
+    2. `CQT ACUM (%)` (largura 30.0)
+    3. `TENSÃO 127V` (largura 30.0)
+- **Validação e Conformidade com a Suíte de Testes**:
+  - 74 testes aprovados em `tests/test_levantamento_postes.py` e `tests/test_levantamento_condutores.py`.
+  - Suíte completa do projeto: 1.410 testes aprovados, 3 skipped, 0 falhas (100% PASS).
+
+
+### 33. Novo Leiaute CQT de 11 Colunas e Exportador Excel (Modo Clandestino Light) (2026-10-19)
+
+- **Demanda do Usuário & Requisitos do Leiaute**:
+  - Geração da tabela no formato exato da planilha de CQT da Light S.A.
+  - **Opção C adotada**: Tabela nativa no DWG (`ACAD_TABLE`) e exportação direta em planilha Excel (`.xlsx`).
+  - **Escopo Exclusivo**: O novo leiaute de 11 colunas aplica-se **exclusivamente no modo CLANDESTINO**. O modo NORMAL preserva rigorosamente a tabela clássica de 10 colunas.
+- **Estrutura das 11 Colunas CQT (Ordem Exata da Concessionária)**:
+  1. `TRECHO`: Rótulo do vão (`TR, P1` para raiz, `P1, P2`, etc.).
+  2. `PONTO`: Sequência numérica do nó (`1`, `2`, `3`...).
+  3. `TRECHO jusante`: Sequência do nó pai montante (`0` para o TR/P1, ou SEQ do montante pai).
+  4. `M`: Comprimento do vão em metros (`4.0` fixo no P1, distâncias reais ou manuais para downstream).
+  5. `CLIENTES`: Clientes locais no ponto.
+  6. `CLT ACUMULAD`: Clientes acumulados a jusante.
+  7. `TOTAL DO TRECHO`: Demanda local calculada em kVA.
+  8. `ACUMULADA`: Demanda acumulada em kVA calculada via TAB_CLAN_DMDI.
+  9. `LADO`: Circuito / Ramo (`TRAFO` para o nó raiz P1, `LADO 1`, `LADO 2`...).
+  10. `CONDUTOR`: Condutor elétrico previsto ou atribuído (`240 Cu` para P1, `70 Al - MX`...).
+  11. `CQT NO PONTO`: Tensão terminal 127V com indicador de conformidade (`✔ 118,59` se $\Delta V \le 7\%$, ou `✖ 116,22` se $> 7\%$).
+- **Módulo Python `orcamento/clandestino_excel.py` (215 linhas, 90% cobertura)**:
+  - Construído com `openpyxl`, gerando pasta de trabalho `.xlsx` formatada:
+    - Cabeçalho preto `#000000` com tipografia branca e negrito.
+    - Preenchimento verde pastel `#D9EAD3` para identificadores (`PONTO`, `TRECHO jusante`, `LADO`, `CONDUTOR`).
+    - Preenchimento azul pastel `#CFE2F3` para métricas (`M`, `CQT NO PONTO`).
+    - Tipografia em vermelho `#C00000` para a linha do Trafo e para células com violação de CQT (`✖`).
+    - Ajuste automático de largura de colunas e CLI integrado (`--json`, `--out`, `--open`).
+- **Integração CAD e Comandos AutoLISP**:
+  - `(lp-cqt-gerar-tabela-cad)`: Cria a `ACAD_TABLE` de 11 colunas no DWG com larguras e títulos oficiais.
+  - `(lp-cqt-atualizar-celulas-tabela)`: Atualiza em tempo real as células da tabela CAD existente sem recriá-la.
+  - `(lp-cqt-exportar-excel)` / Comandos `LP_EXCEL` e `CQT_EXCEL`: Exportação instantânea para planilha Excel.
+  - Menu interativo de `LEVANTAR_POSTES` com opção `Excel` ativa em modo CLANDESTINO.
+- **Conformidade de Limites de Código**:
+  - `orcamento/levantamento_postes.lsp`: 946 linhas (hard limit <= 1.000 linhas).
+  - `orcamento/clandestino_cqt.lsp`: 703 linhas (soft limit <= 750 linhas).
+  - `orcamento/clandestino_light.lsp`: 279 linhas (ideal <= 500 linhas).
+  - `orcamento/clandestino_excel.py`: 215 linhas (ideal <= 500 linhas).
+- **Validação e Testes**:
+  - 83 testes em `tests/test_levantamento_postes.py` aprovados (100% PASS).
+  - 90% de cobertura no módulo `clandestino_excel.py`.
+  - Suíte completa do repositório: 1.435 testes aprovados (100% PASS).

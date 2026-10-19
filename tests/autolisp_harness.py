@@ -10,6 +10,7 @@ substituem lp-sincronizar-levantamento por um stub que registra as chamadas.
 """
 from __future__ import annotations
 
+import fnmatch
 import math
 import re
 from pathlib import Path
@@ -247,7 +248,7 @@ class AutoLisp:
                 for k in fn.locs:
                     self.env[k] = None
                 for k, v in zip(fn.params, args):
-                    self.env[k] = v
+                    self.env[k] = None if v is False else v
                 res = None
                 for form in fn.body:
                     res = self.ev(form)
@@ -379,7 +380,14 @@ class AutoLisp:
         ent = self.dwg[e.handle]
         type_val = ent.get("type", ent.get("0", ent.get(0, "TEXT")))
         text_val = ent.get("text", ent.get("1", ent.get(1, "")))
-        return [Pair(-1, e), Pair(0, type_val), Pair(5, e.handle), Pair(1, text_val)]
+        res = [Pair(-1, e), Pair(0, type_val), Pair(5, e.handle), Pair(1, text_val)]
+        for k, v in ent.items():
+            if str(k) not in ("-1", "0", "5", "1", "type", "text"):
+                try:
+                    res.append(Pair(int(k), v))
+                except ValueError:
+                    pass
+        return res
 
     def _findfile(self, p):
         cand = Path(p)
@@ -410,7 +418,7 @@ class AutoLisp:
 
         def assoc(k, al):
             for it in al or []:
-                if (isinstance(it, Pair) and lisp_equal(it.car, k)) or (isinstance(it, list) and lisp_equal(it[0], k)):
+                if (isinstance(it, Pair) and lisp_equal(it.car, k)) or (isinstance(it, (list, tuple)) and lisp_equal(it[0], k)):
                     return it
             return None
 
@@ -485,6 +493,7 @@ class AutoLisp:
             "<": lambda a, b: tb(num(a) < num(b)), ">": lambda a, b: tb(num(a) > num(b)),
             "<=": lambda a, b: tb(num(a) <= num(b)), ">=": lambda a, b: tb(num(a) >= num(b)),
             "abs": lambda a: abs(num(a)), "max": lambda *a: max(a), "fix": lambda a: int(num(a)), "float": lambda a: float(num(a)),
+            "sqrt": lambda a: math.sqrt(num(a)),
             "cons": cons, "car": car, "cdr": cdr, "cadr": lambda x: car(cdr(x)), "caddr": lambda x: car(cdr(cdr(x))),
             "list": lambda *a: norm(list(a)), "append": lambda *ls: norm([e for lst in ls for e in (lst or [])]),
             "length": lambda x: len(x or []), "nth": lambda n, x: x[n] if x and 0 <= n < len(x) else None,
@@ -514,6 +523,13 @@ class AutoLisp:
             "entget": self._entget, "entnext": lambda *a: None, "handent": lambda h: Ename(h) if h in self.dwg else None,
             "vlax-ldata-get": lambda d, k, *r: self.ldata.get((d, k)), "vlax-ldata-put": ldata_put,
             "vlax-ldata-delete": lambda d, k: tb(self.ldata.pop((d, k), None) is not None),
+            "vla-setcolumnwidth": lambda *a: None, "vla-settext": lambda *a: None, "vla-mergecells": lambda *a: None,
+            "vla-get-columns": lambda *a: 10, "vla-get-rows": lambda *a: 10, "vla-update": lambda *a: None,
+            "vlax-get-acad-object": lambda: None, "vla-get-activedocument": lambda *a: None,
+            "vla-get-activelayout": lambda *a: None, "vla-get-block": lambda *a: None,
+            "vla-addtable": lambda *a: Ename("TBL_01"), "vla-get-handle": lambda *a: "TBL_01",
+            "vlax-3d-point": lambda *a: None, "vlax-ename->vla-object": lambda e: e,
+            "wcmatch": lambda s, p: tb(fnmatch.fnmatch(str(s or "").upper(), str(p or "").upper())),
         }
         for name, fn in b.items():
             self.env[Sym(name.upper())] = fn

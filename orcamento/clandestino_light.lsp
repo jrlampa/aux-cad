@@ -208,14 +208,17 @@
               (lp-clan-resumo-topologia (lp-db-obter-topologia))
               (strcat "MODO LINEAR LEGADO (" (lp-db-obter-sentido) ") [SEM TOPOLOGIA CADASTRADA]")))))
 
-;;; 5. RECÁLCULO TOPOLÓGICO TRANSACIONAL (FAIL-SAFE)
-(defun lp-clan-atualizar-ponto-demandas (p dem-val acum-val)
+(defun lp-clan-atualizar-ponto-demandas (p dem-val acum-val acum-cli)
   (setq p (if (assoc "DEMANDA" p)
             (subst (cons "DEMANDA" (lp-clan-format-num dem-val t)) (assoc "DEMANDA" p) p)
             (append p (list (cons "DEMANDA" (lp-clan-format-num dem-val t))))))
-  (if (assoc "ACUMULADA" p)
-    (subst (cons "ACUMULADA" (lp-clan-format-num acum-val t)) (assoc "ACUMULADA" p) p)
-    (append p (list (cons "ACUMULADA" (lp-clan-format-num acum-val t))))))
+  (setq p (if (assoc "ACUMULADA" p)
+            (subst (cons "ACUMULADA" (lp-clan-format-num acum-val t)) (assoc "ACUMULADA" p) p)
+            (append p (list (cons "ACUMULADA" (lp-clan-format-num acum-val t))))))
+  (if (null acum-cli) (setq acum-cli (lp-clan-parse-cli (cdr (assoc "CLIENTES" p)))))
+  (if (assoc "CLIENTES_ACUMULADOS" p)
+    (subst (cons "CLIENTES_ACUMULADOS" acum-cli) (assoc "CLIENTES_ACUMULADOS" p) p)
+    (append p (list (cons "CLIENTES_ACUMULADOS" acum-cli)))))
 
 (defun lp-clan-recalcular-pontos (pontos area sentido / topo mapa-filhos cli-lookup abort err-msg p poste cli
                                                         local-cli jusante-postes acum-cli j-cli dem-val acum-val
@@ -258,7 +261,7 @@
                       (foreach j-nom jusante-postes
                         (setq j-cli (cdr (assoc j-nom cli-lookup))) (if j-cli (setq acum-cli (+ acum-cli j-cli))))
                       (setq dem-val (lp-clan-calcular-demanda area local-cli) acum-val (lp-clan-calcular-acumulada area acum-cli)
-                            novos (append novos (list (lp-clan-atualizar-ponto-demandas p dem-val acum-val)))))
+                            novos (append novos (list (lp-clan-atualizar-ponto-demandas p dem-val acum-val acum-cli)))))
                     novos)))
               (progn
                 (setq sentido-str (strcase (if (and sentido (= (type sentido) 'STR)) sentido "PONTA->FONTE")))
@@ -280,7 +283,7 @@
                                    (setq cli (lp-clan-parse-cli (cdr (assoc "CLIENTES" p)))
                                          dem-val (lp-clan-calcular-demanda area cli)
                                          acum-val (lp-clan-calcular-acumulada area acum-total))
-                                   (lp-clan-atualizar-ponto-demandas p dem-val acum-val))
+                                   (lp-clan-atualizar-ponto-demandas p dem-val acum-val acum-total))
                                 pontos cli-map)))
                     (progn
                       (setq acum-tot 0)
@@ -296,5 +299,5 @@
                           (foreach p pontos
                             (setq cli (lp-clan-parse-cli (cdr (assoc "CLIENTES" p))) acum-tot (+ acum-tot cli)
                                   dem-val (lp-clan-calcular-demanda area cli) acum-val (lp-clan-calcular-acumulada area acum-tot)
-                                  novos (append novos (list (lp-clan-atualizar-ponto-demandas p dem-val acum-val)))))
+                                  novos (append novos (list (lp-clan-atualizar-ponto-demandas p dem-val acum-val acum-tot)))))
                           novos)))))))))))))

@@ -134,6 +134,7 @@
 (load-aux-safe "orcamento\\levantamento_condutores.lsp")
 (load-aux-safe "orcamento\\clandestino_light.lsp")
 (load-aux-safe "orcamento\\clandestino_topologia.lsp")
+(load-aux-safe "orcamento\\clandestino_cqt.lsp")
 (load-aux-safe "orcamento\\levantamento_postes.lsp")
 
 ;; 7. Módulo Estúdio Web de Satélite de Postes & Cargas

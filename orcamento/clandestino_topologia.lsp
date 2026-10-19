@@ -74,8 +74,101 @@
       (if (/= dig "") dig "-"))
     id))
 
-;;; 2. COLETA DE RAMOS (LADOS E DERIVAÇÕES)
-(defun lp-clan-coletar-sequencia-postes (nome-ramo no-origem / postes cont ord ant p-id)
+;;; 2. COLETA DE RAMOS (LADOS E DERIVACOES) E MEDICAO DE VAOS
+
+(defun lp-clan-obter-distancia-cad-ou-sugerida (ant-id filho-id / pontos p-ant p-filho dist)
+  (setq pontos (lp-db-obter-pontos)
+        p-ant nil
+        p-filho nil)
+  (foreach p pontos
+    (if (= (strcase (lp-trim (cdr (assoc "POSTE" p)))) (strcase (lp-trim ant-id)))
+      (setq p-ant p))
+    (if (= (strcase (lp-trim (cdr (assoc "POSTE" p)))) (strcase (lp-trim filho-id)))
+      (setq p-filho p)))
+  (if (and p-ant p-filho
+           (fboundp 'lp-cqt-distancia-pontos)
+           (not (lp-cqt-vao-estimado-p p-ant p-filho)))
+    (list (lp-cqt-distancia-pontos p-ant p-filho) t)
+    (list (if (boundp '*lp-cqt-vao-padrao*) *lp-cqt-vao-padrao* 30.0) nil)))
+
+(defun lp-clan-perguntar-vao-comp (ant-id filho-id / sug-info dist-sug tem-coords prompt-msg resp val ent edata tip txt dist-val)
+  (setq sug-info (lp-clan-obter-distancia-cad-ou-sugerida ant-id filho-id)
+        dist-sug (car sug-info)
+        tem-coords (cadr sug-info))
+  (setq prompt-msg (strcat "\nComprimento do vão " ant-id " -> " filho-id
+                           " (m) [Enter=" (rtos dist-sug 2 1) " / E=Entidade CAD / Digite]: "))
+  (setq resp (getstring t prompt-msg))
+  (cond
+    ((or (null resp) (= (lp-trim resp) ""))
+     (list dist-sug (if tem-coords "CAD_DIST" "MANUAL") nil))
+    ((or (= (strcase (lp-trim resp)) "E") (= (strcase (lp-trim resp)) "ENTIDADE"))
+     (setq ent (entsel "\nSelecione a cota (DIMENSION) ou texto do comprimento do vão: "))
+     (if (and ent (car ent))
+       (progn
+         (setq edata (entget (car ent))
+               tip (cdr (assoc 0 edata))
+               txt ""
+               dist-val nil)
+         (cond
+           ((member tip '("TEXT" "MTEXT"))
+            (setq txt (cdr (assoc 1 edata))))
+           ((= tip "DIMENSION")
+            (setq txt (cdr (assoc 1 edata)))
+            (if (or (null txt) (= txt ""))
+              (setq dist-val (cdr (assoc 42 edata))))))
+         (if (and (null dist-val) (/= txt ""))
+           (setq dist-val (lp-parse-num txt)))
+         (if (and dist-val (numberp dist-val) (> dist-val 0.0))
+           (list (float dist-val) "CAD_ENTIDADE" (cdr (assoc 5 edata)))
+           (progn
+             (princ "\n[AVISO] Não foi possível extrair distância da entidade. Adotando sugestão.")
+             (list dist-sug (if tem-coords "CAD_DIST" "MANUAL") nil))))
+       (list dist-sug (if tem-coords "CAD_DIST" "MANUAL") nil)))
+    (t
+     (setq val (lp-parse-num resp))
+     (if (and val (numberp val) (> val 0.0))
+       (list (float val) "MANUAL" nil)
+       (progn
+         (princ (strcat "\n[AVISO] Valor '" resp "' inválido. Adotando sugestão de " (rtos dist-sug 2 1) " m."))
+         (list dist-sug (if tem-coords "CAD_DIST" "MANUAL") nil))))))
+
+(defun lp-clan-perguntar-vao-cabo (ant-id filho-id / opt cabo-dig cabo-res ent edata tip raw h)
+  (initget "Auto Manual Entidade")
+  (setq opt (getkword (strcat "\nCondutor do vão " ant-id " -> " filho-id
+                              " [Auto/Manual/Entidade] <Auto>: ")))
+  (if (null opt) (setq opt "Auto"))
+  (cond
+    ((= opt "Auto")
+     (list "AUTO" "AUTO" nil))
+    ((= opt "Manual")
+     (setq cabo-dig (getstring t "\nDigite o condutor (ex: 70 Al - MX, 185 Al - MX, 240 Cu, 53 AA): "))
+     (if (and cabo-dig (/= (lp-trim cabo-dig) ""))
+       (setq cabo-res (if (fboundp 'lp-cqt-resolver-cabo)
+                        (lp-cqt-resolver-cabo cabo-dig "BT")
+                        cabo-dig))
+       (setq cabo-res "AUTO"))
+     (list cabo-res (if (= cabo-res "AUTO") "AUTO" "MANUAL") nil))
+    ((= opt "Entidade")
+     (setq ent (entsel "\nSelecione o texto do condutor no CAD: "))
+     (if (and ent (car ent))
+       (progn
+         (setq edata (entget (car ent))
+               tip (cdr (assoc 0 edata))
+               raw ""
+               h (cdr (assoc 5 edata)))
+         (if (member tip '("TEXT" "MTEXT"))
+           (setq raw (cdr (assoc 1 edata))))
+         (if (/= raw "")
+           (setq cabo-res (if (fboundp 'lp-cqt-resolver-cabo)
+                            (lp-cqt-resolver-cabo (lp-strip-mtext raw) "BT")
+                            raw))
+           (setq cabo-res "AUTO"))
+         (list cabo-res (if (= cabo-res "AUTO") "AUTO" "CAD_ENTIDADE") h))
+       (list "AUTO" "AUTO" nil)))
+    (t (list "AUTO" "AUTO" nil))))
+
+(defun lp-clan-coletar-sequencia-postes (nome-ramo no-origem / postes cont ord ant p-id
+                                                               comp-res cabo-res tr-item eh-no-tr)
   (princ (strcat "\n--- Cadastro de " nome-ramo " (partindo de " no-origem ") ---"))
   (setq postes '() cont t ord 1 ant no-origem)
   (while cont
@@ -86,8 +179,34 @@
       (if (or (= (strcase p-id) (strcase no-origem)) (member (strcase p-id) postes))
         (princ (strcat "\n[AVISO] Poste " p-id " já incluído neste ramo. Selecione o próximo poste a jusante."))
         (progn
+          ;; Se é o primeiro poste do LADO 1 partindo do TR, este poste É o próprio poste do Trafo (P1/TR).
+          ;; Não existe vão separado TR -> P1.
+          (setq eh-no-tr (and (= ord 1)
+                              (or (= (strcase nome-ramo) "LADO 1") (= (strcase nome-ramo) "LADO-1"))
+                              (or (= (strcase no-origem) (strcase (if (boundp 'tr-id) (if tr-id tr-id "") "")))
+                                  (wcmatch (strcase no-origem) "*TR*"))))
+          (if (not eh-no-tr)
+            (progn
+              (setq comp-res (lp-clan-perguntar-vao-comp ant (strcase p-id))
+                    cabo-res (lp-clan-perguntar-vao-cabo ant (strcase p-id)))
+              (setq tr-item (list (strcase p-id)
+                                  ant
+                                  (car comp-res)
+                                  (car cabo-res)
+                                  (cadr comp-res)
+                                  (caddr comp-res)))
+              (setq rem-trechos '())
+              (if (boundp '*lp-clan-trechos-coletados*)
+                (foreach x *lp-clan-trechos-coletados*
+                  (if (not (and (= (strcase (nth 0 x)) (strcase p-id))
+                                (= (strcase (nth 1 x)) (strcase ant))))
+                    (setq rem-trechos (cons x rem-trechos)))))
+              (setq *lp-clan-trechos-coletados* (cons tr-item rem-trechos))))
           (setq postes (append postes (list (strcase p-id))) ant (strcase p-id) ord (1+ ord))
-          (princ (strcat "\n  [" nome-ramo "] " no-origem " -> " (vl-prin1-to-string postes)))))
+          (princ (strcat "\n  [" nome-ramo "] " no-origem " -> " (vl-prin1-to-string postes)
+                         (if tr-item
+                           (strcat " (Vão: " (rtos (car comp-res) 2 1) "m | Cabo: " (car cabo-res) ")")
+                           " (Nó TR raiz)")))))
       (setq cont nil)))
   postes)
 
@@ -114,7 +233,10 @@
             (progn
               (lp-db-salvar-modo "CLANDESTINO")
               (if (not (lp-db-area-configurada-p)) (lp-db-salvar-area area))
-              (lp-db-salvar-topologia nova-topo) (lp-db-salvar-sentido "TOPOLOGIA")
+              (lp-db-salvar-topologia nova-topo)
+              (if (assoc "TRECHOS" nova-topo)
+                (vlax-ldata-put "OXCAD_LEVANTAMENTO" "TRECHOS" (cdr (assoc "TRECHOS" nova-topo))))
+              (lp-db-salvar-sentido "TOPOLOGIA")
               (lp-db-salvar-pontos recalc)
               (if tbl (lp-sincronizar-levantamento recalc tbl))
               (princ (strcat "\n[SUCESSO] " (lp-clan-resumo-topologia nova-topo) " salva e demandas recalculadas!"))
@@ -122,7 +244,10 @@
         (progn
           (lp-db-salvar-modo "CLANDESTINO")
           (if (not (lp-db-area-configurada-p)) (lp-db-salvar-area area))
-          (lp-db-salvar-topologia nova-topo) (lp-db-salvar-sentido "TOPOLOGIA")
+          (lp-db-salvar-topologia nova-topo)
+          (if (assoc "TRECHOS" nova-topo)
+            (vlax-ldata-put "OXCAD_LEVANTAMENTO" "TRECHOS" (cdr (assoc "TRECHOS" nova-topo))))
+          (lp-db-salvar-sentido "TOPOLOGIA")
           (princ (strcat "\n[SUCESSO] " (lp-clan-resumo-topologia nova-topo) " salva no DWG!"))
           nova-topo)))))
 
@@ -157,7 +282,8 @@
                       (princ (strcat "\n[OK] Derivação partindo de " p-orig " cadastrada: " (vl-prin1-to-string seq-d))))
                (princ "\n[AVISO] Derivação sem postes a jusante não foi adicionada."))))))
       ((= op-t "Concluir")
-       (setq nova-topo (list (cons "TR" tr-id) (cons "LADOS" lados) (cons "DERIVACOES" derivs)))
+       (setq nova-topo (list (cons "TR" tr-id) (cons "LADOS" lados) (cons "DERIVACOES" derivs)
+                             (cons "TRECHOS" (if (boundp '*lp-clan-trechos-coletados*) *lp-clan-trechos-coletados* '()))))
        (setq res (lp-clan-aplicar-topologia nova-topo) editando nil))
       ((= op-t "Cancelar")
        (princ "\n[TOPOLOGIA] Edição cancelada. Topologia e cálculos anteriores preservados.")
@@ -165,6 +291,7 @@
   res)
 
 (defun lp-clan-iniciar-novo-cadastro-topologia (/ tr-id seq-l1)
+  (setq *lp-clan-trechos-coletados* '())
   (setq tr-id (lp-clan-selecionar-no-cad "\nSelecione o texto identificador do Transformador (TR) no desenho (Enter para cancelar): " t))
   (if (null tr-id)
     (progn (princ "\n[AVISO] Seleção do TR cancelada. Topologia anterior preservada.") nil)
@@ -187,6 +314,8 @@
       (cond
         ((= acao "Manter") (lp-clan-aplicar-topologia topo-atual))
         ((= acao "Editar")
+         (setq *lp-clan-trechos-coletados* (or (vlax-ldata-get "OXCAD_LEVANTAMENTO" "TRECHOS")
+                                               (if (assoc "TRECHOS" topo-atual) (cdr (assoc "TRECHOS" topo-atual)) '())))
          (setq tr-raw (cdr (assoc "TR" topo-atual)) tr-id (if (listp tr-raw) (car tr-raw) (if tr-raw tr-raw "TR-01"))
                lados (if (assoc "LADOS" topo-atual) (cdr (assoc "LADOS" topo-atual)) topo-atual)
                derivs (if (assoc "DERIVACOES" topo-atual) (cdr (assoc "DERIVACOES" topo-atual)) '()))

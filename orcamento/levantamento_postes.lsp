@@ -4,20 +4,16 @@
 ;;; Coleta TEXT/MTEXT por ponto, calcula clientes, posições e CS,
 ;;; e gera tabela nativa do AutoCAD com persistência isolada por DWG (LData).
 ;;; ============================================================================
-
 (vl-load-com)
 (if (null fboundp) (defun fboundp (s) (and s (boundp s) (member (type (eval s)) '(SUBR USUBR)))))
 (foreach m '("clandestino_light" "clandestino_topologia")
   (setq *lp-clan-carregado* nil)
   (foreach p (list (strcat m ".lsp") (strcat "orcamento\\" m ".lsp") (strcat "C:\\Users\\jonat\\OneDrive - IM3 Brasil\\aux cad\\orcamento\\" m ".lsp"))
     (if (and (null *lp-clan-carregado*) (findfile p)) (progn (vl-catch-all-apply 'load (list (findfile p))) (setq *lp-clan-carregado* t)))))
-
 ;;; ----------------------------------------------------------------------------
 ;;; 1. UTILITÁRIOS DE STRING E SANITIZAÇÃO DE TEXTO
 ;;; ----------------------------------------------------------------------------
-
 (defun lp-trim (value) (if (= (type value) 'STR) (vl-string-trim " \t\r\n{}" value) ""))
-
 (defun lp-strip-mtext (value / index len char next end result)
   "Remove códigos de formatação MText mantendo quebras de linha normalizadas."
   (if (not (= (type value) 'STR)) ""
@@ -38,7 +34,6 @@
               (setq index (if (<= end len) (1+ end) (+ index 2))))))
           (t (setq result (strcat result char) index (1+ index)))))
       (lp-trim result))))
-
 (defun lp-split-lines (text / len idx char line lines)
   "Divide uma string contendo quebras de linha em uma lista de linhas."
   (setq len (strlen text) idx 1 line "" lines '())
@@ -56,11 +51,9 @@
     (setq idx (1+ idx)))
   (if (/= (lp-trim line) "") (setq lines (append lines (list (lp-trim line)))))
   lines)
-
 ;;; ----------------------------------------------------------------------------
 ;;; 2. FILTRAGEM DE RUÍDO E TEXTOS AUXILIARES
 ;;; ----------------------------------------------------------------------------
-
 (defun lp-is-noise-line (line / upper)
   "Verifica se a linha contém dados auxiliares (esforço daN, demanda, etc.)."
   (setq upper (strcase (lp-trim line)))
@@ -70,18 +63,15 @@
       (vl-string-search "DEMANDA" upper) (vl-string-search "ACUM.:" upper)
       (vl-string-search "ACUM." upper) (vl-string-search "ACUMULADO" upper)
       (vl-string-search "KVA" upper) (vl-string-search "CLIENTE" upper)))
-
 (defun lp-format-val (val)
   "Formata valor para exibição em tabelas e console."
   (cond
     ((numberp val) (itoa val))
     ((= (type val) 'STR) val)
     (t "-")))
-
 ;;; ----------------------------------------------------------------------------
 ;;; 3. PARSERS MODULARES
 ;;; ----------------------------------------------------------------------------
-
 ;; 3.1 Parser de Código de Poste
 (defun lp-parse-poste (lines / item found upper len i ch all-digits)
   "Localiza e extrai o código do poste (ex: P112600B, P212600B, P01)."
@@ -100,7 +90,6 @@
                     (= ch "-"))
               (setq found upper)))))))
   found)
-
 ;; 3.2 Parser de Ramais e Clientes
 (defun lp-parse-phase-qty (token / up x-pos qty phase)
   "Extrai (quantidade fase) de um token como 12x1ø ou 1x3%%c."
@@ -120,7 +109,6 @@
          (setq phase 1)))
       (if (> qty 0) (list qty phase) nil))
     nil))
-
 (defun lp-parse-ramais-e-clientes (lines / ramais-found mono-qty bi-qty tri-qty
                                           ramal-str upper parts tokens token pq)
   "Extrai ramais normalizados, total de clientes e contagem por fase exclusivamente dos ramais."
@@ -128,7 +116,6 @@
         bi-qty 0
         tri-qty 0
         ramais-found '())
-
   (foreach line lines
     (setq upper (strcase (lp-trim line)))
     (if (not (lp-is-noise-line upper))
@@ -154,7 +141,6 @@
                    (setq bi-qty (+ bi-qty (car pq))))
                   ((= (cadr pq) 3)
                    (setq tri-qty (+ tri-qty (car pq))))))))))))
-
   ;; Monta representação normalizada com %%C (ex: 12x%%C1 | 1x%%C3)
   (if (> mono-qty 0)
     (setq ramais-found (append ramais-found (list (strcat (itoa mono-qty) "x%%C1")))))
@@ -162,19 +148,16 @@
     (setq ramais-found (append ramais-found (list (strcat (itoa bi-qty) "x%%C2")))))
   (if (> tri-qty 0)
     (setq ramais-found (append ramais-found (list (strcat (itoa tri-qty) "x%%C3")))))
-
   (setq ramal-str "")
   (if ramais-found
     (progn
       (setq ramal-str (car ramais-found))
       (foreach item (cdr ramais-found)
         (setq ramal-str (strcat ramal-str " | " item)))))
-
   ;; Se não há ramais identificados, clientes é '-'
   (if (null ramais-found)
     (list "-" "-" 0 0 0)
     (list ramal-str (+ mono-qty bi-qty tri-qty) mono-qty bi-qty tri-qty)))
-
 ;; 3.3 Parser de Luminária
 (defun lp-parse-luminaria (lines / lum upper)
   "Extrai identificação de luminária (ex: IP, LUM., LED, etc.) ou '-'."
@@ -196,7 +179,6 @@
                               (vl-string-search "250" upper)))))
           (setq lum (lp-trim line))))))
   lum)
-
 ;; 3.4 Parsers de Demanda e Demanda Acumulada
 (defun lp-extract-value-after-key (text key / up pos len idx ch val has-digit)
   "Extrai o valor numérico após uma chave (ex: 'DEM' ou 'ACUM') preservando decimais."
@@ -216,17 +198,11 @@
         (setq val (substr val 1 (1- (strlen val)))))
       (if (and has-digit (> (strlen val) 0)) val nil))
     nil))
-
-(defun lp-extract-demanda-line (line / upper prefixes val prefix)
+(defun lp-extract-demanda-line (line / upper)
   "Tenta extrair valor de Demanda da linha."
   (setq upper (strcase (lp-trim line)))
-  (setq prefixes '("DEMANDA" "DEM.:" "DEM:" "DEM." "DEM"))
-  (setq val nil)
-  (foreach prefix prefixes
-    (if (and (null val) (vl-string-search prefix upper))
-      (setq val (lp-extract-value-after-key line prefix))))
-  val)
-
+  (vl-some '(lambda (p) (if (vl-string-search p upper) (lp-extract-value-after-key line p)))
+           '("DEMANDA" "DEM.:" "DEM:" "DEM." "DEM")))
 (defun lp-parse-demanda (lines / found-val ambig item candidate)
   "Extrai o valor de Demanda (kVA) preservando formato, ou '-' se ausente/ambíguo."
   (setq found-val nil ambig nil)
@@ -235,17 +211,11 @@
       (if (null found-val) (setq found-val candidate)
         (if (/= found-val candidate) (setq ambig t)))))
   (if (or (null found-val) ambig) "-" found-val))
-
-(defun lp-extract-acumulada-line (line / upper prefixes val prefix)
+(defun lp-extract-acumulada-line (line / upper)
   "Tenta extrair valor de Demanda Acumulada da linha."
   (setq upper (strcase (lp-trim line)))
-  (setq prefixes '("ACUMULADA" "ACUMULADO" "ACUM.:" "ACUM:" "ACUM." "ACUM"))
-  (setq val nil)
-  (foreach prefix prefixes
-    (if (and (null val) (vl-string-search prefix upper))
-      (setq val (lp-extract-value-after-key line prefix))))
-  val)
-
+  (vl-some '(lambda (p) (if (vl-string-search p upper) (lp-extract-value-after-key line p)))
+           '("ACUMULADA" "ACUMULADO" "ACUM.:" "ACUM:" "ACUM." "ACUM")))
 (defun lp-parse-acumulada (lines / found-val ambig item candidate)
   "Extrai o valor de Demanda Acumulada (kVA) preservando formato, ou '-' se ausente/ambíguo."
   (setq found-val nil ambig nil)
@@ -254,7 +224,6 @@
       (if (null found-val) (setq found-val candidate)
         (if (/= found-val candidate) (setq ambig t)))))
   (if (or (null found-val) ambig) "-" found-val))
-
 ;; 3.5 Extrator de Coordenadas do Bloco CO
 ;; A rotina ADDBLOCO (topografia/addbloco.lsp) preenche exatamente os atributos
 ;; N e E do bloco CO como N=Y e E=X, já formatados com duas casas.  Esta rotina
@@ -287,7 +256,6 @@
   (if (and valid (> digits 0) (> (abs number) 0.0001))
     number
     nil))
-
 (defun lp-extrair-coordenadas-bloco (ent / edata tip obj has-atts atts-result atts-list tag val-n val-e n e)
   "Lê N/E do mecanismo CO; retorna '-' quando o bloco não traz coordenadas válidas."
   (if (or (null ent) (not (listp (setq edata (entget ent)))))
@@ -324,27 +292,22 @@
           (if (and n e)
             (strcat "N: " (rtos n 2 2) "\nE: " (rtos e 2 2))
             "-"))))))
-
 ;;; ----------------------------------------------------------------------------
 ;;; 4. CÁLCULO DE POSIÇÕES E CAIXAS DE SERVIÇO (CS)
 ;;; ----------------------------------------------------------------------------
-
 (defun lp-calc-posicoes (mono bi tri)
   "Calcula Total de Posições = (1ø * 1) + (2ø * 2) + (3ø * 3)."
   (if (and (= mono 0) (= bi 0) (= tri 0))
     "-"
     (+ (* mono 1) (* bi 2) (* tri 3))))
-
 (defun lp-calc-cs (posicoes)
   "Calcula Total CS = teto(posicoes / 9)."
   (if (or (not (numberp posicoes)) (<= posicoes 0))
     "-"
     (/ (+ posicoes 8) 9)))
-
 ;;; ----------------------------------------------------------------------------
 ;;; 5. PROCESSAMENTO DE UM PONTO
 ;;; ----------------------------------------------------------------------------
-
 (defun lp-process-point-texts (raw-texts-list seq coords / lines poste ram-res
                                                           ramais clientes mono bi tri
                                                           lum posicoes cs dem acum)
@@ -352,19 +315,16 @@
   (setq lines '())
   (foreach txt raw-texts-list
     (setq lines (append lines (lp-split-lines (lp-strip-mtext txt)))))
-
   (setq poste (lp-parse-poste lines))
   (if (and (null poste) (fboundp 'lp-clan-parse-no-poste) (fboundp 'lp-db-obter-modo) (= (lp-db-obter-modo) "CLANDESTINO"))
     (setq poste (lp-clan-parse-no-poste lines)))
   (if (null poste) (setq poste "-"))
-
   (setq ram-res (lp-parse-ramais-e-clientes lines))
   (setq ramais   (nth 0 ram-res)
         clientes (nth 1 ram-res)
         mono     (nth 2 ram-res)
         bi       (nth 3 ram-res)
         tri      (nth 4 ram-res))
-
   (setq lum (lp-parse-luminaria lines))
   (setq posicoes (lp-calc-posicoes mono bi tri)
         cs (lp-calc-cs posicoes)
@@ -378,35 +338,27 @@
         (cons "CS" cs) (cons "DEMANDA" dem) (cons "ACUMULADA" acum)
         (cons "COORDENADAS" coords)
         (cons "RAW" raw-texts-list)))
-
 ;;; ----------------------------------------------------------------------------
 ;;; 6. PERSISTÊNCIA ISOLADA POR DWG (AutoCAD LData)
 ;;; ----------------------------------------------------------------------------
-
 (setq *lp-dict-name* "OXCAD_LEVANTAMENTO")
 (setq *lp-key-name* "PONTOS" *lp-key-tabela* "TABELA_HANDLE")
-
 (defun lp-db-obter-pontos (/ dados)
   "Lê os pontos armazenados no LData do DWG ativo."
   (setq dados (vlax-ldata-get *lp-dict-name* *lp-key-name*))
   (if (listp dados) dados '()))
-
 (defun lp-db-salvar-pontos (pontos)
   "Salva a lista de pontos no LData do DWG ativo."
   (vlax-ldata-put *lp-dict-name* *lp-key-name* pontos))
-
 (defun lp-db-limpar-pontos ()
   "Remove a lista de pontos do LData do DWG ativo."
   (vlax-ldata-delete *lp-dict-name* *lp-key-name*))
-
 (defun lp-db-obter-tabela-handle ()
   "Recupera o handle da tabela associada ao levantamento no DWG."
   (vlax-ldata-get *lp-dict-name* *lp-key-tabela*))
-
 (defun lp-db-salvar-tabela-handle (handle)
   "Salva o handle da tabela associada no LData do DWG."
   (vlax-ldata-put *lp-dict-name* *lp-key-tabela* handle))
-
 (defun lp-db-remover-tabela-handle ()
   "Remove o vínculo com a tabela no LData do DWG."
   (vlax-ldata-delete *lp-dict-name* *lp-key-tabela*))
@@ -429,84 +381,79 @@
         (progn
           (princ "\n[LEVANTAR_POSTES] Inserção cancelada pelo usuário. Coleta mantida.")
           nil)
-        (progn
-          (setq acad (vlax-get-acad-object)
-                doc  (vla-get-ActiveDocument acad)
-                space (vla-get-Block (vla-get-ActiveLayout doc))
-                row-count (+ 2 (length pontos))
-                col-count 10)
-          (setq table-res
-            (vl-catch-all-apply
-              'vla-AddTable
-              (list space (vlax-3d-point pt) row-count col-count 6.0 35.0)))
-          (if (vl-catch-all-error-p table-res)
-            (progn
-              (princ (strcat "\n[LEVANTAR_POSTES][ERRO] Falha ao criar tabela: "
-                             (vl-catch-all-error-message table-res)))
-              (princ "\n[LEVANTAR_POSTES] A coleta foi preservada no DWG.")
-              nil)
-            (progn
-              (setq table table-res)
-              (setq fill-res
-                (vl-catch-all-apply
-                  '(lambda ()
-                     (vla-put-Layer table "0")
-                     ;; Título mesclado (10 colunas: de 0 a 9)
-                     (vla-MergeCells table 0 0 0 9)
-                     (vla-SetText table 0 0 "LEVANTAMENTO DE POSTES E CLIENTES")
-
-                     ;; Cabeçalhos (ordem normativa - 10 colunas)
-                     (vla-SetText table 1 0 "PONTO")
-                     (vla-SetText table 1 1 "POSTE")
-                     (vla-SetText table 1 2 "RAMAIS")
-                     (vla-SetText table 1 3 "LUMINÁRIA")
-                     (vla-SetText table 1 4 "TOTAL CLIENTES")
-                     (vla-SetText table 1 5 "TOTAL POSIÇÕES")
-                     (vla-SetText table 1 6 "TOTAL CS")
-                     (vla-SetText table 1 7 "DEMANDA (kVA)")
-                     (vla-SetText table 1 8 "ACUMULADA (kVA)")
-                     (vla-SetText table 1 9 "COORDENADAS")
-
-                     ;; Larguras ajustadas
-                     (vla-SetColumnWidth table 0 22.0)
-                     (vla-SetColumnWidth table 1 35.0)
-                     (vla-SetColumnWidth table 2 50.0)
-                     (vla-SetColumnWidth table 3 35.0)
-                     (vla-SetColumnWidth table 4 38.0)
-                     (vla-SetColumnWidth table 5 38.0)
-                     (vla-SetColumnWidth table 6 25.0)
-                     (vla-SetColumnWidth table 7 38.0)
-                     (vla-SetColumnWidth table 8 38.0)
-                     (vla-SetColumnWidth table 9 45.0)
-
-                     ;; Preenchimento das linhas
-                     (setq row-idx 2)
-                     (foreach p pontos
-                       (vla-SetText table row-idx 0 (lp-format-val (cdr (assoc "SEQ" p))))
-                       (vla-SetText table row-idx 1 (lp-format-val (cdr (assoc "POSTE" p))))
-                       (vla-SetText table row-idx 2 (lp-format-val (cdr (assoc "RAMAIS" p))))
-                       (vla-SetText table row-idx 3 (lp-format-val (cdr (assoc "LUM" p))))
-                       (vla-SetText table row-idx 4 (lp-format-val (cdr (assoc "CLIENTES" p))))
-                       (vla-SetText table row-idx 5 (lp-format-val (cdr (assoc "POSICOES" p))))
-                       (vla-SetText table row-idx 6 (lp-format-val (cdr (assoc "CS" p))))
-                       (vla-SetText table row-idx 7 (lp-format-val (cdr (assoc "DEMANDA" p))))
-                       (vla-SetText table row-idx 8 (lp-format-val (cdr (assoc "ACUMULADA" p))))
-                       (vla-SetText table row-idx 9 (lp-format-val (cdr (assoc "COORDENADAS" p))))
-                       (setq row-idx (1+ row-idx)))
-
-                     (vla-Update table))))
-              (if (vl-catch-all-error-p fill-res)
-                (progn
-                  (princ (strcat "\n[LEVANTAR_POSTES][ERRO] Falha ao preencher células da tabela: "
-                                 (vl-catch-all-error-message fill-res)))
-                  (princ "\n[LEVANTAR_POSTES] A coleta foi preservada no DWG.")
-                  nil)
-                (progn
-                  (setq tbl-handle (vla-get-Handle table))
-                  (lp-db-salvar-tabela-handle tbl-handle)
-                  (princ (strcat "\n[LEVANTAR_POSTES] Tabela criada com sucesso com "
-                                 (itoa (length pontos)) " pontos (Handle #" tbl-handle ")."))
-                  table)))))))))
+        (if (and (fboundp 'lp-cqt-colunas-adicionais-p) (lp-cqt-colunas-adicionais-p)
+                 (fboundp 'lp-cqt-gerar-tabela-cad))
+          (lp-cqt-gerar-tabela-cad pontos pt)
+          (progn
+            (setq acad (vlax-get-acad-object)
+                  doc  (vla-get-ActiveDocument acad)
+                  space (vla-get-Block (vla-get-ActiveLayout doc))
+                  row-count (+ 2 (length pontos))
+                  col-count 10)
+            (setq table-res
+              (vl-catch-all-apply
+                'vla-AddTable
+                (list space (vlax-3d-point pt) row-count col-count 6.0 35.0)))
+            (if (vl-catch-all-error-p table-res)
+              (progn
+                (princ (strcat "\n[LEVANTAR_POSTES][ERRO] Falha ao criar tabela: "
+                               (vl-catch-all-error-message table-res)))
+                (princ "\n[LEVANTAR_POSTES] A coleta foi preservada no DWG.")
+                nil)
+              (progn
+                (setq table table-res)
+                (setq fill-res
+                  (vl-catch-all-apply
+                    '(lambda ()
+                       (vla-put-Layer table "0")
+                       (vla-MergeCells table 0 0 0 9)
+                       (vla-SetText table 0 0 "LEVANTAMENTO DE POSTES E CLIENTES")
+                       (vla-SetText table 1 0 "PONTO")
+                       (vla-SetText table 1 1 "POSTE")
+                       (vla-SetText table 1 2 "RAMAIS")
+                       (vla-SetText table 1 3 "LUMINÁRIA")
+                       (vla-SetText table 1 4 "TOTAL CLIENTES")
+                       (vla-SetText table 1 5 "TOTAL POSIÇÕES")
+                       (vla-SetText table 1 6 "TOTAL CS")
+                       (vla-SetText table 1 7 "DEMANDA (kVA)")
+                       (vla-SetText table 1 8 "ACUMULADA (kVA)")
+                       (vla-SetText table 1 9 "COORDENADAS")
+                       (vla-SetColumnWidth table 0 22.0)
+                       (vla-SetColumnWidth table 1 35.0)
+                       (vla-SetColumnWidth table 2 50.0)
+                       (vla-SetColumnWidth table 3 35.0)
+                       (vla-SetColumnWidth table 4 38.0)
+                       (vla-SetColumnWidth table 5 38.0)
+                       (vla-SetColumnWidth table 6 25.0)
+                       (vla-SetColumnWidth table 7 38.0)
+                       (vla-SetColumnWidth table 8 38.0)
+                       (vla-SetColumnWidth table 9 45.0)
+                       (setq row-idx 2)
+                       (foreach p pontos
+                         (vla-SetText table row-idx 0 (lp-format-val (cdr (assoc "SEQ" p))))
+                         (vla-SetText table row-idx 1 (lp-format-val (cdr (assoc "POSTE" p))))
+                         (vla-SetText table row-idx 2 (lp-format-val (cdr (assoc "RAMAIS" p))))
+                         (vla-SetText table row-idx 3 (lp-format-val (cdr (assoc "LUM" p))))
+                         (vla-SetText table row-idx 4 (lp-format-val (cdr (assoc "CLIENTES" p))))
+                         (vla-SetText table row-idx 5 (lp-format-val (cdr (assoc "POSICOES" p))))
+                         (vla-SetText table row-idx 6 (lp-format-val (cdr (assoc "CS" p))))
+                         (vla-SetText table row-idx 7 (lp-format-val (cdr (assoc "DEMANDA" p))))
+                         (vla-SetText table row-idx 8 (lp-format-val (cdr (assoc "ACUMULADA" p))))
+                         (vla-SetText table row-idx 9 (lp-format-val (cdr (assoc "COORDENADAS" p))))
+                         (setq row-idx (1+ row-idx)))
+                       (vla-Update table))))
+                (if (vl-catch-all-error-p fill-res)
+                  (progn
+                    (princ (strcat "\n[LEVANTAR_POSTES][ERRO] Falha ao preencher células da tabela: "
+                                   (vl-catch-all-error-message fill-res)))
+                    (princ "\n[LEVANTAR_POSTES] A coleta foi preservada no DWG.")
+                    nil)
+                  (progn
+                    (setq tbl-handle (vla-get-Handle table))
+                    (lp-db-salvar-tabela-handle tbl-handle)
+                    (princ (strcat "\n[LEVANTAR_POSTES] Tabela criada com sucesso com "
+                                   (itoa (length pontos)) " pontos (Handle #" tbl-handle ")."))
+                    table))))))))))
 
 ;;; ----------------------------------------------------------------------------
 ;;; 8. SINCRONIZAÇÃO ENTRE DESENHO E TABELA VINCULADA
@@ -548,10 +495,12 @@
       (if use-comma (vl-string-translate "." "," s) s))))
 
 (defun lp-recalcular-demandas-acumuladas (pontos / novos acum-anterior p dem-str acum-str
-                                                  dem-val acum-val use-comma novo-p)
+                                                  dem-val acum-val use-comma novo-p pts-dem)
   "Recalcula a demanda acumulada em cadeia para os pontos quando aplicável."
   (if (and (fboundp 'lp-db-obter-modo) (= (lp-db-obter-modo) "CLANDESTINO"))
-    (lp-clan-recalcular-pontos pontos (lp-db-obter-area) (lp-db-obter-sentido))
+    (progn
+      (setq pts-dem (lp-clan-recalcular-pontos pontos (lp-db-obter-area) (lp-db-obter-sentido)))
+      (if (fboundp 'lp-cqt-calcular-rede-pontos) (lp-cqt-calcular-rede-pontos pts-dem) pts-dem))
     (progn
       (setq novos '()
             acum-anterior 0.0)
@@ -581,30 +530,28 @@
         (setq novos (append novos (list novo-p))))
       novos)))
 
-(defun lp-atualizar-celulas-tabela (table pontos / row-idx rows-existentes rows-necessarias p)
+(defun lp-atualizar-celulas-tabela (table pontos / row-idx rows-existentes rows-necessarias p col-idx)
   "Atualiza as células da tabela nativa existente sem recriá-la nem mover sua posição."
-  (setq rows-existentes (vla-get-Rows table)
-        rows-necessarias (+ 2 (length pontos)))
-  (if (> rows-necessarias rows-existentes)
-    (vl-catch-all-apply 'vla-InsertRows
-                        (list table rows-existentes 6.0 (- rows-necessarias rows-existentes))))
-  (setq row-idx 2)
-  (foreach p pontos
-    (if (< row-idx (vla-get-Rows table))
-      (progn
-        (vla-SetText table row-idx 0 (lp-format-val (cdr (assoc "SEQ" p))))
-        (vla-SetText table row-idx 1 (lp-format-val (cdr (assoc "POSTE" p))))
-        (vla-SetText table row-idx 2 (lp-format-val (cdr (assoc "RAMAIS" p))))
-        (vla-SetText table row-idx 3 (lp-format-val (cdr (assoc "LUM" p))))
-        (vla-SetText table row-idx 4 (lp-format-val (cdr (assoc "CLIENTES" p))))
-        (vla-SetText table row-idx 5 (lp-format-val (cdr (assoc "POSICOES" p))))
-        (vla-SetText table row-idx 6 (lp-format-val (cdr (assoc "CS" p))))
-        (vla-SetText table row-idx 7 (lp-format-val (cdr (assoc "DEMANDA" p))))
-        (vla-SetText table row-idx 8 (lp-format-val (cdr (assoc "ACUMULADA" p))))
-        (vla-SetText table row-idx 9 (lp-format-val (cdr (assoc "COORDENADAS" p))))))
-    (setq row-idx (1+ row-idx)))
-  (vla-Update table)
-  t)
+  (if (and (fboundp 'lp-cqt-colunas-adicionais-p) (lp-cqt-colunas-adicionais-p)
+           (fboundp 'lp-cqt-atualizar-celulas-tabela))
+    (lp-cqt-atualizar-celulas-tabela table pontos)
+    (progn
+      (setq rows-existentes (vla-get-Rows table)
+            rows-necessarias (+ 2 (length pontos)))
+      (if (> rows-necessarias rows-existentes)
+        (vl-catch-all-apply 'vla-InsertRows
+                            (list table rows-existentes 6.0 (- rows-necessarias rows-existentes))))
+      (setq row-idx 2)
+      (foreach p pontos
+        (if (< row-idx (vla-get-Rows table))
+          (progn
+            (setq col-idx 0)
+            (foreach k '("SEQ" "POSTE" "RAMAIS" "LUM" "CLIENTES" "POSICOES" "CS" "DEMANDA" "ACUMULADA" "COORDENADAS")
+              (vla-SetText table row-idx col-idx (lp-format-val (cdr (assoc k p))))
+              (setq col-idx (1+ col-idx)))))
+        (setq row-idx (1+ row-idx)))
+      (vla-Update table)
+      t)))
 
 (defun lp-sincronizar-levantamento (pontos tbl-handle / tbl-ent edata-tbl tbl-obj
                                                        tem-alteracao pontos-afetados
@@ -718,11 +665,11 @@
 
 (defun lp-exibir-revisao (pontos / p seq poste ramais lum clientes pos cs dem acum coords)
   (textscr)
-  (princ (strcat "\n=================================================================================================================================="
-                 "\n                                          REVISÃO DE PONTOS COLETADOS - OXCAD                                                     "
-                 "\n=================================================================================================================================="
-                 "\n PONTO | POSTE      | RAMAIS               | LUMINÁRIA   | CLI | POS | CS | DEMANDA (kVA) | ACUMULADA (kVA) | COORDENADAS           "
-                 "\n----------------------------------------------------------------------------------------------------------------------------------"))
+  (princ "\n==================================================================================================================================")
+  (princ "\n                                          REVISÃO DE PONTOS COLETADOS - OXCAD                                                     ")
+  (princ "\n==================================================================================================================================")
+  (princ "\n PONTO | POSTE      | RAMAIS               | LUMINÁRIA   | CLI | POS | CS | DEMANDA (kVA) | ACUMULADA (kVA) | COORDENADAS           ")
+  (princ "\n----------------------------------------------------------------------------------------------------------------------------------")
   (foreach p pontos
     (setq seq (lp-format-val (cdr (assoc "SEQ" p))) poste (lp-format-val (cdr (assoc "POSTE" p)))
           ramais (lp-format-val (cdr (assoc "RAMAIS" p))) lum (lp-format-val (cdr (assoc "LUM" p)))
@@ -730,16 +677,11 @@
           cs (lp-format-val (cdr (assoc "CS" p))) dem (lp-format-val (cdr (assoc "DEMANDA" p)))
           acum (lp-format-val (cdr (assoc "ACUMULADA" p)))
           coords (vl-string-translate "\n" " | " (lp-format-val (cdr (assoc "COORDENADAS" p)))))
-    (princ (strcat "\n " seq (substr "    " 1 (max 1 (- 5 (strlen seq))))
-                   " | " poste (substr "          " 1 (max 1 (- 10 (strlen poste))))
-                   " | " ramais (substr "                    " 1 (max 1 (- 20 (strlen ramais))))
-                   " | " lum (substr "           " 1 (max 1 (- 11 (strlen lum))))
-                   " | " clientes (substr "   " 1 (max 1 (- 3 (strlen clientes))))
-                   " | " pos (substr "   " 1 (max 1 (- 3 (strlen pos))))
-                   " | " cs (substr "  " 1 (max 1 (- 2 (strlen cs))))
-                   " | " dem (substr "             " 1 (max 1 (- 13 (strlen dem))))
-                   " | " acum (substr "              " 1 (max 1 (- 14 (strlen acum))))
-                   " | " coords)))
+    (princ (strcat "\n " seq (substr "    " 1 (max 1 (- 5 (strlen seq)))) " | " poste (substr "          " 1 (max 1 (- 10 (strlen poste))))
+                   " | " ramais (substr "                    " 1 (max 1 (- 20 (strlen ramais)))) " | " lum (substr "           " 1 (max 1 (- 11 (strlen lum))))
+                   " | " clientes (substr "   " 1 (max 1 (- 3 (strlen clientes)))) " | " pos (substr "   " 1 (max 1 (- 3 (strlen pos))))
+                   " | " cs (substr "  " 1 (max 1 (- 2 (strlen cs)))) " | " dem (substr "             " 1 (max 1 (- 13 (strlen dem))))
+                   " | " acum (substr "              " 1 (max 1 (- 14 (strlen acum)))) " | " coords)))
   (princ "\n==================================================================================================================================\n")
   (graphscr))
 
@@ -754,12 +696,7 @@
 (defun lp-renumerar-pontos (pontos / idx)
   "Renumera sequencialmente os registros de 1 a N preservando todos os atributos originais."
   (setq idx 0)
-  (mapcar '(lambda (p)
-             (setq idx (1+ idx))
-             (if (assoc "SEQ" p)
-               (subst (cons "SEQ" idx) (assoc "SEQ" p) p)
-               (append p (list (cons "SEQ" idx)))))
-          pontos))
+  (mapcar '(lambda (p) (setq idx (1+ idx)) (if (assoc "SEQ" p) (subst (cons "SEQ" idx) (assoc "SEQ" p) p) (append p (list (cons "SEQ" idx))))) pontos))
 
 (defun lp-excluir-ponto (pontos idx-alvo / i removido remanescentes)
   "Remove exatamente o ponto selecionado (1 a N) e renumera sequencialmente os restantes."
@@ -769,9 +706,7 @@
       (setq i 0 removido nil remanescentes '())
       (foreach p pontos
         (setq i (1+ i))
-        (if (and (not removido)
-                 (or (= (cdr (assoc "SEQ" p)) idx-alvo)
-                     (= i idx-alvo)))
+        (if (and (not removido) (or (= (cdr (assoc "SEQ" p)) idx-alvo) (= i idx-alvo)))
           (setq removido t)
           (setq remanescentes (cons p remanescentes))))
       (lp-renumerar-pontos (reverse remanescentes)))))
@@ -779,9 +714,7 @@
 (defun lp-precisa-renumerar-p (pontos / idx precisa)
   "Verifica se a lista de pontos necessita de normalização sequencial."
   (setq idx 0 precisa nil)
-  (foreach p pontos
-    (setq idx (1+ idx))
-    (if (/= (cdr (assoc "SEQ" p)) idx) (setq precisa t)))
+  (foreach p pontos (setq idx (1+ idx)) (if (/= (cdr (assoc "SEQ" p)) idx) (setq precisa t)))
   precisa)
 
 ;;; ----------------------------------------------------------------------------
@@ -791,7 +724,7 @@
 (defun c:LEVANTAR_POSTES (/ *error* old-pickadd pontos opt looping forcar-menu sel idx ent
                            raw-texts text-handles novo-ponto novo-poste dups
                            table-ok sel-blk coords tbl-handle sync-res opt-tabela
-                           recriar)
+                           recriar pt-geom dig-id eh-passante)
   (vl-load-com)
 
   (defun *error* (msg)
@@ -853,8 +786,12 @@
         (princ (strcat "\n[LEVANTAR_POSTES] " (itoa (length pontos))
                        " ponto(s) na coleta. | Modo: "
                        (if (fboundp 'lp-clan-status-modo-str) (lp-clan-status-modo-str) (lp-db-obter-modo))))
-        (initget "Adicionar Revisar Excluir Gerar Limpar Sair Configurar")
-        (setq opt (getkword "\nOpção [Adicionar/Revisar/Excluir/Gerar/Configurar/Limpar/Sair] <Adicionar>: "))
+        (if (and (fboundp 'lp-cqt-colunas-adicionais-p) (lp-cqt-colunas-adicionais-p))
+          (initget "Adicionar Revisar Excluir Gerar Limpar Sair Configurar Excel")
+          (initget "Adicionar Revisar Excluir Gerar Limpar Sair Configurar"))
+        (setq opt (getkword (if (and (fboundp 'lp-cqt-colunas-adicionais-p) (lp-cqt-colunas-adicionais-p))
+                              "\nOpção [Adicionar/Revisar/Excluir/Gerar/Excel/Configurar/Limpar/Sair] <Adicionar>: "
+                              "\nOpção [Adicionar/Revisar/Excluir/Gerar/Configurar/Limpar/Sair] <Adicionar>: ")) )
         (if (null opt) (setq opt "Adicionar")))
       (setq opt "Adicionar"))
 
@@ -868,11 +805,12 @@
       ((= opt "Adicionar")
        (princ (strcat "\nSelecione textos (TEXT/MTEXT) do Ponto "
                       (itoa (1+ (length pontos)))
-                      " (Enter para voltar ao menu): "))
+                      " (Enter se for poste passante sem textos): "))
        (setq sel (ssget '((0 . "TEXT,MTEXT"))))
+       (setq sel-blk nil coords "-" text-handles '() raw-texts '() novo-poste nil eh-passante nil)
        (if sel
          (progn
-           (setq raw-texts '() text-handles '() idx 0)
+           (setq idx 0)
            (repeat (sslength sel)
              (setq ent (ssname sel idx)
                    raw-texts (append raw-texts (list (cdr (assoc 1 (entget ent))))))
@@ -894,8 +832,50 @@
            (if (and (= (lp-db-obter-modo) "CLANDESTINO") (= novo-poste "-") (fboundp 'lp-clan-solicitar-poste-ponto))
              (progn
                (setq novo-poste (lp-clan-solicitar-poste-ponto))
-               (setq novo-ponto (subst (cons "POSTE" novo-poste) (assoc "POSTE" novo-ponto) novo-ponto))))
+               (setq novo-ponto (subst (cons "POSTE" novo-poste) (assoc "POSTE" novo-ponto) novo-ponto)))))
+         (progn
+           ;; Fluxo B: Poste Passante sem Textos
+           (princ "\n[POSTE PASSANTE] Nenhum texto selecionado. Selecione o bloco ou clique no ponto do poste.")
+           (setq sel-blk (entsel "\nSelecione o bloco do poste passante (ou Enter para indicar coordenada): "))
+           (if sel-blk
+             (progn
+               (setq coords (lp-extrair-coordenadas-bloco (car sel-blk)))
+               (if (= coords "-")
+                 (princ "\n[AVISO] Bloco sem atributos N/E válidos. Coordenadas registradas como ausente (-).")
+                 (princ (strcat "\n[COORDENADAS] " (vl-string-translate "\n" " | " coords)))))
+             (progn
+               (setq pt-geom (getpoint "\nClique no ponto geométrico do poste (Enter para cancelar cadastro): "))
+               (if pt-geom
+                 (setq coords (strcat "N: " (rtos (cadr pt-geom) 2 2) "\nE: " (rtos (car pt-geom) 2 2)))
+                 (setq coords nil))))
+           (if (null coords)
+             (princ "\n[LEVANTAR_POSTES] Cadastro cancelado. Nenhum ponto ou bloco informado.")
+             (progn
+               (setq dig-id (getstring t "\nDigite o identificador do poste passante (ex: P5) [Enter para cancelar]: "))
+               (setq dig-id (strcase (lp-trim dig-id)))
+               (if (= dig-id "")
+                 (princ "\n[LEVANTAR_POSTES] Identificador não informado. Cadastro do poste passante cancelado.")
+                 (progn
+                   (setq eh-passante t
+                         novo-poste dig-id
+                         novo-ponto (list (cons "SEQ" (1+ (length pontos)))
+                                          (cons "POSTE" novo-poste)
+                                          (cons "RAMAIS" "-")
+                                          (cons "LUM" "-")
+                                          (cons "CLIENTES" 0)
+                                          (cons "POSICOES" "-")
+                                          (cons "CS" "-")
+                                          (cons "DEMANDA" (if (= (lp-db-obter-modo) "CLANDESTINO") "0,00" "0.00"))
+                                          (cons "ACUMULADA" (if (= (lp-db-obter-modo) "CLANDESTINO") "0,00" "0.00"))
+                                          (cons "COORDENADAS" coords)
+                                          (cons "RAW" '())
+                                          (cons "PASSANTE" "SIM")
+                                          (cons "TEXT_HANDLES" '())))
+                   (if sel-blk
+                     (setq novo-ponto (cons (cons "BLOCO_POSTE_HANDLE" (cdr (assoc 5 (entget (car sel-blk))))) novo-ponto)))))))))
 
+       (if (and novo-ponto novo-poste (/= novo-poste "-") (/= novo-poste ""))
+         (progn
            ;; Detecção de duplicidade informativa
            (setq dups (lp-verificar-duplicidade pontos novo-poste))
            (if (> (length dups) 0)
@@ -907,12 +887,17 @@
            (lp-db-salvar-pontos pontos)
            (setq novo-ponto (last pontos))
 
-           ;; Feedback resumido ao usuário (após cálculo da demanda acumulada)
+           ;; Feedback resumido ao usuário (após cálculo da demanda acumulada e CQT)
            (princ (strcat "\n[PONTO " (lp-format-val (cdr (assoc "SEQ" novo-ponto))) "]"
+                          (if eh-passante " [PASSANTE]" "")
                           " Poste: " novo-poste " | Ramais: " (lp-format-val (cdr (assoc "RAMAIS" novo-ponto)))
                           " | Clientes: " (lp-format-val (cdr (assoc "CLIENTES" novo-ponto)))
                           " | Dem: " (lp-format-val (cdr (assoc "DEMANDA" novo-ponto)))
-                          " | Acum: " (lp-format-val (cdr (assoc "ACUMULADA" novo-ponto))))))
+                          " | Acum: " (lp-format-val (cdr (assoc "ACUMULADA" novo-ponto)))
+                          (if (and (= (lp-db-obter-modo) "CLANDESTINO") (assoc "CQT_PREVISTO" novo-ponto))
+                            (strcat " | Cabo: " (lp-format-val (cdr (assoc "CONDUTOR_PREVISTO" novo-ponto)))
+                                    " | CQT: " (lp-format-val (cdr (assoc "CQT_PREVISTO" novo-ponto))))
+                            ""))))
          (setq forcar-menu t)))
 
       ;; OPÇÃO: REVISAR PONTOS
@@ -974,6 +959,14 @@
                    (setq looping nil))
                  (princ "\nA tabela não foi criada. A coleta foi preservada.")))))
          (princ "\nNenhum ponto para gerar tabela.")))
+
+      ;; OPÇÃO: EXPORTAR EXCEL
+      ((= opt "Excel")
+       (if (and pontos (> (length pontos) 0))
+         (if (fboundp 'lp-cqt-exportar-excel)
+           (lp-cqt-exportar-excel (lp-recalcular-demandas-acumuladas pontos))
+           (princ "\n[AVISO] Módulo de exportação CQT não disponível."))
+         (princ "\n[AVISO] Nenhum ponto coletado para exportar.")))
 
       ;; OPÇÃO: LIMPAR EXPLICITAMENTE
       ((= opt "Limpar")
